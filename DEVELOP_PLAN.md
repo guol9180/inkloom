@@ -179,11 +179,12 @@
   - 推送前完成 `pnpm typecheck`、`pnpm build` 和 `pnpm test` 验证。
   - `main` 分支及首个提交已推送到 GitHub。
 - 边界：本任务仅完成仓库初始化与代码托管，不配置生产部署、域名或 GitHub Secrets。
-- 状态：in-progress
+- 状态：done
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-13 计划 建立 GitHub 仓库初始化与首次推送任务卡。
   - 2026-11-13 执行 初始化本地 `main` 分支；确认忽略依赖、构建产物和环境变量，常见密钥模式扫描无命中。
   - 2026-11-13 验证 `pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 全部通过；构建仅有图表 chunk 过大警告。
+  - 2026-11-13 交付 创建公开仓库 `https://github.com/guol9180/inkloom`，首个提交 `9cae0f2` 已推送到 `origin/main`。
 
 ## 状态枚举
 

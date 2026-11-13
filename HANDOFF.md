@@ -14,7 +14,7 @@
 - 浏览器域名：`https://inkloom.imhgl.com`。
 - API 域名：`https://api.inkloom.imhgl.com`。
 - 协同域名：`wss://sync.inkloom.imhgl.com`。
-- 开源仓库建议名：`inkloom`。
+- 开源仓库：`https://github.com/guol9180/inkloom`，默认分支 `main`。
 - 包作用域：`@inkloom/*`。
 - 当前 Web 原型位于 `apps/web`，已构建并验证。
 - 下一个开发任务：先完成 T3 的 core/storage/diagrams 抽取，同时按 T9 加固移动平台契约。
@@ -44,20 +44,19 @@ node apps/web/serve.mjs
 - 尚无真实文件系统 adapter、SQLite、云 API 和协同服务。
 - 依赖审计仍有已知传递依赖问题，正式发布前必须处理，详见产品方案的“主要风险”。
 
-## GitHub 发布建议
+## GitHub 仓库后续设置
 
-发布前需要用户确认或执行：
+仓库已创建并完成首次推送。以下设置需要用户确认或执行：
 
-1. 创建 GitHub 仓库 `inkloom`，建议公开仓库，默认分支 `main`。
-2. 确认许可证。当前暂按 MIT 整理；若希望防止闭源 SaaS 派生，应改为 AGPL-3.0。
-3. 在仓库设置中启用 Issues、Discussions 和 Private vulnerability reporting。
-4. 配置 `main` 分支保护，要求 CI 通过。
-5. 配置域名 DNS：
+1. 确认许可证。当前暂按 MIT 整理；若希望防止闭源 SaaS 派生，应改为 AGPL-3.0。
+2. 在仓库设置中启用 Issues、Discussions 和 Private vulnerability reporting。
+3. 配置 `main` 分支保护，要求 CI 通过。
+4. 配置域名 DNS：
    - `inkloom.imhgl.com` -> Web
    - `api.inkloom.imhgl.com` -> API
    - `sync.inkloom.imhgl.com` -> WebSocket 服务
-6. 添加 GitHub Actions secrets；当前 CI 不需要业务密钥。
-7. 完成首次提交后再创建 v0.1.0 原型标签。
+5. 添加 GitHub Actions secrets；当前 CI 不需要业务密钥。
+6. 完成首次提交后再创建 v0.1.0 原型标签。
 
 ## 下个会话的第一条任务建议
 
