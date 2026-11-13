@@ -1,0 +1,7 @@
+{
+  "name": "@inkloom/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InkLoom Tauri desktop application.",
+  "license": "MIT"
+}

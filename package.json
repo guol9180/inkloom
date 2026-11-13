@@ -1,0 +1,23 @@
+{
+  "name": "inkloom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Markdown-native, file-first knowledge workspace for text and diagrams.",
+  "license": "MIT",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @inkloom/web dev",
+    "build": "pnpm --filter @inkloom/web build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "preview:web": "node apps/web/serve.mjs"
+  }
+}

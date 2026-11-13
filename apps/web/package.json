@@ -1,0 +1,30 @@
+{
+  "name": "@inkloom/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "InkLoom browser application.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
+    "dompurify": "^3.4.17",
+    "lucide-react": "^1.72.0",
+    "marked": "^18.2.0",
+    "mermaid": "^12.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}

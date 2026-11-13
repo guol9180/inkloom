@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a focused InkLoom improvement
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Does this change a core boundary?
+      options:
+        - No
+        - Markdown source of truth
+        - Storage adapter
+        - Diagram format
+        - Sync protocol
+        - Permissions/security

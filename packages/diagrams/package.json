@@ -1,0 +1,17 @@
+{
+  "name": "@inkloom/diagrams",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mermaid and Excalidraw integrations for InkLoom.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@inkloom/core": "workspace:*"
+  }
+}

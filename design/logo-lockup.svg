@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 96" role="img" aria-label="InkLoom 墨织">
+  <g transform="translate(4 12) scale(.94)">
+    <rect width="64" height="72" rx="10" fill="#122830"/>
+    <path d="M0 10h64v52H0z" fill="#172f38"/>
+    <path d="M8 0v72" stroke="#a46624" stroke-width="5"/>
+    <path d="M21 43c8-15 13 13 22-8 4-9 8-7 13 0" fill="none" stroke="#f4e8d7" stroke-width="3" stroke-linecap="round"/>
+    <path d="M22 29c8 15 14-13 22 7 4 9 8 8 12 1" fill="none" stroke="#6ea197" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <text x="88" y="52" fill="#172f38" font-family="Georgia, 'Songti SC', serif" font-size="36" font-weight="700" letter-spacing="1">InkLoom</text>
+  <text x="90" y="76" fill="#6d807c" font-family="'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" letter-spacing="5">墨织 · MARKDOWN WORKSPACE</text>
+</svg>

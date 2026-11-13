@@ -1,0 +1,11 @@
+{
+  "name": "@inkloom/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "InkLoom cloud API and collaboration service.",
+  "license": "MIT",
+  "dependencies": {
+    "@inkloom/core": "workspace:*"
+  }
+}
