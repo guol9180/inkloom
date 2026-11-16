@@ -202,6 +202,23 @@
   - 2026-11-16 交付 产出 `README.md`、`AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
   - 2026-11-16 验证 `pnpm typecheck` 通过；`pnpm test` 4 项通过；`pnpm build` 成功，仍仅存在图表大 chunk 警告。
 
+### T14: 同步 init-project-docs 注释规范（P0）
+
+- 目标：将 init-project-docs skill 新增的注释约束同步到 AGENTS 通用规范第 5 条。
+- 动机：权威“精准修改”条目已扩展注释写作边界，项目规范需保持一致。
+- 验收标准：
+  - `AGENTS.md` 第 5 条与 skill 标准条目语义一致。
+  - 注释约束只写入 AGENTS，不在 README 或 DEVELOP_PLAN 复制。
+  - README、AGENTS、DEVELOP_PLAN 职责分工不因本次同步发生变化。
+  - DEVELOP_PLAN 状态值均在状态枚举内，进度区只追加。
+- 边界：只改 AGENTS 和 DEVELOP_PLAN，不改运行时代码、README 或其他文档。
+- 状态：done
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-16 计划 用户明确要求再次执行 init-project-docs skill，任务卡确认。
+  - 2026-11-16 执行 AGENTS 第 5 条追加注释写作边界；README 与其他文档未复制该规范。
+  - 2026-11-16 验证 第 5 条与 skill 标准条目逐字一致；14 个任务状态全部在枚举内；`git diff --check` 无输出；`pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 通过，构建仅有既存图表大 chunk 警告。
+  - 2026-11-16 交付 产出 `AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
+
 ## 状态枚举
 
 | 状态 | 含义 |
