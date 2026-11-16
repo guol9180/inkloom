@@ -2,8 +2,6 @@
 
 ## 当前基线
 
-- 产品名：InkLoom / 墨织
-- 浏览器主域：`inkloom.imhgl.com`
 - 当前可运行产物：`apps/web`
 - 当前阶段：Web 交互原型完成，等待进入本地桌面 MVP
 
@@ -185,6 +183,24 @@
   - 2026-11-13 执行 初始化本地 `main` 分支；确认忽略依赖、构建产物和环境变量，常见密钥模式扫描无命中。
   - 2026-11-13 验证 `pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 全部通过；构建仅有图表 chunk 过大警告。
   - 2026-11-13 交付 创建公开仓库 `https://github.com/guol9180/inkloom`，首个提交 `9cae0f2` 已推送到 `origin/main`。
+
+### T13: 复核项目三文档结构（P0）
+
+- 目标：按 init-project-docs skill 复核 README、AGENTS 和 DEVELOP_PLAN 的职责边界，并同步最新开发规范。
+- 动机：AGENTS 通用规范已从四条升级为五条，需确保项目文档与权威规范一致。
+- 验收标准：
+  - `AGENTS.md` 标题为“通用规范（必建五条）”。
+  - 五条标准条目完整包含“精准修改”，语义与 skill 标准条目一致。
+  - README、AGENTS、DEVELOP_PLAN 内容按既有单一事实源分工，重复事实改为链接引用。
+  - DEVELOP_PLAN 状态值均在状态枚举内，进度区只追加。
+- 边界：只调整三件套文档，不改运行时代码、产品方案、部署文档和交接文档。
+- 状态：done
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-16 计划 用户明确要求再次执行 init-project-docs skill，任务卡确认。
+  - 2026-11-16 执行 AGENTS 通用规范升级为必建五条并新增“精准修改”；README 部署与技术栈重复清单改为链接；DEVELOP_PLAN 当前基线移除归属 README 与部署文档的重复事实。
+  - 2026-11-16 验证 `rg` 确认五条规范存在且 README 不再复制域名；脚本核对 13 个任务状态全部在枚举内；`git diff --check` 无输出。
+  - 2026-11-16 交付 产出 `README.md`、`AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
+  - 2026-11-16 验证 `pnpm typecheck` 通过；`pnpm test` 4 项通过；`pnpm build` 成功，仍仅存在图表大 chunk 警告。
 
 ## 状态枚举
 

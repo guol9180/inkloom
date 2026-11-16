@@ -76,28 +76,11 @@ inkloom/
 
 ## 域名与部署
 
-| 用途 | 地址 |
-| --- | --- |
-| Web 应用 | `https://inkloom.imhgl.com` |
-| API | `https://api.inkloom.imhgl.com` |
-| 实时协同 | `wss://sync.inkloom.imhgl.com` |
-| 静态资源 | `https://cdn.inkloom.imhgl.com` |
-
-部署变量与拆分方式见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。
+部署域名、环境变量与拆分方式见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。
 
 ## 技术方向
 
-- Web：React + TypeScript + Vite
-- 桌面：Tauri 2 + Rust
-- 编辑器：Milkdown / ProseMirror / CodeMirror 6
-- 文本图：Mermaid
-- 自由画布：Excalidraw
-- 本地索引：SQLite FTS5
-- 云服务：Node.js + PostgreSQL + S3/MinIO
-- 实时协同：Yjs + Hocuspocus
-- 移动端：Tauri 2（Android/iOS）与 ArkUI + ArkWeb（HarmonyOS）
-
-移动端基础约束见 [ADR 0005](./docs/adr/0005-mobile-ready-foundation.md)，完整技术取舍见 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)。
+Web、桌面、图表与同步技术选型，以及移动端基础约束，见 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)。
 
 ## 参与开发
 
