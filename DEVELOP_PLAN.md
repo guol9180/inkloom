@@ -270,6 +270,8 @@
   - 2026-11-18 验证 干净 release worktree 通过 frozen install、`pnpm typecheck`、26 项单元/集成测试与 `pnpm build`；GitHub Actions run `44280666039` 通过 Playwright E2E、外部构建、GHCR 推送、自动部署和生产验证。
   - 2026-11-18 验证 `https://inkloom.imhgl.com` 返回 HTTP/2 200，`https://api.inkloom.imhgl.com/api/health` 返回 `{"ok":true,"service":"inkloom-api"}`；CSP、HSTS、frame、MIME 和 referrer 安全头生效，容器无 OOM，系统无 failed unit。
   - 2026-11-18 交付 Inkloom API 与共享 Caddy Edge 已部署到生产，release SHA 为 `f71fe4e4308713ec2852541371b91426ac50631d`；workbench 当前停止，镜像和数据卷保留供后续重新部署。剩余差距：无。
+  - 2026-11-18 执行 清理 1Panel 安装包与解压目录、`.zai` 日志、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh、主机 Node/npm 和编译缓存；撤销 1Panel 遗留的 root SSH 公钥，仅保留仍在使用的 Workbench 管理公钥。
+  - 2026-11-18 交付 `docs/DEPLOYMENT.md` 增补发布前检查、外部构建、固定 SHA、共享 Edge、容器监听、资源与日志上限、秘密管理和回滚规范；文档不记录主机地址、密钥、令牌或用户数据。
 
 ## 状态枚举
 
