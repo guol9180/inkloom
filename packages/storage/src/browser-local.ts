@@ -127,13 +127,14 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
         workspaceId: input.workspaceId,
         path: input.path,
         title: input.title,
-        tags: [],
+        tags: input.tags ?? [],
         revision: 1,
         contentHash: contentHash(markdown),
         createdAt: timestamp,
         updatedAt: timestamp
       },
-      markdown
+      markdown,
+      extensions: input.extensions
     };
     this.writePersisted({
       ...persisted,

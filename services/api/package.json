@@ -7,5 +7,15 @@
   "license": "MIT",
   "dependencies": {
     "@inkloom/core": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build && node dist/server.mjs",
+    "start": "node dist/server.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --config ../../vitest.config.ts"
   }
 }

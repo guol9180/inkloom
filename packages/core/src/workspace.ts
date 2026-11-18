@@ -50,6 +50,8 @@ export type CreateDocumentInput = {
   path: WorkspacePath;
   title: string;
   markdown?: string;
+  tags?: readonly string[];
+  extensions?: DocumentExtensions;
 };
 
 export type WriteDocumentInput = {

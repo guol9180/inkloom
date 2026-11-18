@@ -10,14 +10,17 @@
     "node": ">=22.12.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },
   "scripts": {
     "dev:web": "pnpm --filter @inkloom/web dev",
-    "build": "pnpm --filter @inkloom/web build",
+    "dev:api": "pnpm --filter @inkloom/api dev",
+    "build": "pnpm --filter @inkloom/web build && pnpm --filter @inkloom/api build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "preview:web": "node apps/web/serve.mjs"
+    "preview:web": "node apps/web/serve.mjs",
+    "start:api": "pnpm --filter @inkloom/api start"
   }
 }

@@ -1,0 +1,615 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  InkLoomError,
+  RevisionConflictError,
+  workspacePath,
+  type DocumentExtensions,
+  type JsonValue
+} from "@inkloom/core";
+import {
+  ApiDatabaseError,
+  DocumentDatabase,
+  normalizeEmail,
+  type ApiUser,
+  type DocumentDatabaseOptions
+} from "./database";
+import {
+  createSessionToken,
+  hashPassword,
+  verifyPassword
+} from "./auth";
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const COOKIE_NAME = "inkloom_session";
+const HOST_COOKIE_NAME = "__Host-inkloom_session";
+
+export type ApiServerOptions = {
+  database?: DocumentDatabase;
+  databaseOptions?: DocumentDatabaseOptions;
+  allowedOrigins?: readonly string[];
+  secureCookies?: boolean;
+  now?: () => number;
+};
+
+type RequestContext = {
+  request: IncomingMessage;
+  response: ServerResponse;
+  url: URL;
+  body: unknown;
+};
+
+export function createApiServer(options: ApiServerOptions = {}) {
+  const database =
+    options.database ??
+    new DocumentDatabase(
+      options.databaseOptions ?? {
+        filename:
+          process.env.INKLOOM_DATABASE_PATH ??
+          resolve(process.cwd(), "data/inkloom.sqlite")
+      }
+    );
+  const allowedOrigins = new Set(
+    options.allowedOrigins ??
+      (process.env.INKLOOM_WEB_ORIGINS ??
+        "http://127.0.0.1:4173,http://localhost:4173")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+  );
+  const secureCookies =
+    options.secureCookies ??
+    (process.env.NODE_ENV === "production" ||
+      process.env.INKLOOM_SECURE_COOKIES === "true");
+  const now = options.now ?? (() => Date.now());
+
+  const server = createServer(async (request, response) => {
+    try {
+      applyBaseHeaders(response);
+      const origin = request.headers.origin;
+      if (origin && !allowedOrigins.has(origin)) {
+        throw new ApiHttpError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在允许列表中。");
+      }
+      if (origin) {
+        response.setHeader("Access-Control-Allow-Origin", origin);
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.setHeader("Vary", "Origin");
+      }
+
+      if (request.method === "OPTIONS") {
+        response.statusCode = 204;
+        response.setHeader(
+          "Access-Control-Allow-Methods",
+          "GET, POST, PUT, DELETE, OPTIONS"
+        );
+        response.setHeader(
+          "Access-Control-Allow-Headers",
+          "Content-Type, Accept"
+        );
+        response.setHeader("Access-Control-Max-Age", "600");
+        response.end();
+        return;
+      }
+
+      const url = new URL(
+        request.url ?? "/",
+        `http://${request.headers.host ?? "127.0.0.1"}`
+      );
+      const body = await readJsonBody(request);
+      await route({
+        database,
+        secureCookies,
+        now,
+        context: { request, response, url, body }
+      });
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
+  return {
+    server,
+    database,
+    async close(): Promise<void> {
+      await new Promise<void>((resolveClose, reject) => {
+        server.close((error) => (error ? reject(error) : resolveClose()));
+      });
+      database.close();
+    }
+  };
+}
+
+async function route({
+  database,
+  secureCookies,
+  now,
+  context
+}: {
+  database: DocumentDatabase;
+  secureCookies: boolean;
+  now: () => number;
+  context: RequestContext;
+}): Promise<void> {
+  const { request, response, url, body } = context;
+  const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  const method = request.method ?? "GET";
+
+  if (method === "GET" && url.pathname === "/api/health") {
+    sendJson(response, 200, {
+      ok: true,
+      service: "inkloom-api",
+      time: new Date(now()).toISOString()
+    });
+    return;
+  }
+
+  if (segments[0] !== "api") {
+    throw new ApiHttpError(404, "NOT_FOUND", "接口不存在。");
+  }
+
+  if (method === "POST" && url.pathname === "/api/auth/register") {
+    const input = parseRecord(body);
+    const email = validateEmail(input.email);
+    const password = validatePassword(input.password);
+    if (database.findUserByEmail(email)) {
+      throw new ApiHttpError(409, "EMAIL_IN_USE", "该邮箱已注册。");
+    }
+    const passwordData = hashPassword(password);
+    let user: ApiUser;
+    try {
+      user = database.createUser({
+        email,
+        displayName: optionalString(input.displayName, 40),
+        passwordHash: passwordData.hash,
+        passwordSalt: passwordData.salt
+      });
+    } catch (error) {
+      if (isUniqueConstraint(error)) {
+        throw new ApiHttpError(409, "EMAIL_IN_USE", "该邮箱已注册。");
+      }
+      throw error;
+    }
+    issueSession(database, response, user, secureCookies, now);
+    sendJson(response, 201, { user });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/api/auth/login") {
+    const input = parseRecord(body);
+    const email = validateEmail(input.email);
+    const password = validatePassword(input.password);
+    const row = database.findUserByEmail(email);
+    if (
+      !row ||
+      !verifyPassword(password, row.password_hash, row.password_salt)
+    ) {
+      throw new ApiHttpError(401, "INVALID_CREDENTIALS", "邮箱或密码不正确。");
+    }
+    const user = database.findUserById(row.id);
+    if (!user) throw new ApiHttpError(401, "INVALID_SESSION", "登录失败。");
+    issueSession(database, response, user, secureCookies, now);
+    sendJson(response, 200, { user });
+    return;
+  }
+
+  const sessionToken = readSessionToken(request, secureCookies);
+  const user = sessionToken ? database.findUserBySession(sessionToken) : undefined;
+
+  if (method === "POST" && url.pathname === "/api/auth/logout") {
+    if (sessionToken) database.deleteSession(sessionToken);
+    clearSessionCookie(response, secureCookies);
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+
+  if (!user) {
+    throw new ApiHttpError(401, "UNAUTHORIZED", "请先登录。");
+  }
+
+  if (method === "GET" && url.pathname === "/api/auth/me") {
+    sendJson(response, 200, { user });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/api/workspaces") {
+    sendJson(response, 200, { workspaces: database.listWorkspaces(user.id) });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/api/workspaces") {
+    const input = parseRecord(body);
+    const workspace = database.createWorkspace(
+      user.id,
+      requiredString(input.name, "工作区名称")
+    );
+    sendJson(response, 201, { workspace });
+    return;
+  }
+
+  if (segments[0] === "api" && segments[1] === "workspaces" && segments[2]) {
+    const workspaceId = segments[2];
+
+    if (method === "GET" && segments.length === 4 && segments[3] === "tree") {
+      sendJson(response, 200, {
+        tree: database.listTree(user.id, workspaceId)
+      });
+      return;
+    }
+
+    if (method === "POST" && segments.length === 4 && segments[3] === "documents") {
+      const input = parseRecord(body);
+      const document = database.createDocument(user.id, workspaceId, {
+        path: requiredString(input.path, "文档路径"),
+        title: requiredString(input.title, "文档标题"),
+        markdown: optionalString(input.markdown, 1_500_000),
+        tags: optionalStringArray(input.tags),
+        extensions: optionalExtensions(input.extensions)
+      });
+      sendJson(response, 201, { document });
+      return;
+    }
+
+    if (
+      segments.length === 5 &&
+      segments[3] === "documents" &&
+      segments[4]
+    ) {
+      const documentId = segments[4];
+      if (method === "GET") {
+        sendJson(response, 200, {
+          document: database.readDocument(user.id, workspaceId, documentId)
+        });
+        return;
+      }
+      if (method === "PUT") {
+        const input = parseRecord(body);
+        const document = database.writeDocument(
+          user.id,
+          workspaceId,
+          documentId,
+          {
+            markdown: requiredMarkdown(input.markdown),
+            baseRevision: requiredRevision(input.baseRevision),
+            title:
+              input.title === undefined
+                ? undefined
+                : requiredString(input.title, "文档标题"),
+            tags:
+              input.tags === undefined
+                ? undefined
+                : optionalStringArray(input.tags),
+            extensions:
+              input.extensions === undefined
+                ? undefined
+                : optionalExtensions(input.extensions)
+          }
+        );
+        sendJson(response, 200, { document });
+        return;
+      }
+    }
+
+    if (
+      segments.length === 6 &&
+      segments[3] === "documents" &&
+      segments[4] &&
+      segments[5] === "revisions" &&
+      method === "GET"
+    ) {
+      sendJson(response, 200, {
+        revisions: database.listRevisions(user.id, workspaceId, segments[4])
+      });
+      return;
+    }
+
+    if (
+      segments.length === 7 &&
+      segments[3] === "documents" &&
+      segments[4] &&
+      segments[5] === "revisions" &&
+      segments[6] &&
+      method === "POST"
+    ) {
+      const input = parseRecord(body);
+      const document = database.restoreRevision(
+        user.id,
+        workspaceId,
+        segments[4],
+        segments[6],
+        requiredRevision(input.baseRevision)
+      );
+      sendJson(response, 200, { document });
+      return;
+    }
+
+    if (
+      segments.length === 5 &&
+      segments[3] === "nodes" &&
+      segments[4]
+    ) {
+      if (method === "PUT") {
+        const input = parseRecord(body);
+        const node = database.moveDocument(user.id, workspaceId, segments[4], {
+          targetPath: requiredString(input.targetPath, "目标路径"),
+          baseRevision: requiredRevision(input.baseRevision)
+        });
+        sendJson(response, 200, { node });
+        return;
+      }
+      if (method === "DELETE") {
+        const input = parseRecord(body);
+        database.deleteDocument(
+          user.id,
+          workspaceId,
+          segments[4],
+          requiredRevision(input.baseRevision)
+        );
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+    }
+  }
+
+  throw new ApiHttpError(404, "NOT_FOUND", "接口不存在。");
+}
+
+function issueSession(
+  database: DocumentDatabase,
+  response: ServerResponse,
+  user: ApiUser,
+  secureCookies: boolean,
+  now: () => number
+): void {
+  const token = createSessionToken();
+  const expiresAt = new Date(now() + SESSION_TTL_MS).toISOString();
+  database.createSession(user.id, token, expiresAt);
+  response.setHeader(
+    "Set-Cookie",
+    serializeCookie(sessionCookieName(secureCookies), token, {
+      maxAge: SESSION_TTL_MS / 1000,
+      secure: secureCookies
+    })
+  );
+}
+
+function clearSessionCookie(
+  response: ServerResponse,
+  secureCookies: boolean
+): void {
+  response.setHeader(
+    "Set-Cookie",
+    serializeCookie(sessionCookieName(secureCookies), "", {
+      maxAge: 0,
+      secure: secureCookies
+    })
+  );
+}
+
+function sessionCookieName(secure: boolean): string {
+  return secure ? HOST_COOKIE_NAME : COOKIE_NAME;
+}
+
+function serializeCookie(
+  name: string,
+  value: string,
+  options: { maxAge: number; secure: boolean }
+): string {
+  const parts = [
+    `${name}=${value}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${Math.floor(options.maxAge)}`
+  ];
+  if (options.secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function readSessionToken(
+  request: IncomingMessage,
+  secureCookies: boolean
+): string | undefined {
+  const cookie = request.headers.cookie;
+  if (!cookie) return undefined;
+  const name = sessionCookieName(secureCookies);
+  for (const part of cookie.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return undefined;
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  if (request.method === "GET" || request.method === "HEAD") return {};
+  let bytes = 0;
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > MAX_BODY_BYTES) {
+      throw new ApiHttpError(413, "PAYLOAD_TOO_LARGE", "请求正文超过 2 MiB。");
+    }
+    chunks.push(buffer);
+  }
+  if (chunks.length === 0) return {};
+  const contentType = request.headers["content-type"] ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new ApiHttpError(415, "UNSUPPORTED_MEDIA_TYPE", "请求正文必须是 JSON。");
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  } catch {
+    throw new ApiHttpError(400, "INVALID_JSON", "请求正文不是有效 JSON。");
+  }
+}
+
+function sendJson(response: ServerResponse, status: number, value: unknown): void {
+  const body = JSON.stringify(value);
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Content-Length", Buffer.byteLength(body));
+  response.end(body);
+}
+
+function sendError(response: ServerResponse, error: unknown): void {
+  if (response.headersSent) {
+    response.destroy();
+    return;
+  }
+  if (error instanceof RevisionConflictError) {
+    sendJson(response, 409, {
+      error: {
+        code: error.code,
+        message: "文档已被其他会话修改，请刷新后处理。",
+        details: {
+          documentId: error.documentId,
+          expectedRevision: error.expectedRevision,
+          actualRevision: error.actualRevision
+        }
+      }
+    });
+    return;
+  }
+  if (error instanceof ApiDatabaseError || error instanceof ApiHttpError) {
+    sendJson(response, error.status, {
+      error: { code: error.code, message: error.message }
+    });
+    return;
+  }
+  if (error instanceof InkLoomError) {
+    const status =
+      error.code === "INVALID_WORKSPACE_PATH" ? 400 : 409;
+    sendJson(response, status, {
+      error: { code: error.code, message: error.message }
+    });
+    return;
+  }
+  console.error(error);
+  sendJson(response, 500, {
+    error: { code: "INTERNAL_ERROR", message: "服务暂时不可用。" }
+  });
+}
+
+function applyBaseHeaders(response: ServerResponse): void {
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Cross-Origin-Resource-Policy", "same-site");
+}
+
+function parseRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiHttpError(400, "INVALID_BODY", "请求正文必须是 JSON 对象。");
+  }
+  return value as Record<string, unknown>;
+}
+
+function validateEmail(value: unknown): string {
+  const email = requiredString(value, "邮箱", 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiHttpError(400, "INVALID_EMAIL", "请输入有效邮箱。");
+  }
+  return normalizeEmail(email);
+}
+
+function validatePassword(value: unknown): string {
+  const password = requiredString(value, "密码", 128);
+  if (password.length < 8) {
+    throw new ApiHttpError(400, "WEAK_PASSWORD", "密码至少需要 8 个字符。");
+  }
+  return password;
+}
+
+function requiredString(
+  value: unknown,
+  name: string,
+  maxLength = 200
+): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ApiHttpError(400, "INVALID_INPUT", `${name}不能为空。`);
+  }
+  if (value.length > maxLength) {
+    throw new ApiHttpError(413, "INPUT_TOO_LARGE", `${name}超过长度限制。`);
+  }
+  return value;
+}
+
+function requiredMarkdown(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new ApiHttpError(400, "INVALID_INPUT", "Markdown 正文必须是字符串。");
+  }
+  if (value.length > 1_500_000) {
+    throw new ApiHttpError(413, "INPUT_TOO_LARGE", "Markdown 正文超过长度限制。");
+  }
+  return value;
+}
+
+function optionalString(value: unknown, maxLength: number): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    throw new ApiHttpError(400, "INVALID_INPUT", "字段类型不正确。");
+  }
+  if (value.length > maxLength) {
+    throw new ApiHttpError(413, "INPUT_TOO_LARGE", "字段超过长度限制。");
+  }
+  return value;
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new ApiHttpError(400, "INVALID_INPUT", "标签必须是字符串数组。");
+  }
+  return value.slice(0, 30);
+}
+
+function optionalExtensions(value: unknown): DocumentExtensions | undefined {
+  if (value === undefined) return undefined;
+  if (!isJsonObject(value)) {
+    throw new ApiHttpError(400, "INVALID_EXTENSIONS", "扩展数据必须是 JSON 对象。");
+  }
+  return value as DocumentExtensions;
+}
+
+function requiredRevision(value: unknown): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new ApiHttpError(400, "INVALID_REVISION", "revision 必须是正整数。");
+  }
+  return value as number;
+}
+
+function isJsonObject(value: unknown): value is Record<string, JsonValue> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function isUniqueConstraint(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /UNIQUE constraint failed/i.test(error.message)
+  );
+}
+
+class ApiHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApiHttpError";
+  }
+}
+
+const invokedPath = process.argv[1];
+if (invokedPath && fileURLToPath(import.meta.url) === resolve(invokedPath)) {
+  const port = Number(process.env.PORT ?? process.env.INKLOOM_API_PORT ?? 3001);
+  const application = createApiServer();
+  application.server.listen(port, "127.0.0.1", () => {
+    console.log(`InkLoom API: http://127.0.0.1:${port}`);
+  });
+}

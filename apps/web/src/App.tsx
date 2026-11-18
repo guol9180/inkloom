@@ -13,10 +13,22 @@ import {
   type CanvasScene
 } from "@inkloom/diagrams";
 import {
+  RevisionConflictError,
+  workspacePath,
+  type JsonValue,
+  type WorkspaceId
+} from "@inkloom/core";
+import {
   countWords,
   extractHeadings,
   type MarkdownViewMode
 } from "@inkloom/editor";
+import type {
+  CloudDocumentRevision,
+  CloudUser,
+  CloudWorkspace,
+  CloudWorkspaceAdapter
+} from "@inkloom/storage";
 import {
   ArrowUpRight,
   Bold,
@@ -30,6 +42,7 @@ import {
   Download,
   Eye,
   FileText,
+  FolderInput,
   FolderClosed,
   FolderOpen,
   GitBranch,
@@ -53,22 +66,25 @@ import {
   X
 } from "lucide-react";
 import {
-  loadBrowserWorkspace,
-  persistBrowserActiveDocument,
-  persistBrowserWorkspace
-} from "./browser-workspace";
-import { folderOrder, seedNotes, type Note } from "./data";
+  clearDraft,
+  cloudClient,
+  ensureCloudWorkspace,
+  loadCloudWorkspace,
+  persistActiveWorkspace,
+  saveDraft,
+  snapshotToNote
+} from "./cloud-workspace";
+import { folderOrder, type Note } from "./data";
 
 type ViewMode = MarkdownViewMode;
-type SaveState = "saved" | "saving";
+type SaveState = "loading" | "saved" | "saving" | "error" | "conflict";
 
-const initialWorkspace = loadBrowserWorkspace(
-  seedNotes,
-  new URLSearchParams(window.location.search).has("fresh")
-);
-if (new URLSearchParams(window.location.search).has("fresh")) {
-  window.history.replaceState({}, "", window.location.pathname);
-}
+type SavedNoteShape = {
+  title: string;
+  content: string;
+  tags: string[];
+  canvas?: CanvasScene;
+};
 
 function formatTime(value: string): string {
   const date = new Date(value);
@@ -81,27 +97,24 @@ function formatTime(value: string): string {
   }).format(date);
 }
 
-function createNote(folder = "个人"): Note {
-  const now = new Date().toISOString();
-  const id = crypto.randomUUID();
-  return {
-    id,
-    title: "未命名文档",
-    folder,
-    filePath: `${folder}/未命名文档.md`,
-    tags: [],
-    createdAt: now,
-    updatedAt: now,
-    content: "# 未命名文档\n\n从这里开始记录。\n"
-  };
-}
-
-function App() {
-  const [notes, setNotes] = useState<Note[]>(() => [...initialWorkspace.notes]);
-  const [activeId, setActiveId] = useState(initialWorkspace.activeId);
+function WorkspaceApp({
+  user,
+  onLogout
+}: {
+  user: CloudUser;
+  onLogout: () => Promise<void>;
+}) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [activeId, setActiveId] = useState("");
+  const [workspace, setWorkspace] = useState<CloudWorkspace>();
+  const [adapter, setAdapter] = useState<CloudWorkspaceAdapter>();
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [revisions, setRevisions] = useState<CloudDocumentRevision[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [query, setQuery] = useState("");
-  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [saveState, setSaveState] = useState<SaveState>("loading");
+  const [saveError, setSaveError] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(folderOrder)
   );
@@ -113,9 +126,16 @@ function App() {
   const previewRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  const initialSave = useRef(true);
+  const lastSavedRef = useRef(new Map<string, SavedNoteShape>());
+  const savingRef = useRef(false);
+  const conflictLockedRef = useRef(false);
+  const saveTimerRef = useRef<number | undefined>(undefined);
 
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0];
+  const visibleFolders = useMemo(
+    () => [...new Set([...folderOrder, ...notes.map((note) => note.folder)])],
+    [notes]
+  );
   const filteredNotes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return notes;
@@ -156,21 +176,85 @@ function App() {
   }, [previewHtml]);
 
   useEffect(() => {
-    if (initialSave.current) {
-      initialSave.current = false;
-      return;
-    }
-    setSaveState("saving");
-    const timer = window.setTimeout(() => {
-      persistBrowserWorkspace(notes, activeId);
-      setSaveState("saved");
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [notes]);
+    let cancelled = false;
+    void (async () => {
+      setWorkspaceLoading(true);
+      setWorkspaceError("");
+      setSaveState("loading");
+      try {
+        const nextWorkspace = await ensureCloudWorkspace();
+        if (cancelled) return;
+        const nextAdapter = cloudClient.workspace(nextWorkspace.id as WorkspaceId);
+        const loaded = await loadCloudWorkspace(nextAdapter, nextWorkspace);
+        if (cancelled) return;
+        lastSavedRef.current = new Map(
+          loaded.notes.map((note) => [note.id, noteShape(note)])
+        );
+        setWorkspace(nextWorkspace);
+        setAdapter(nextAdapter);
+        setNotes(loaded.notes);
+        setActiveId(loaded.activeId);
+        setWorkspaceLoading(false);
+        setSaveState("saved");
+        if (loaded.recoveredDraft) {
+          showToast("已恢复上次未成功保存到云端的本地草稿");
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setWorkspaceError(
+          error instanceof Error ? error.message : "工作区加载失败。"
+        );
+        setWorkspaceLoading(false);
+        setSaveState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (activeId) persistBrowserActiveDocument(activeId);
-  }, [activeId]);
+    if (!adapter || !activeNote || workspaceLoading || savingRef.current) return;
+    if (conflictLockedRef.current) return;
+    const saved = lastSavedRef.current.get(activeNote.id);
+    if (!saved || noteShapesEqual(saved, noteShape(activeNote))) {
+      return;
+    }
+    saveDraft(activeNote);
+    setSaveState("saving");
+    setSaveError("");
+    saveTimerRef.current = window.setTimeout(() => {
+      void persistNote(activeNote, adapter);
+    }, 550);
+    return () => {
+      if (saveTimerRef.current !== undefined) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [activeNote, adapter, workspaceLoading]);
+
+  useEffect(() => {
+    if (workspace && activeId) persistActiveWorkspace(workspace.id as WorkspaceId, activeId);
+  }, [activeId, workspace]);
+
+  useEffect(() => {
+    if (!adapter || !activeNote) {
+      setRevisions([]);
+      return;
+    }
+    let cancelled = false;
+    void cloudClient
+      .listRevisions(adapter.workspaceId, activeNote.id)
+      .then((items) => {
+        if (!cancelled) setRevisions(items);
+      })
+      .catch(() => {
+        if (!cancelled) setRevisions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, activeNote?.id, activeNote?.revision]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -180,18 +264,167 @@ function App() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        persistBrowserWorkspace(notes, activeId);
-        setSaveState("saved");
-        showToast("当前工作区已保存");
+        if (adapter && activeNote) {
+          void persistNote(activeNote, adapter);
+          showToast("正在保存当前文档");
+        }
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activeId, notes]);
+  }, [activeNote, adapter]);
 
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2400);
+  }
+
+  function noteShape(note: Note): SavedNoteShape {
+    return {
+      title: note.title,
+      content: note.content,
+      tags: note.tags,
+      canvas: note.canvas
+    };
+  }
+
+  function noteShapesEqual(left: SavedNoteShape, right: SavedNoteShape): boolean {
+    return (
+      left.title === right.title &&
+      left.content === right.content &&
+      JSON.stringify(left.tags) === JSON.stringify(right.tags) &&
+      JSON.stringify(left.canvas) === JSON.stringify(right.canvas)
+    );
+  }
+
+  async function persistNote(
+    note: Note,
+    targetAdapter: CloudWorkspaceAdapter
+  ): Promise<void> {
+    if (savingRef.current) return;
+    const savedShape = lastSavedRef.current.get(note.id);
+    if (savedShape && noteShapesEqual(savedShape, noteShape(note))) {
+      clearDraft(note.id);
+      setSaveState("saved");
+      return;
+    }
+    if (saveTimerRef.current !== undefined) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+    savingRef.current = true;
+    const sentShape = noteShape(note);
+    saveDraft(note);
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      const saved = await targetAdapter.writeDocument({
+        documentId: note.id,
+        baseRevision: note.revision,
+        markdown: note.content,
+        title: note.title,
+        tags: note.tags,
+        extensions: note.canvas
+          ? { canvas: note.canvas as unknown as JsonValue }
+          : undefined
+      });
+      const savedNote = snapshotToNote(saved);
+      lastSavedRef.current.set(
+        savedNote.id,
+        noteShape(savedNote)
+      );
+      clearDraft(savedNote.id);
+      setNotes((current) =>
+        current.map((item) => {
+          if (item.id !== savedNote.id) return item;
+          return noteShapesEqual(sentShape, noteShape(item))
+            ? savedNote
+            : {
+                ...item,
+                revision: savedNote.revision,
+                updatedAt: savedNote.updatedAt
+              };
+        })
+      );
+      setSaveState("saved");
+    } catch (error) {
+      saveDraft(note);
+      if (error instanceof RevisionConflictError) {
+        conflictLockedRef.current = true;
+        setSaveState("conflict");
+        setSaveError("云端已有更新，本地内容已保留为冲突副本。");
+        try {
+          await preserveConflictCopy(note, targetAdapter);
+        } catch {
+          setSaveError("保存冲突。请保留此页面并刷新后处理，云端内容不会被覆盖。");
+        }
+      } else {
+        setSaveState("error");
+        setSaveError(
+          error instanceof Error
+            ? `保存失败：${error.message}`
+            : "保存失败，本地草稿已保留。"
+        );
+      }
+    } finally {
+      savingRef.current = false;
+    }
+  }
+
+  async function preserveConflictCopy(
+    localNote: Note,
+    targetAdapter: CloudWorkspaceAdapter
+  ): Promise<void> {
+    const serverSnapshot = await targetAdapter.readDocument(localNote.id);
+    const copyTitle = nextAvailableTitle(
+      `${localNote.title}（本地冲突副本）`,
+      localNote.folder,
+      notes
+    );
+    const copyPath = uniqueFilePath(localNote.folder, copyTitle, notes);
+    const created = await targetAdapter.createDocument({
+      workspaceId: targetAdapter.workspaceId,
+      path: workspacePath(copyPath),
+      title: copyTitle,
+      markdown: localNote.content,
+      tags: localNote.tags,
+      extensions: localNote.canvas
+        ? { canvas: localNote.canvas as unknown as JsonValue }
+        : undefined
+    });
+    const serverNote = snapshotToNote(serverSnapshot);
+    const copyNote = snapshotToNote(created);
+    lastSavedRef.current.set(serverNote.id, noteShape(serverNote));
+    lastSavedRef.current.set(copyNote.id, noteShape(copyNote));
+    clearDraft(localNote.id);
+    clearDraft(copyNote.id);
+    setNotes((current) =>
+      current.flatMap((item) =>
+        item.id === localNote.id ? [serverNote, copyNote] : [item]
+      )
+    );
+    setActiveId(copyNote.id);
+    conflictLockedRef.current = false;
+    setSaveError("");
+    setSaveState("saved");
+    showToast("云端版本与本地修改均已保留");
+  }
+
+  async function createServerNote(folder = "个人"): Promise<Note> {
+    if (!adapter) throw new Error("工作区尚未加载。");
+    const title = nextAvailableTitle("未命名文档", folder, notes);
+    const snapshot = await adapter.createDocument({
+      workspaceId: adapter.workspaceId,
+      path: workspacePath(uniqueFilePath(folder, title, notes)),
+      title,
+      markdown: `# ${title}\n\n从这里开始记录。\n`
+    });
+    const note = snapshotToNote(snapshot);
+    lastSavedRef.current.set(note.id, noteShape(note));
+    setNotes((current) => [...current, note]);
+    setActiveId(note.id);
+    setSaveState("saved");
+    return note;
   }
 
   function updateActiveNote(patch: Partial<Note>) {
@@ -212,14 +445,26 @@ function App() {
   }
 
   function selectNote(id: string) {
+    if (adapter && activeNote && id !== activeNote.id) {
+      const saved = lastSavedRef.current.get(activeNote.id);
+      if (saved && !noteShapesEqual(saved, noteShape(activeNote))) {
+        void persistNote(activeNote, adapter);
+      }
+    }
     setActiveId(id);
     setSidebarOpen(false);
   }
 
-  function addNote(folder = activeNote?.folder ?? "个人") {
-    const note = createNote(folder);
-    setNotes((current) => [...current, note]);
-    setActiveId(note.id);
+  async function addNote(folder = activeNote?.folder ?? "个人") {
+    if (!adapter) return;
+    setSaveState("saving");
+    try {
+      await createServerNote(folder);
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "新建文档失败。");
+      return;
+    }
     setExpandedFolders((current) => new Set([...current, folder]));
     window.setTimeout(() => {
       const titleInput = document.querySelector<HTMLInputElement>(".document-title");
@@ -228,14 +473,29 @@ function App() {
     }, 30);
   }
 
-  function deleteActiveNote() {
-    if (!activeNote) return;
-    if (!window.confirm(`删除“${activeNote.title}”？原型会同时删除浏览器本地副本。`)) return;
-    const remaining = notes.filter((note) => note.id !== activeNote.id);
-    const next = remaining.length > 0 ? remaining : [createNote()];
-    setNotes(next);
-    setActiveId(next[0].id);
-    showToast("文档已删除");
+  async function deleteActiveNote() {
+    if (!activeNote || !adapter) return;
+    if (!window.confirm(`删除“${activeNote.title}”？该操作会从云端工作区删除文档。`)) {
+      return;
+    }
+    setSaveState("saving");
+    try {
+      await adapter.deleteNode({
+        nodeId: activeNote.id,
+        baseRevision: activeNote.revision
+      });
+      clearDraft(activeNote.id);
+      lastSavedRef.current.delete(activeNote.id);
+      const remaining = notes.filter((note) => note.id !== activeNote.id);
+      setNotes(remaining);
+      setActiveId(remaining[0]?.id ?? "");
+      setSaveState("saved");
+      if (remaining.length === 0) await createServerNote();
+      showToast("文档已删除");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "删除失败。");
+    }
   }
 
   function insertAtCursor(before: string, after = "", placeholder = "文字") {
@@ -316,52 +576,48 @@ function App() {
   async function importMarkdown(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    const text = await file.text();
-    const title = file.name.replace(/\.md$/i, "");
-    const now = new Date().toISOString();
-    const note: Note = {
-      id: crypto.randomUUID(),
-      title,
-      folder: "个人",
-      filePath: `个人/${file.name}`,
-      tags: ["导入"],
-      createdAt: now,
-      updatedAt: now,
-      content: /^#\s/m.test(text) ? text : `# ${title}\n\n${text}`
-    };
-    setNotes((current) => [...current, note]);
-    setActiveId(note.id);
-    showToast("Markdown 已导入");
+    if (!file || !adapter) return;
+    setSaveState("saving");
+    try {
+      const note = await importOneMarkdown(
+        file.name,
+        await file.text(),
+        "个人",
+        ["导入"]
+      );
+      setActiveId(note.id);
+      setSaveState("saved");
+      showToast("Markdown 已保存到云端");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "Markdown 导入失败。");
+    }
   }
 
   async function importFolder() {
-    const picker = (window as unknown as { showDirectoryPicker?: (options?: unknown) => Promise<any> })
+    const picker = (window as unknown as { showDirectoryPicker?: (options?: unknown) => Promise<DirectoryHandle> })
       .showDirectoryPicker;
-    if (!picker) {
+    if (!picker || !adapter) {
       showToast("当前浏览器不支持目录读取，请使用导入 Markdown");
       return;
     }
 
     try {
       const directory = await picker({ mode: "read" });
-      const imported: Note[] = [];
-      const scan = async (handle: any, prefix = "") => {
+      const pending: Array<{
+        name: string;
+        text: string;
+        folder: string;
+      }> = [];
+      const scan = async (handle: DirectoryHandle, prefix = "") => {
         for await (const [name, entry] of handle.entries()) {
-          if (name.startsWith(".") || imported.length >= 200) continue;
+          if (name.startsWith(".") || pending.length >= 200) continue;
           if (entry.kind === "file" && /\.md$/i.test(name)) {
             const file = await entry.getFile();
-            const text = await file.text();
-            const now = new Date(file.lastModified).toISOString();
-            imported.push({
-              id: crypto.randomUUID(),
-              title: name.replace(/\.md$/i, ""),
-              folder: prefix.split("/")[0] || "个人",
-              filePath: `${prefix}${name}`,
-              tags: ["文件夹导入"],
-              createdAt: now,
-              updatedAt: now,
-              content: /^#\s/m.test(text) ? text : `# ${name.replace(/\.md$/i, "")}\n\n${text}`
+            pending.push({
+              name,
+              text: await file.text(),
+              folder: prefix.split("/")[0] || "个人"
             });
           }
           if (entry.kind === "directory" && prefix.split("/").length < 2) {
@@ -370,16 +626,133 @@ function App() {
         }
       };
       await scan(directory);
-      if (imported.length === 0) {
+      if (pending.length === 0) {
         showToast("文件夹里没有找到 Markdown");
         return;
       }
-      setNotes((current) => [...imported, ...current]);
-      setActiveId(imported[0].id);
-      setExpandedFolders((current) => new Set([...current, ...imported.map((note) => note.folder)]));
+      setSaveState("saving");
+      const imported: Note[] = [];
+      try {
+        for (const file of pending) {
+          imported.push(
+            await importOneMarkdown(
+              file.name,
+              file.text,
+              file.folder,
+              ["文件夹导入"]
+            )
+          );
+        }
+      } finally {
+        if (imported.length > 0) {
+          setActiveId(imported[0].id);
+          setExpandedFolders(
+            (current) =>
+              new Set([...current, ...imported.map((note) => note.folder)])
+          );
+        }
+      }
+      setSaveState("saved");
       showToast(`已导入 ${imported.length} 篇 Markdown`);
     } catch (error) {
       if ((error as Error).name !== "AbortError") showToast("目录读取失败");
+    }
+  }
+
+  async function importOneMarkdown(
+    fileName: string,
+    text: string,
+    folder: string,
+    tags: string[]
+  ): Promise<Note> {
+    if (!adapter) throw new Error("工作区尚未加载。");
+    const baseTitle = fileName.replace(/\.md$/i, "");
+    const title = nextAvailableTitle(baseTitle, folder, notes);
+    const path = uniqueFilePath(folder, title, notes);
+    const markdown = /^#\s/m.test(text) ? text : `# ${title}\n\n${text}`;
+    const snapshot = await adapter.createDocument({
+      workspaceId: adapter.workspaceId,
+      path: workspacePath(path),
+      title,
+      markdown,
+      tags
+    });
+    const note = snapshotToNote(snapshot);
+    lastSavedRef.current.set(note.id, noteShape(note));
+    setNotes((current) => [...current, note]);
+    return note;
+  }
+
+  async function moveActiveNote() {
+    if (!activeNote || !adapter) return;
+    const targetPath = window.prompt("输入新的工作区路径", activeNote.filePath);
+    if (!targetPath || targetPath === activeNote.filePath) return;
+    setSaveState("saving");
+    try {
+      const moved = await adapter.moveNode({
+        nodeId: activeNote.id,
+        targetPath: workspacePath(targetPath),
+        baseRevision: activeNote.revision
+      });
+      const folder = targetPath.split("/")[0] || "个人";
+      lastSavedRef.current.set(activeNote.id, noteShape(activeNote));
+      setNotes((current) =>
+        current.map((note) =>
+          note.id === activeNote.id
+            ? {
+                ...note,
+                filePath: moved.path,
+                folder,
+                revision:
+                  moved.kind === "document" ? moved.meta.revision : note.revision,
+                updatedAt:
+                  moved.kind === "document" ? moved.meta.updatedAt : note.updatedAt
+              }
+            : note
+        )
+      );
+      setExpandedFolders((current) => new Set([...current, folder]));
+      setSaveState("saved");
+      showToast("文档路径已更新");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "移动文档失败。");
+    }
+  }
+
+  async function restoreVersion(revision: CloudDocumentRevision) {
+    if (!activeNote || !adapter) return;
+    if (!window.confirm(`恢复 revision ${revision.meta.revision}？当前内容会先保存为历史版本。`)) {
+      return;
+    }
+    setSaveState("saving");
+    try {
+      const restored = await cloudClient.restoreRevision(
+        adapter.workspaceId,
+        activeNote.id,
+        revision.revisionId,
+        activeNote.revision
+      );
+      const restoredNote = snapshotToNote(restored);
+      lastSavedRef.current.set(restoredNote.id, noteShape(restoredNote));
+      clearDraft(restoredNote.id);
+      setNotes((current) =>
+        current.map((note) => (note.id === restoredNote.id ? restoredNote : note))
+      );
+      setSaveState("saved");
+      showToast("历史版本已恢复并保存为新 revision");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : "恢复历史版本失败。");
+    }
+  }
+
+  async function logout() {
+    if (!window.confirm("退出当前账号？")) return;
+    try {
+      await onLogout();
+    } catch {
+      showToast("退出失败，请稍后重试");
     }
   }
 
@@ -395,7 +768,46 @@ function App() {
     }
   }
 
-  if (!activeNote) return null;
+  if (workspaceLoading) {
+    return (
+      <main className="session-loading">
+        <span className="brand-mark" aria-hidden="true">
+          <span>墨</span>
+        </span>
+        <p>正在载入云端文档…</p>
+      </main>
+    );
+  }
+
+  if (workspaceError) {
+    return (
+      <main className="workspace-load-error">
+        <span className="brand-mark" aria-hidden="true">
+          <span>墨</span>
+        </span>
+        <h1>工作区暂时无法打开</h1>
+        <p>{workspaceError}</p>
+        <button className="auth-submit" type="button" onClick={() => window.location.reload()}>
+          重新连接
+        </button>
+      </main>
+    );
+  }
+
+  if (!activeNote) {
+    return (
+      <main className="workspace-load-error">
+        <span className="brand-mark" aria-hidden="true">
+          <span>墨</span>
+        </span>
+        <h1>工作区还是空的</h1>
+        <p>新建一篇 Markdown，开始记录第一篇云端文档。</p>
+        <button className="auth-submit" type="button" onClick={() => void addNote("个人")}>
+          新建文档
+        </button>
+      </main>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -420,24 +832,33 @@ function App() {
 
         <div className="workspace-switcher">
           <span className="workspace-kicker">工作区</span>
-          <button type="button">
-            产品设计库
-            <ChevronDown size={14} />
-          </button>
+          <span className="workspace-title">
+            {workspace?.name ?? "我的工作区"}
+          </span>
         </div>
 
         <div className="topbar-actions">
           <span className="sync-state">
-            <span className="sync-dot" />
-            本机模式
+            <span className={`sync-dot is-${saveState}`} />
+            {saveState === "error"
+              ? "云端连接异常"
+              : saveState === "conflict"
+                ? "需要处理冲突"
+                : "云端已连接"}
           </span>
-          <button className="top-action secondary-action" type="button" onClick={importFolder}>
+          <button
+            className="top-action secondary-action"
+            type="button"
+            aria-label="导入文件夹"
+            onClick={importFolder}
+          >
             <FolderOpen size={16} />
             <span>导入文件夹</span>
           </button>
           <button
             className="top-action secondary-action"
             type="button"
+            aria-label="导入 Markdown"
             onClick={() => importRef.current?.click()}
           >
             <Upload size={16} />
@@ -447,12 +868,15 @@ function App() {
             <Download size={16} />
             导出
           </button>
-          <button className="icon-button" type="button" aria-label="设置">
-            <Settings size={17} />
+          <button
+            className="avatar"
+            type="button"
+            title={`${user.displayName} · 退出登录`}
+            aria-label="退出登录"
+            onClick={() => void logout()}
+          >
+            {user.displayName.slice(0, 1)}
           </button>
-          <div className="avatar" title="本地用户">
-            林
-          </div>
         </div>
         <input
           ref={importRef}
@@ -470,7 +894,12 @@ function App() {
               <span className="section-label">文件</span>
               <strong>{notes.length} 篇文档</strong>
             </div>
-            <button className="icon-button" type="button" onClick={() => addNote()}>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="新建文档"
+              onClick={() => addNote()}
+            >
               <SquarePen size={17} />
             </button>
           </div>
@@ -487,7 +916,7 @@ function App() {
           </label>
 
           <div className="file-tree">
-            {folderOrder.map((folder) => {
+            {visibleFolders.map((folder) => {
               const folderNotes = filteredNotes.filter((note) => note.folder === folder);
               const expanded = expandedFolders.has(folder);
               if (query && folderNotes.length === 0) return null;
@@ -541,16 +970,29 @@ function App() {
             <div className="storage-card">
               <HardDrive size={18} />
               <div>
-                <strong>浏览器本地存储</strong>
-                <span>原型数据自动保存</span>
+                <strong>云端工作区 SQLite</strong>
+                <span>账号内自动保存与版本记录</span>
               </div>
               <Check size={15} />
             </div>
             <div className="sidebar-links">
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectorOpen(true);
+                  showToast("最近版本显示在右侧信息栏");
+                }}
+              >
                 <History size={15} /> 版本历史
               </button>
-              <button type="button">
+              <button
+                type="button"
+                onClick={() =>
+                  window.alert(
+                    `账号：${user.email}\n工作区：${workspace?.name ?? "我的工作区"}\n存储：云端 SQLite`
+                  )
+                }
+              >
                 <Settings size={15} /> 工作区设置
               </button>
             </div>
@@ -560,7 +1002,7 @@ function App() {
         <main className="editor-column">
           <div className="document-topline">
             <div className="breadcrumbs">
-              <span>产品设计库</span>
+              <span>{workspace?.name ?? "我的工作区"}</span>
               <ChevronRight size={12} />
               <span>{activeNote.folder}</span>
               <ChevronRight size={12} />
@@ -568,15 +1010,26 @@ function App() {
             </div>
             <div className="document-actions">
               <div className="save-indicator" aria-live="polite">
-                {saveState === "saving" ? (
+                {saveState === "saving" || saveState === "loading" ? (
                   <>
                     <span className="saving-dot" />
                     保存中
                   </>
+                ) : saveState === "error" || saveState === "conflict" ? (
+                  <button
+                    type="button"
+                    title={saveError || "保存失败"}
+                    onClick={() => {
+                      if (adapter && activeNote) void persistNote(activeNote, adapter);
+                    }}
+                  >
+                    <span className="save-error-dot" />
+                    {saveState === "conflict" ? "冲突已隔离" : "保存失败"}
+                  </button>
                 ) : (
                   <>
                     <Check size={13} />
-                    已保存
+                    已保存到云端
                   </>
                 )}
               </div>
@@ -613,6 +1066,15 @@ function App() {
                 aria-label="切换信息栏"
               >
                 <PanelRightClose size={17} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="移动或重命名文档路径"
+                title="移动或重命名文档路径"
+                onClick={() => void moveActiveNote()}
+              >
+                <FolderInput size={17} />
               </button>
               <button className="icon-button" type="button" aria-label="更多操作" onClick={deleteActiveNote}>
                 <MoreHorizontal size={18} />
@@ -815,16 +1277,28 @@ function App() {
                 <span className="version-dot is-current" />
                 <span>
                   <strong>当前版本</strong>
-                  <small>{formatTime(activeNote.updatedAt)} · 自动保存</small>
+                  <small>
+                    revision {activeNote.revision} · {formatTime(activeNote.updatedAt)}
+                  </small>
                 </span>
               </button>
-              <button type="button">
-                <span className="version-dot" />
-                <span>
-                  <strong>编辑前快照</strong>
-                  <small>今天 13:58 · 本机</small>
-                </span>
-              </button>
+              {revisions.slice(0, 3).map((revision) => (
+                <button
+                  type="button"
+                  key={revision.revisionId}
+                  onClick={() => void restoreVersion(revision)}
+                  title="恢复为这个历史版本"
+                >
+                  <span className="version-dot" />
+                  <span>
+                    <strong>revision {revision.meta.revision}</strong>
+                    <small>{formatTime(revision.recordedAt)} · 点击恢复</small>
+                  </span>
+                </button>
+              ))}
+              {revisions.length === 0 && (
+                <p className="empty-note">首次修改后会在这里生成历史版本。</p>
+              )}
             </div>
           </section>
         </aside>
@@ -843,4 +1317,51 @@ function App() {
   );
 }
 
-export default App;
+type DirectoryHandle = {
+  entries(): AsyncIterableIterator<[string, DirectoryEntry]>;
+};
+
+type DirectoryEntry =
+  | {
+      kind: "file";
+      getFile(): Promise<File>;
+    }
+  | {
+      kind: "directory";
+      entries(): AsyncIterableIterator<[string, DirectoryEntry]>;
+    };
+
+function nextAvailableTitle(
+  baseTitle: string,
+  folder: string,
+  notes: readonly Note[]
+): string {
+  const existing = new Set(
+    notes
+      .filter((note) => note.folder === folder)
+      .map((note) => note.title)
+  );
+  if (!existing.has(baseTitle)) return baseTitle;
+  let index = 2;
+  while (existing.has(`${baseTitle} ${index}`)) index += 1;
+  return `${baseTitle} ${index}`;
+}
+
+function uniqueFilePath(
+  folder: string,
+  title: string,
+  notes: readonly Note[]
+): string {
+  const safeFolder = folder.replaceAll("/", "-").trim() || "个人";
+  const safeTitle = title.replace(/[\\/:*?"<>|]/g, "-").trim() || "未命名文档";
+  const existing = new Set(notes.map((note) => note.filePath));
+  let path = `${safeFolder}/${safeTitle}.md`;
+  let index = 2;
+  while (existing.has(path)) {
+    path = `${safeFolder}/${safeTitle} ${index}.md`;
+    index += 1;
+  }
+  return path;
+}
+
+export default WorkspaceApp;

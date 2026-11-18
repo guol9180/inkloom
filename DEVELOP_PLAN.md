@@ -227,6 +227,39 @@
   - 2026-11-16 验证 第 5 条与 skill 标准条目逐字一致；14 个任务状态全部在枚举内；`git diff --check` 无输出；`pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 通过，构建仅有既存图表大 chunk 警告。
   - 2026-11-16 交付 产出 `AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
 
+### T15: Web 云工作区可上线 MVP（P0）
+
+- 目标：把现有 Web 原型升级为带账号、后端 API 和真实持久化的可用 MVP，用户刷新或更换浏览器后仍能读取自己的文档。
+- 验收标准：
+  - 用户可注册、登录、退出；密码使用强哈希保存，会话 Cookie 为 HttpOnly、SameSite=Lax，生产环境启用 Secure。
+  - 每个用户拥有独立工作区；文档、标题、标签、Markdown 与画布场景持久化到服务端 SQLite。
+  - Web 的创建、读取、自动保存、移动、删除、Markdown 导入导出继续可用，且不直接把 localStorage 当生产数据源。
+  - 每次写入携带 `baseRevision`；过期 revision 返回明确冲突，禁止静默覆盖。
+  - 自动保存失败或 revision 冲突在界面明确提示；本地仅保留临时草稿用于恢复，不作为正文事实源。
+  - API 校验会话、工作区归属、路径、请求体大小和 Origin，并对 Web 域名执行最小 CORS。
+  - `pnpm typecheck`、`pnpm test`、`pnpm build` 通过；API 契约测试覆盖认证、跨用户隔离、CRUD、刷新恢复和 revision 冲突。
+- 边界：不实现跨设备离线队列、实时协作、团队权限、对象存储、评论或分享；不继续 T4 桌面开发。
+- 状态：done
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-18 计划 用户确认先交付可真实保存数据的 Web 端；复用现有原型 UI，以账号会话、SQLite API、Cloud adapter 和 revision 安全为 M1 上线范围，完成后暂停后续开发等待确认。
+  - 2026-11-18 执行 `@inkloom/api` 增加 scrypt 账号、HttpOnly 会话、最小 CORS、用户隔离、SQLite 文档/历史 revision、移动与删除；`@inkloom/storage` 增加 Cloud adapter；Web 切换为云端工作区并补齐登录页、草稿恢复、冲突副本、真实版本历史和移动路径入口。
+  - 2026-11-18 验证 `pnpm typecheck` 通过；`pnpm test` 31 项通过，其中 API 4 项覆盖注册登录刷新、CRUD、跨用户隔离、revision 冲突、历史恢复、移动、越界路径和 Origin 限制；`pnpm build` 通过。
+  - 2026-11-18 验证 浏览器完成登录、Markdown 自动保存 revision 1→2、整页刷新恢复、Mermaid 渲染、Excalidraw 场景持久化；模拟另一会话写入后，本地冲突内容保存为独立副本，云端内容保持 `SERVER_CONFLICT_20261118` 未被覆盖。
+  - 2026-11-18 交付 产出可本地运行的 Web + API MVP、Cloud adapter、API 集成测试和运行文档；剩余差距：生产域名尚未部署，由 T16 关闭。
+
+### T16: Web 端到端测试与生产部署（P0）
+
+- 目标：在 T15 完成后执行自动化与浏览器回归，将 Web 和 API 部署到约定生产域名并验证真实账号和持久化。
+- 验收标准：
+  - 单元、API 集成、浏览器端到端测试覆盖注册登录、刷新恢复、编辑保存、删除、导出和冲突提示。
+  - 生产构建、健康检查、安全响应头、CORS 和 Cookie 配置在目标域名验证通过。
+  - `https://inkloom.imhgl.com` 可访问 Web，`https://api.inkloom.imhgl.com/api/health` 返回健康状态。
+  - 部署步骤、环境变量、备份与回滚方式同步到 `docs/DEPLOYMENT.md`。
+- 边界：不进行 M2 离线同步、桌面或移动端发布。
+- 状态：planned
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-18 计划 跟随 T15 建立生产发布与上线验证任务卡。
+
 ## 状态枚举
 
 | 状态 | 含义 |
@@ -248,8 +281,9 @@
 | 里程碑 | 内容 | 状态 |
 | --- | --- | --- |
 | M0 | 原型与开源交接 | done |
-| M1 | 桌面本地 MVP | planned |
-| M2 | Web 云工作区 | planned |
+| M1 | Web 云工作区可上线 MVP（T15、T16） | in-progress |
+| M1D | 桌面本地 MVP（T4–T6，等待 Web 上线后确认） | planned |
+| M2 | 离线队列与双向同步 | planned |
 | M3 | 实时协作 | planned |
 | M4 | 移动端与 HarmonyOS | planned |
 

@@ -17,3 +17,6 @@ test-results/
 !.vscode/extensions.json
 !.vscode/settings.json
 *.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

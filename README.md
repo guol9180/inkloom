@@ -12,32 +12,36 @@ InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、�
 
 ## 项目状态
 
-当前仓库包含一个已验证可运行的 Web 交互原型：
+当前仓库包含一个已验证可本地运行的 Web 云端工作区：
 
+- 邮箱注册、登录、退出和 HttpOnly 会话
+- 每用户独立工作区，文档和 revision 持久化到服务端 SQLite
 - Markdown 源码、分栏与阅读模式
-- 文档目录、搜索、自动保存和导入导出
+- 文档目录、搜索、自动保存、移动、版本恢复和导入导出
 - Mermaid 图表渲染
 - Excalidraw 场景编辑与保存
-- 浏览器本地演示存储
+- revision 冲突时保留云端版本和本地冲突副本
 
-桌面客户端、真实磁盘工作区、SQLite 索引和云同步已经完成技术设计，尚未实现。当前任务状态见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，产品与技术方案见 [docs/PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md)。
+桌面客户端、真实磁盘工作区和跨设备离线同步已经完成技术设计，尚未实现。当前任务状态见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，产品与技术方案见 [docs/PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md)。
 
 ## 快速开始
 
-直接运行已构建的 Web 原型，不需要安装依赖：
+启动 API 和已构建的 Web：
 
 ```bash
-cd apps/web
-node serve.mjs
+pnpm build
+INKLOOM_DATABASE_PATH=.inkloom/inkloom.sqlite pnpm start:api
+node apps/web/serve.mjs
 ```
 
-打开 `http://127.0.0.1:4173`。
+打开 `http://127.0.0.1:4173`。API 默认位于 `http://127.0.0.1:3001`。
 
-开发模式：
+开发模式需要两个终端：
 
 ```bash
 corepack enable
 pnpm install
+pnpm dev:api
 pnpm dev:web
 ```
 
@@ -47,7 +51,7 @@ pnpm dev:web
 pnpm build
 ```
 
-环境要求：Node.js 22.12+、pnpm 12.5.1。桌面端后续要求 Rust stable 与 Tauri 2 所需系统依赖。
+环境要求：Node.js 22.12+、pnpm 12.5.1。API 数据文件及服务端环境变量示例见 [.env.example](./.env.example)，生产要求见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。桌面端后续要求 Rust stable 与 Tauri 2 所需系统依赖。
 
 ## 仓库结构
 
@@ -84,7 +88,7 @@ Web、桌面、图表与同步技术选型，以及移动端基础约束，见 [
 
 ## 参与开发
 
-开发规范见 [AGENTS.md](./AGENTS.md)，贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。当前原型不是生产文件系统，请勿把 `apps/web` 的 localStorage 实现当作最终存储层。
+开发规范见 [AGENTS.md](./AGENTS.md)，贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。浏览器 localStorage 只用于未完成保存的临时草稿，正文事实源是服务端持久化文档；桌面文件版尚未实现。
 
 ## License
 
