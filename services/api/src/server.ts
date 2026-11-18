@@ -608,8 +608,9 @@ class ApiHttpError extends Error {
 const invokedPath = process.argv[1];
 if (invokedPath && fileURLToPath(import.meta.url) === resolve(invokedPath)) {
   const port = Number(process.env.PORT ?? process.env.INKLOOM_API_PORT ?? 3001);
+  const host = process.env.HOST ?? "127.0.0.1";
   const application = createApiServer();
-  application.server.listen(port, "127.0.0.1", () => {
-    console.log(`InkLoom API: http://127.0.0.1:${port}`);
+  application.server.listen(port, host, () => {
+    console.log(`InkLoom API: http://${host}:${port}`);
   });
 }

@@ -44,6 +44,7 @@ API runtime:
 
 ```dotenv
 NODE_ENV=production
+HOST=0.0.0.0
 PORT=3001
 INKLOOM_DATABASE_PATH=/data/inkloom.sqlite
 INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com

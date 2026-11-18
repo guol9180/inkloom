@@ -18,6 +18,7 @@ pnpm --filter @inkloom/api start
 
 | 变量 | 说明 |
 | --- | --- |
+| `HOST` | 监听地址，本地默认 `127.0.0.1`，容器内设为 `0.0.0.0` |
 | `PORT` / `INKLOOM_API_PORT` | API 端口，默认 `3001` |
 | `INKLOOM_DATABASE_PATH` | SQLite 文件路径 |
 | `INKLOOM_WEB_ORIGINS` | 逗号分隔的允许 Web Origin |
