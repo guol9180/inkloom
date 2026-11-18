@@ -29,6 +29,7 @@ Resource and operational defaults:
 - Caddy certificates persist in `inkloom-caddy-data`; SQLite data persists in `inkloom-data`.
 - Deploy immutable commits or release artifacts. Do not deploy a dirty worktree.
 - Images are built outside the production host. GitHub Actions publishes commit-tagged `linux/amd64` images to GHCR; the server only pulls and starts them.
+- The public repository stores no deployment credentials. Actions uses a dedicated `inkloom-deploy` SSH identity, pinned host keys and immutable Action SHAs; GHCR login credentials exist only for the duration of a deployment.
 
 ## Environment
 
