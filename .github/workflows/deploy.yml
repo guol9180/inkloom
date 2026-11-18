@@ -124,9 +124,10 @@ jobs:
           DEPLOY_HOST: ${{ secrets.INKLOOM_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.INKLOOM_DEPLOY_USER }}
         run: |
+          test -f ~/.ssh/inkloom_deploy || exit 0
           ssh_opts=(-i ~/.ssh/inkloom_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes)
           ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "docker logout ghcr.io"
+            "docker logout ghcr.io" || true
       - name: Verify production
         if: env.DEPLOY_CONFIGURED == 'true'
         run: pnpm verify:production
