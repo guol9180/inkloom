@@ -19,6 +19,7 @@
 - 当前生产 release 为 `f71fe4e4308713ec2852541371b91426ac50631d`。
 - workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
 - 1Panel 已完整卸载，其旧数据与迁移备份已删除。
+- 生产主机已清除旧 1Panel 安装包、`.zai`、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh 和不再使用的主机 Node/npm 环境；服务器只负责拉取和运行镜像。
 - 用户要求 M1 上线后暂停后续开发，T4 桌面、M2 离线同步等不得自行继续。
 
 ## 已验证

@@ -99,6 +99,14 @@ Run the manual `Deploy Web MVP` workflow with the desired immutable Git ref. The
 
 Use a service restart window for M1. Database writes are revision-checked, but this version does not yet provide blue/green deployment.
 
+Before starting the workflow:
+
+1. Read `/srv/inkloom/DEPLOYED_RELEASE` and retain the previous release SHA for rollback.
+2. Run the database backup procedure below and confirm the archive is non-empty.
+3. Confirm DNS still resolves both production hosts to the intended edge.
+4. Check the workflow uses the full commit SHA and the existing deployment secrets.
+5. After deployment, verify both public health checks, security headers and container health before removing the previous images.
+
 ## Database Backup
 
 Back up before each release and on a daily schedule. Stop the API briefly so SQLite WAL files are quiescent, copy the named volume, then restart:
@@ -135,12 +143,16 @@ Restoring is destructive. Verify the backup filename and current incident scope 
 
 ## Rollback
 
-The M1 schema is additive and performs no destructive migrations. Code rollback is safe only when the previous release supports the current schema:
+The M1 schema is additive and performs no destructive migrations. Code rollback is safe only when the previous release supports the current schema. Re-run the deployment workflow with the last-known-good full Git SHA, or pull that existing image tag without building on the server:
 
 ```bash
 cd /srv/inkloom
-git switch --detach <last-known-good-commit>
-docker compose -f deploy/compose.yaml up -d --build
+docker login ghcr.io
+export INKLOOM_IMAGE_TAG=<last-known-good-full-sha>
+docker compose -f deploy/compose.yaml pull
+docker compose -f deploy/compose.yaml up -d --remove-orphans
+printf '%s\n' "$INKLOOM_IMAGE_TAG" > DEPLOYED_RELEASE
+docker logout ghcr.io
 pnpm verify:production
 ```
 
@@ -156,6 +168,30 @@ docker compose -f deploy/compose.yaml restart api
 
 The API writes only `INKLOOM_DATABASE_PATH` and its SQLite WAL/SHM companions. Logs must not contain document bodies or passwords.
 
+## Deployment Standard
+
+The production lessons from the M1 launch are:
+
+- Build only in GitHub Actions or another trusted build environment. A small production host must remain a runtime target.
+- Tag both images with the full resolved commit SHA. Never deploy a floating `latest` tag.
+- Keep one public edge proxy. Additional projects join `inkloom-edge` and expose only internal ports.
+- Bind containerized services to `0.0.0.0` inside the container; retain loopback as the safe local-development default.
+- Treat memory limits as ceilings, not capacity. Confirm actual headroom before adding services; swap is a fallback, not normal capacity.
+- Configure Docker and Compose log rotation before publishing logs. A stopped or noisy container must not grow without bounds.
+- Make the server directory contain runtime Compose inputs only. Application code belongs in immutable images.
+- Pin deployment Actions to commit SHAs and pin SSH host keys. Avoid live `ssh-keyscan` in automation.
+- Use a dedicated deployment identity. Docker group access is effectively privileged, so do not reuse it for interactive users or unrelated jobs.
+- Store SSH keys, tokens, environment secrets and host-specific values in GitHub Secrets or the server secret store, never in Git.
+- Keep `.env`, private keys, database archives, raw logs and user documents out of Git and Docker build contexts.
+- Record the deployed SHA and verify the public Web, health endpoint and security headers after every release.
+
+Required release sequence:
+
+```text
+clean commit -> CI tests/E2E -> immutable images -> deploy exact SHA
+-> pull on server -> recreate containers -> health and HTTPS verification
+```
+
 ## Security
 
 - Caddy sets HSTS, CSP, frame denial, MIME sniffing protection and a restrictive permissions policy.
@@ -163,6 +199,10 @@ The API writes only `INKLOOM_DATABASE_PATH` and its SQLite WAL/SHM companions. L
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `Secure`, and use the `__Host-` prefix in production.
 - Passwords use scrypt with per-user random salts.
 - SQLite is stored in a named volume and is never committed to Git.
+- The public repository uses a dedicated deployment identity, fixed SSH host keys, commit-pinned Actions and ephemeral GHCR authentication.
+- `.env` files are excluded from Docker build contexts; only `.env.example` may be committed.
+- Docker group access is treated as root-equivalent. Deployment credentials must not be reused for personal or unrelated administration.
+- Review package visibility before publishing proprietary artifacts. Public image packages must not contain secrets or non-public data.
 - Run `pnpm audit --prod` before every release and record unresolved transitive issues.
 - Current audit residual is one high `picomatch` ReDoS in Excalidraw's Sass build-only dependency chain and one low nested KaTeX advisory. Verify the vulnerable watcher chain is absent from `apps/web/dist`; the API runtime has no such dependency.
 
