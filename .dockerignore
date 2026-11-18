@@ -6,6 +6,9 @@ node_modules
 **/*.tsbuildinfo
 .git
 .github
+.env
+.env.*
+!.env.example
 .inkloom
 data
 coverage
