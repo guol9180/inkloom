@@ -16,6 +16,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DEPLOY_CONFIGURED: ${{ secrets.INKLOOM_DEPLOY_HOST != '' }}
     concurrency:
       group: inkloom-production
       cancel-in-progress: false
@@ -67,6 +69,7 @@ jobs:
           cache-from: type=gha,scope=inkloom-edge
           cache-to: type=gha,mode=max,scope=inkloom-edge
       - name: Check deployment secrets
+        if: env.DEPLOY_CONFIGURED == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.INKLOOM_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.INKLOOM_DEPLOY_USER }}
@@ -78,6 +81,7 @@ jobs:
           test -n "$DEPLOY_PATH"
           test -n "$DEPLOY_SSH_KEY"
       - name: Upload release and restart containers
+        if: env.DEPLOY_CONFIGURED == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.INKLOOM_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.INKLOOM_DEPLOY_USER }}
@@ -101,4 +105,5 @@ jobs:
           ssh -i ~/.ssh/inkloom_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
             "docker logout ghcr.io"
       - name: Verify production
+        if: env.DEPLOY_CONFIGURED == 'true'
         run: pnpm verify:production
