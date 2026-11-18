@@ -28,8 +28,8 @@ Resource and operational defaults:
 - Container logs rotate at `10m` per file with three files.
 - Caddy certificates persist in `inkloom-caddy-data`; SQLite data persists in `inkloom-data`.
 - Deploy immutable commits or release artifacts. Do not deploy a dirty worktree.
-- Images are built outside the production host. GitHub Actions publishes commit-tagged `linux/amd64` images to GHCR; the server only pulls and starts them.
-- The public repository stores no deployment credentials. Actions uses a dedicated `inkloom-deploy` SSH identity, pinned host keys and immutable Action SHAs; GHCR login credentials exist only for the duration of a deployment.
+- Images are built outside the production host. This public repository's GitHub Actions publishes commit-tagged `linux/amd64` images to GHCR; the server only pulls and starts them.
+- Production deployment credentials and release orchestration live only in the private `guol9180/imhgl-ops` repository. This public repository stores no SSH host, deployment key, server path or GHCR read token.
 
 ## Environment
 
@@ -50,42 +50,27 @@ INKLOOM_DATABASE_PATH=/data/inkloom.sqlite
 INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com
 ```
 
-`deploy/compose.yaml` sets these values. Server-only variables must never use a `VITE_` prefix.
+The private deployment control plane sets these values. Server-only variables must never use a `VITE_` prefix.
 
-## First Deploy
+## Image Publishing
 
-GitHub Actions is the supported build and deployment path. Configure the deployment secrets below, then run the `Deploy Web MVP` workflow. It tests the release, builds and pushes `inkloom-api` and `inkloom-edge`, updates the server Compose files, pulls the commit-tagged images, restarts the two containers, and runs production verification.
+Run the manual `Build and publish images` workflow with the desired immutable Git ref. It runs typecheck, unit and integration tests, the production build and Playwright, then publishes commit-tagged `inkloom-api` and `inkloom-edge` images to GHCR.
 
-Each successful deployment records the active image commit in `/srv/inkloom/DEPLOYED_RELEASE`.
+This workflow never connects to the production server and has no deployment secrets.
 
-`deploy/migrate-legacy-edge.sh` is a one-time, idempotent migration from the legacy `workbench` Compose edge. It copies the legacy Caddy certificate volume only when present and removes the old container only when its Compose project label is exactly `workbench`.
+## Deployment
 
-Manual server commands are limited to pull and runtime operations:
+Deploy the published full commit SHA from the private `guol9180/imhgl-ops` control plane. Its `verify` mode checks the dedicated deployment identity without changing containers; its `deploy` mode uploads the production Compose manifest, pulls the exact image tag and recreates the service.
 
-```bash
-mkdir -p /srv/inkloom/deploy
-cd /srv/inkloom
-docker login ghcr.io
-INKLOOM_IMAGE_TAG=<release-commit> docker compose -f deploy/compose.yaml pull
-INKLOOM_IMAGE_TAG=<release-commit> docker compose -f deploy/compose.yaml up -d --remove-orphans
-```
+Each successful deployment records the active commit in `/srv/inkloom/DEPLOYED_RELEASE`.
 
-Run tests and image builds in CI or another build environment, never on the production server. Wait for both services:
+Production verification runs after deployment:
 
 ```bash
-docker compose -f deploy/compose.yaml ps
 curl -fsS https://api.inkloom.imhgl.com/api/health
+curl -fsSI https://inkloom.imhgl.com
 pnpm verify:production
 ```
-
-Alternatively, configure these GitHub Actions secrets and run the `Deploy Web MVP` workflow:
-
-| Secret | Value |
-| --- | --- |
-| `INKLOOM_DEPLOY_HOST` | SSH host/IP |
-| `INKLOOM_DEPLOY_USER` | Deployment SSH user |
-| `INKLOOM_DEPLOY_PATH` | Absolute release directory, for example `/srv/inkloom` |
-| `INKLOOM_DEPLOY_SSH_KEY` | Private key with access limited to the deployment directory and Docker commands |
 
 Expected API health:
 
@@ -95,16 +80,21 @@ Expected API health:
 
 ## Updates
 
-Run the manual `Deploy Web MVP` workflow with the desired immutable Git ref. The workflow publishes a new commit-tagged pair of images, deploys that exact tag, and runs `pnpm verify:production`. Production hosts must not build application images.
+1. Run `Build and publish images` in this repository for the desired immutable Git ref.
+2. Confirm both GHCR images exist under the resolved full commit SHA.
+3. Run the private `imhgl-ops` deployment workflow with that exact SHA.
+4. Confirm its production verification and this repository's local or CI `pnpm verify:production` both pass.
+
+Production hosts must not build application images.
 
 Use a service restart window for M1. Database writes are revision-checked, but this version does not yet provide blue/green deployment.
 
 Before starting the workflow:
 
-1. Read `/srv/inkloom/DEPLOYED_RELEASE` and retain the previous release SHA for rollback.
+1. Read `/srv/inkloom/DEPLOYED_RELEASE` through the private control plane and retain the previous release SHA for rollback.
 2. Run the database backup procedure below and confirm the archive is non-empty.
 3. Confirm DNS still resolves both production hosts to the intended edge.
-4. Check the workflow uses the full commit SHA and the existing deployment secrets.
+4. Confirm the deployment workflow uses the full commit SHA and the private control plane's Environment Secrets.
 5. After deployment, verify both public health checks, security headers and container health before removing the previous images.
 
 ## Database Backup
@@ -143,18 +133,9 @@ Restoring is destructive. Verify the backup filename and current incident scope 
 
 ## Rollback
 
-The M1 schema is additive and performs no destructive migrations. Code rollback is safe only when the previous release supports the current schema. Re-run the deployment workflow with the last-known-good full Git SHA, or pull that existing image tag without building on the server:
+The M1 schema is additive and performs no destructive migrations. Code rollback is safe only when the previous release supports the current schema. Run the private `imhgl-ops` deployment workflow with the last-known-good full Git SHA; do not rebuild it and do not move deployment credentials into this public repository.
 
-```bash
-cd /srv/inkloom
-docker login ghcr.io
-export INKLOOM_IMAGE_TAG=<last-known-good-full-sha>
-docker compose -f deploy/compose.yaml pull
-docker compose -f deploy/compose.yaml up -d --remove-orphans
-printf '%s\n' "$INKLOOM_IMAGE_TAG" > DEPLOYED_RELEASE
-docker logout ghcr.io
-pnpm verify:production
-```
+Run `pnpm verify:production` from a trusted local checkout or CI runner after the rollback. The production host does not contain this workspace or a Node.js application build environment.
 
 If a release changed the database schema incompatibly, restore the matching pre-release backup before rolling back code.
 
@@ -197,6 +178,7 @@ Interactive installer, uninstaller or migration scripts must receive explicit st
 The production lessons from the M1 launch are:
 
 - Build only in GitHub Actions or another trusted build environment. A small production host must remain a runtime target.
+- Keep production deployment credentials in one private control-plane repository; public application repositories publish images only.
 - Tag both images with the full resolved commit SHA. Never deploy a floating `latest` tag.
 - Keep one public edge proxy. Additional projects join `inkloom-edge` and expose only internal ports.
 - Bind containerized services to `0.0.0.0` inside the container; retain loopback as the safe local-development default.
@@ -224,7 +206,7 @@ clean commit -> CI tests/E2E -> immutable images -> deploy exact SHA
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `Secure`, and use the `__Host-` prefix in production.
 - Passwords use scrypt with per-user random salts.
 - SQLite is stored in a named volume and is never committed to Git.
-- The public repository uses a dedicated deployment identity, fixed SSH host keys, commit-pinned Actions and ephemeral GHCR authentication.
+- The public repository has no production SSH identity or server path; the private `imhgl-ops` control plane owns the dedicated deployment identity, fixed host key and ephemeral GHCR authentication.
 - `.env` files are excluded from Docker build contexts; only `.env.example` may be committed.
 - Docker group access is treated as root-equivalent. Deployment credentials must not be reused for personal or unrelated administration.
 - Review package visibility before publishing proprietary artifacts. Public image packages must not contain secrets or non-public data.

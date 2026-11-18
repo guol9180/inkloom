@@ -15,7 +15,7 @@
 - API 域名：`https://api.inkloom.imhgl.com`。
 - 开源仓库：`https://github.com/guol9180/inkloom`，默认分支 `main`。
 - T15 已提交为 `4415b6d`：Web + API 的账号、云端 SQLite、revision、历史恢复和冲突副本闭环可本地运行。
-- T16 已完成：Inkloom Web 与 API 已部署到生产，GitHub Actions 负责外部构建、GHCR 推送、自动部署与线上验证。
+- T16 已完成：Inkloom Web 与 API 已部署到生产。公开仓库负责外部构建与 GHCR 推送，私有 `guol9180/imhgl-ops` 控制面负责受控部署与线上验证。
 - 当前生产 release 为 `f71fe4e4308713ec2852541371b91426ac50631d`。
 - workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
 - 1Panel 已完整卸载，其旧数据与迁移备份已删除。
@@ -43,6 +43,9 @@ pnpm audit --prod
 
 GitHub Actions run 44280666039
 结果：typecheck、单元/集成测试、Playwright、镜像构建、自动部署与生产验证全部通过
+
+GitHub Actions verify run 44291541583
+结果：私有 guol9180/imhgl-ops 使用 production Environment Secrets 完成只读 SSH 和容器检查，部署步骤全部跳过
 ```
 
 验证日期：2026-11-18。
@@ -53,8 +56,8 @@ GitHub Actions run 44280666039
 - 生产目录：`/srv/inkloom`，由专用 `inkloom-deploy` 用户拥有。
 - 运行容器：`inkloom-edge` 与 `inkloom-api`，共享 `inkloom-edge` 网络。
 - 数据卷：`inkloom-data`、`inkloom-caddy-data`、`inkloom-caddy-config`。
-- 发布方式：手动运行 GitHub Actions `Deploy Web MVP`；服务器只执行镜像 `pull + up`，不运行应用构建。
-- 安全：Actions 固定到提交 SHA，SSH host key 固定，部署与 GHCR 凭据只存在 GitHub Secrets；开源仓库不保存任何部署秘密。
+- 发布方式：公开仓库手动运行 `Build and publish images`，随后在私有 `guol9180/imhgl-ops` 控制面按完整 SHA 部署；服务器只执行镜像 `pull + up`，不运行应用构建。
+- 安全：公开仓库只保留 GHCR 写入所需的 `GITHUB_TOKEN`，不再保存 SSH host、部署密钥、服务器路径或部署身份。部署凭据集中在私有控制面的 `production` Environment Secrets，Actions 固定到提交 SHA，SSH host key 固定。
 
 ## 已知边界
 

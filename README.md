@@ -84,7 +84,7 @@ inkloom/
 
 ## 域名与部署
 
-部署域名、环境变量与拆分方式见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。
+公开仓库负责测试、构建与发布镜像；生产部署凭据和发布编排位于私有 `imhgl-ops` 控制面。部署域名、环境变量与拆分方式见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。
 
 ## 技术方向
 
