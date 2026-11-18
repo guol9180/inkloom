@@ -272,6 +272,7 @@
   - 2026-11-18 交付 Inkloom API 与共享 Caddy Edge 已部署到生产，release SHA 为 `f71fe4e4308713ec2852541371b91426ac50631d`；workbench 当前停止，镜像和数据卷保留供后续重新部署。剩余差距：无。
   - 2026-11-18 执行 清理 1Panel 安装包与解压目录、`.zai` 日志、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh、主机 Node/npm 和编译缓存；撤销 1Panel 遗留的 root SSH 公钥，仅保留仍在使用的 Workbench 管理公钥。
   - 2026-11-18 交付 `docs/DEPLOYMENT.md` 增补发布前检查、外部构建、固定 SHA、共享 Edge、容器监听、资源与日志上限、秘密管理和回滚规范；文档不记录主机地址、密钥、令牌或用户数据。
+  - 2026-11-18 验证 排查并终止残留的交互式 `1pctl uninstall` 脚本及 `sed` 子进程；CPU 用户态占用由约 47% 降至约 0.3%，1 秒采样空闲率约 99.3%，容器 CPU 为 0%，API 健康且无 failed unit。
 
 ## 状态枚举
 
