@@ -43,9 +43,12 @@ export type JsonValue =
 export type DocumentExtensions = Readonly<Record<string, JsonValue>>;
 
 export function workspacePath(value: string): WorkspacePath {
-  const normalized = value.replaceAll("\\", "/").replace(/^\/+/, "");
+  const normalized = value.replaceAll("\\", "/");
   const segments = normalized.split("/");
   if (
+    value.includes("\0") ||
+    /^\/|^[A-Za-z]:\//.test(normalized) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) ||
     normalized.length === 0 ||
     segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
   ) {

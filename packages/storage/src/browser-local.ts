@@ -1,4 +1,5 @@
 import {
+  InkLoomError,
   RevisionConflictError,
   contentHash,
   workspacePath,
@@ -112,7 +113,7 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
   async readDocument(documentId: DocumentId): Promise<DocumentSnapshot> {
     const snapshot = this.findDocument(documentId);
-    if (!snapshot) throw new Error(`Document not found: ${documentId}`);
+    if (!snapshot) throw documentNotFound(documentId);
     return cloneSnapshot(snapshot);
   }
 
@@ -144,7 +145,7 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
   async writeDocument(input: WriteDocumentInput): Promise<DocumentSnapshot> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
     const current = persisted.documents.find((document) => document.meta.id === input.documentId);
-    if (!current) throw new Error(`Document not found: ${input.documentId}`);
+    if (!current) throw documentNotFound(input.documentId);
     if (current.meta.revision !== input.baseRevision) {
       throw new RevisionConflictError(
         input.documentId,
@@ -177,7 +178,7 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
   async moveNode(input: MoveNodeInput): Promise<WorkspaceNode> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
     const current = persisted.documents.find((document) => document.meta.id === input.nodeId);
-    if (!current) throw new Error(`Node not found: ${input.nodeId}`);
+    if (!current) throw documentNotFound(input.nodeId);
     if (current.meta.revision !== input.baseRevision) {
       throw new RevisionConflictError(input.nodeId, input.baseRevision, current.meta.revision);
     }
@@ -209,7 +210,7 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
   async deleteNode(input: DeleteNodeInput): Promise<void> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
     const current = persisted.documents.find((document) => document.meta.id === input.nodeId);
-    if (!current) throw new Error(`Node not found: ${input.nodeId}`);
+    if (!current) throw documentNotFound(input.nodeId);
     if (current.meta.revision !== input.baseRevision) {
       throw new RevisionConflictError(input.nodeId, input.baseRevision, current.meta.revision);
     }
@@ -256,6 +257,10 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
 function cloneSnapshot(snapshot: DocumentSnapshot): DocumentSnapshot {
   return JSON.parse(JSON.stringify(snapshot)) as DocumentSnapshot;
+}
+
+function documentNotFound(documentId: string): InkLoomError {
+  return new InkLoomError("DOCUMENT_NOT_FOUND", `Document not found: ${documentId}`);
 }
 
 function isDocumentSnapshot(value: unknown): value is DocumentSnapshot {

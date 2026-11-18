@@ -15,6 +15,13 @@ describe("workspacePath", () => {
     expect(() => workspacePath("docs//secret.md")).toThrow(InkLoomError);
     expect(() => workspacePath("docs/./secret.md")).toThrow(InkLoomError);
   });
+
+  it("rejects absolute and platform URI paths instead of rebasing them", () => {
+    expect(() => workspacePath("/etc/passwd")).toThrow(InkLoomError);
+    expect(() => workspacePath("C:\\Users\\PC\\secret.md")).toThrow(InkLoomError);
+    expect(() => workspacePath("\\\\server\\share\\secret.md")).toThrow(InkLoomError);
+    expect(() => workspacePath("file:///secret.md")).toThrow(InkLoomError);
+  });
 });
 
 describe("platform contract", () => {

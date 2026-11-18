@@ -12,4 +12,4 @@ Read in this order:
 6. [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — `inkloom.imhgl.com` deployment layout.
 7. [docs/adr/0005-mobile-ready-foundation.md](./docs/adr/0005-mobile-ready-foundation.md) — HarmonyOS and mobile platform boundaries.
 
-Current next task: **T9 — complete adapter contract tests and Bridge validation, then proceed to T4 desktop workspace.**
+Current next task: **T4 — build the Tauri desktop workspace and bind its filesystem adapter to the shared contract tests. T9 remains in-progress until every platform adapter participates.**

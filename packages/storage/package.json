@@ -6,7 +6,8 @@
   "description": "Storage adapters for browser, Tauri, and cloud workspaces.",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./contract-tests": "./src/workspace-adapter-contract.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
