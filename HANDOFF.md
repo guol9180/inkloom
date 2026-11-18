@@ -20,6 +20,7 @@
 - workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
 - 1Panel 已完整卸载，其旧数据与迁移备份已删除。
 - 生产主机已清除旧 1Panel 安装包、`.zai`、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh 和不再使用的主机 Node/npm 环境；服务器只负责拉取和运行镜像。
+- 一次由残留交互式 `1pctl` 脚本导致的高 CPU 已定位并处理；当前 CPU 约 99% 空闲，容器 CPU 为 0%，API 健康。
 - 用户要求 M1 上线后暂停后续开发，T4 桌面、M2 离线同步等不得自行继续。
 
 ## 已验证

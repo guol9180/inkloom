@@ -168,6 +168,30 @@ docker compose -f deploy/compose.yaml restart api
 
 The API writes only `INKLOOM_DATABASE_PATH` and its SQLite WAL/SHM companions. Logs must not contain document bodies or passwords.
 
+## CPU Troubleshooting
+
+Start with a short baseline before changing anything:
+
+```bash
+uptime
+vmstat 1 5
+mpstat -P ALL 1 5
+top -b -n 1 -o %CPU -w 240 | head -n 45
+pidstat 1 3
+docker stats --no-stream
+cat /proc/pressure/cpu /proc/pressure/io /proc/pressure/memory
+```
+
+Interpret the result before acting:
+
+- High `%usr` points to an application, script or container.
+- High `%system` points to kernel/network/filesystem activity.
+- High `%iowait` points to storage rather than pure CPU load.
+- High CPU pressure with low request traffic usually means a runaway local process.
+- Compare host process CPU with Docker/cgroup CPU before blaming the application containers.
+
+Interactive installer, uninstaller or migration scripts must receive explicit stdin, or use a documented non-interactive mode. A tool timeout may stop the client while leaving the remote script alive. After any timed-out control-plane operation, run `ps`/`top` and verify that no installer or helper child remains. A stale interactive `1pctl` loop was once observed consuming a full CPU core in this deployment; terminating the orphaned script and its helper restored idle CPU to approximately 99%.
+
 ## Deployment Standard
 
 The production lessons from the M1 launch are:
@@ -184,6 +208,7 @@ The production lessons from the M1 launch are:
 - Store SSH keys, tokens, environment secrets and host-specific values in GitHub Secrets or the server secret store, never in Git.
 - Keep `.env`, private keys, database archives, raw logs and user documents out of Git and Docker build contexts.
 - Record the deployed SHA and verify the public Web, health endpoint and security headers after every release.
+- After management-plane commands, verify orphan processes. A timeout only proves the client stopped waiting; it does not prove the remote process exited.
 
 Required release sequence:
 
