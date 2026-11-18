@@ -12,6 +12,16 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@inkloom/core": "workspace:*"
+    "@excalidraw/excalidraw": "^0.18.1",
+    "@inkloom/core": "workspace:*",
+    "dompurify": "^3.4.17",
+    "marked": "^18.2.0",
+    "mermaid": "^12.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   }
 }

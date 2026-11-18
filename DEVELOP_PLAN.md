@@ -51,9 +51,13 @@
   - Web 不直接访问 localStorage，而是通过 adapter。
   - Web 行为与当前原型一致。
 - 边界：不接入真实磁盘和云 API。
-- 状态：planned
+- 状态：done
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-13 计划 创建任务卡，等待开始。
+  - 2026-11-18 计划 按交接顺序启动 T3；以当前 Web 原型行为为回归基线，先抽取 core 文档记录、BrowserLocalAdapter 和 diagrams 按需加载边界，再切换 Web 依赖。验收范围固化为 typecheck、test、build 与浏览器交互回归。
+  - 2026-11-18 执行 `@inkloom/core` 增加文档扩展 JSON 与可更新标题/标签契约；`@inkloom/editor` 提供 Markdown 视图、标题提取和字数统计；`@inkloom/diagrams` 接管 DOMPurify/Mermaid 安全渲染与 Excalidraw 懒加载；`@inkloom/storage` 新增可注入介质的 `BrowserLocalAdapter`，Web 通过 adapter 持久化工作区。
+  - 2026-11-18 验证 `pnpm typecheck`、`pnpm test`（11 项）与 `pnpm build` 全部通过；浏览器实际验证 Mermaid 输出 SVG，Excalidraw 新增加一个图元后从 11 变为 12，关闭重开及整页刷新后场景仍为 12 个图元。
+  - 2026-11-18 交付 产出共享包实现、Web composition root、storage/editor 测试和 lockfile；原单页渲染与存储逻辑已移出 `App.tsx`，剩余差距：无。
 
 ### T4: Tauri 桌面本地工作区（P0）
 

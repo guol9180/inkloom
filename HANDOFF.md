@@ -17,7 +17,7 @@
 - 开源仓库：`https://github.com/guol9180/inkloom`，默认分支 `main`。
 - 包作用域：`@inkloom/*`。
 - 当前 Web 原型位于 `apps/web`，已构建并验证。
-- 下一个开发任务：先完成 T3 的 core/storage/diagrams 抽取，同时按 T9 加固移动平台契约。
+- 下一个开发任务：完成 T9 的 adapter contract tests 与 Bridge 校验，然后按 T4 建立 Tauri 桌面临时/原子写工作区。
 
 ## 已验证
 
@@ -26,20 +26,20 @@ npm run build
 结果：TypeScript 检查通过，Vite 生产构建成功
 
 pnpm typecheck && pnpm test && pnpm build
-结果：Web 与共享 packages 类型检查通过；4 项基础契约测试通过；生产构建成功
+结果：Web 与共享 packages 类型检查通过；11 项契约与 Markdown helper 测试通过；生产构建成功
 
 node apps/web/serve.mjs
 结果：生产构建可在 127.0.0.1:4173 启动
 
 浏览器人工验证
-结果：Markdown 文档、自动保存、Mermaid SVG、Excalidraw 场景加载和保存均可用
+结果：Markdown 文档、自动保存、Mermaid SVG、Excalidraw 场景加载和保存均可用；T3 后重新验证画布图元保存及整页刷新恢复
 ```
 
 验证日期：2026-11-13。
 
 ## 原型边界
 
-- 当前 Web 原型用 `localStorage` 保存数据。
+- 当前 Web 原型通过 `BrowserLocalAdapter` 保存数据，尚未接入生产数据库或云同步。
 - Excalidraw 场景是演示数据，正式版本需保存完整 `.excalidraw` JSON。
 - 尚无真实文件系统 adapter、SQLite、云 API 和协同服务。
 - 依赖审计仍有已知传递依赖问题，正式发布前必须处理，详见产品方案的“主要风险”。
@@ -60,8 +60,8 @@ node apps/web/serve.mjs
 
 ## 下个会话的第一条任务建议
 
-> 按 DEVELOP_PLAN T3，把 `apps/web/src` 中的文档类型、存储 adapter、Mermaid 渲染和 Excalidraw 编辑器拆到 `packages/core`、`packages/storage`、`packages/diagrams`。保持 Web 现有行为不变，完成后运行 typecheck、build 和浏览器回归。
+> 按 DEVELOP_PLAN T9，为 `WorkspaceAdapter` 建立跨实现 contract tests，并验证 Harmony/Tauri Bridge 的版本、request id、白名单 method、JSON-safe payload 和降级能力。
 
 不要直接把 Tauri 桌面壳加到单页 `App.tsx` 上；先完成包边界，否则后续 Web 与桌面会再次耦合。
 
-T3 完成后立即执行 T9：为 WorkspaceAdapter 增加 adapter contract tests，并验证 Harmony/Tauri Bridge 契约。移动端基础契约见 [ADR 0005](./docs/adr/0005-mobile-ready-foundation.md)。
+T9 完成后执行 T4：建立 Tauri 桌面工作区、原子写和文件监听。移动端基础契约见 [ADR 0005](./docs/adr/0005-mobile-ready-foundation.md)。

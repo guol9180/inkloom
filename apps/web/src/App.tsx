@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -8,9 +6,17 @@ import {
   type ChangeEvent,
   type MouseEvent
 } from "react";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
-import mermaid from "mermaid";
+import {
+  CanvasEditor,
+  renderMarkdown,
+  renderMermaidBlocks,
+  type CanvasScene
+} from "@inkloom/diagrams";
+import {
+  countWords,
+  extractHeadings,
+  type MarkdownViewMode
+} from "@inkloom/editor";
 import {
   ArrowUpRight,
   Bold,
@@ -46,212 +52,22 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { folderOrder, seedNotes, type CanvasScene, type Note } from "./data";
+import {
+  loadBrowserWorkspace,
+  persistBrowserActiveDocument,
+  persistBrowserWorkspace
+} from "./browser-workspace";
+import { folderOrder, seedNotes, type Note } from "./data";
 
-const LazyExcalidraw = lazy(async () => {
-  const module = await import("@excalidraw/excalidraw");
-  return { default: module.Excalidraw };
-});
-
-type ViewMode = "source" | "split" | "read";
+type ViewMode = MarkdownViewMode;
 type SaveState = "saved" | "saving";
 
-const NOTES_KEY = "inkloom.prototype.notes.v1";
-const ACTIVE_KEY = "inkloom.prototype.active.v1";
-
-function loadNotes(): Note[] {
-  try {
-    if (new URLSearchParams(window.location.search).has("fresh")) {
-      localStorage.removeItem(NOTES_KEY);
-      localStorage.removeItem(ACTIVE_KEY);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-    const raw = localStorage.getItem(NOTES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Note[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    // Seed data remains usable if the browser has an old or malformed cache.
-  }
-  return seedNotes;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll("\n", "&#10;");
-}
-
-function stripMarkdown(value: string): string {
-  return value
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`[^`]*`/g, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[#>*_~|-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function slugify(value: string): string {
-  return stripMarkdown(value)
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function renderInlineTokens(tokens: unknown[]): string {
-  const raw = tokens
-    .map((token) => {
-      if (typeof token === "string") return token;
-      const record = token as { raw?: string; text?: string };
-      return record.raw ?? record.text ?? "";
-    })
-    .join("");
-  return marked.parseInline(raw) as string;
-}
-
-function makeCanvasPreview(canvas?: CanvasScene): string {
-  const elements = canvas?.elements ?? [];
-  if (elements.length === 0) {
-    return `
-      <svg viewBox="0 0 800 340" role="img" aria-label="空白画布">
-        <rect x="1" y="1" width="798" height="338" rx="14" fill="#f8faf9" stroke="#cfd9d6"/>
-        <path d="M 80 250 C 180 90, 280 290, 390 140 S 600 90, 720 210" fill="none" stroke="#98aaa5" stroke-width="2" stroke-dasharray="7 8"/>
-        <circle cx="390" cy="140" r="5" fill="#a56827"/>
-        <text x="400" y="184" text-anchor="middle" fill="#61706d" font-size="18">在 Excalidraw 中开始绘制</text>
-      </svg>`;
-  }
-
-  const usable = elements.filter((item) => Number.isFinite(Number(item.x)));
-  const xs = usable.flatMap((item) => {
-    const x = Number(item.x ?? 0);
-    const width = Math.max(0, Number(item.width ?? 0));
-    return [x, x + width];
-  });
-  const ys = usable.flatMap((item) => {
-    const y = Number(item.y ?? 0);
-    const height = Math.max(0, Number(item.height ?? 0));
-    return [y, y + height];
-  });
-  const minX = Math.min(...xs) - 50;
-  const minY = Math.min(...ys) - 50;
-  const maxX = Math.max(...xs) + 50;
-  const maxY = Math.max(...ys) + 50;
-  const width = Math.max(520, maxX - minX);
-  const height = Math.max(240, maxY - minY);
-
-  const shapes = usable
-    .map((item) => {
-      const type = String(item.type ?? "rectangle");
-      const x = Number(item.x ?? 0);
-      const y = Number(item.y ?? 0);
-      const w = Math.max(1, Number(item.width ?? 1));
-      const h = Math.max(1, Number(item.height ?? 1));
-      const stroke = String(item.strokeColor ?? "#244d4a");
-      const fill = String(item.backgroundColor ?? "transparent");
-      const strokeWidth = Number(item.strokeWidth ?? 2);
-
-      if (type === "text") {
-        return `<text x="${x}" y="${y + 22}" fill="${stroke}" font-size="17" font-family="Microsoft YaHei, sans-serif">${escapeHtml(
-          String(item.text ?? "")
-        )}</text>`;
-      }
-      if (type === "arrow" || type === "line") {
-        const endX = x + w;
-        const endY = y + h;
-        return `<g><line x1="${x}" y1="${y}" x2="${endX}" y2="${endY}" stroke="${stroke}" stroke-width="${strokeWidth}" marker-end="url(#arrow)"/></g>`;
-      }
-      if (type === "ellipse") {
-        return `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
-      }
-      if (type === "diamond") {
-        return `<polygon points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${
-          y + h
-        } ${x},${y + h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
-      }
-      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
-    })
-    .join("");
-
-  return `
-    <svg viewBox="${minX} ${minY} ${width} ${height}" role="img" aria-label="${escapeAttribute(
-      canvas?.title ?? "Excalidraw 画布"
-    )}">
-      <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#53656b"/>
-        </marker>
-      </defs>
-      ${shapes}
-    </svg>`;
-}
-
-function renderMarkdown(content: string, canvas?: CanvasScene): string {
-  const renderer = new marked.Renderer();
-
-  renderer.code = ({ text, lang }) => {
-    const language = (lang ?? "").trim().toLowerCase();
-    if (language === "mermaid") {
-      return `
-        <figure class="diagram-frame">
-          <div class="diagram-head">
-            <span class="diagram-kind">MERMAID</span>
-            <span class="diagram-hint">源码随 Markdown 保存</span>
-          </div>
-          <div class="mermaid-block"><code class="mermaid-source">${escapeHtml(text)}</code></div>
-        </figure>`;
-    }
-    if (language === "excalidraw") {
-      return `
-        <figure class="canvas-embed">
-          <div class="canvas-embed-head">
-            <span><span class="diagram-kind">EXCALIDRAW</span> ${
-              canvas?.title ? escapeHtml(canvas.title) : "自由画布"
-            }</span>
-            <button class="canvas-open" type="button">打开画布</button>
-          </div>
-          <div class="canvas-preview">${makeCanvasPreview(canvas)}</div>
-          <figcaption>场景保存在 <code>.excalidraw</code> 文件，正文只保留引用与 SVG 预览。</figcaption>
-        </figure>`;
-    }
-    return `<pre class="code-block"><code class="language-${escapeAttribute(language)}">${escapeHtml(
-      text
-    )}</code></pre>`;
-  };
-
-  renderer.heading = ({ tokens, depth }) => {
-    const inline = renderInlineTokens(tokens);
-    const id = slugify(inline.replace(/<[^>]+>/g, ""));
-    return `<h${depth} id="${id}">${inline}</h${depth}>`;
-  };
-
-  renderer.link = ({ href, title, tokens }) => {
-    const text = renderInlineTokens(tokens);
-    const external = /^https?:\/\//.test(href);
-    return `<a href="${escapeAttribute(href)}"${
-      title ? ` title="${escapeAttribute(title)}"` : ""
-    }${external ? ' target="_blank" rel="noreferrer"' : ""}>${text}</a>`;
-  };
-
-  const parsed = marked.parse(content, {
-    renderer,
-    gfm: true,
-    breaks: false
-  }) as string;
-
-  return DOMPurify.sanitize(parsed, {
-    ADD_ATTR: ["target", "rel", "data-code", "data-canvas-id"],
-    ADD_TAGS: ["figure", "figcaption", "button", "svg", "defs", "marker", "path", "rect", "circle", "ellipse", "polygon", "line", "text", "g"]
-  });
+const initialWorkspace = loadBrowserWorkspace(
+  seedNotes,
+  new URLSearchParams(window.location.search).has("fresh")
+);
+if (new URLSearchParams(window.location.search).has("fresh")) {
+  window.history.replaceState({}, "", window.location.pathname);
 }
 
 function formatTime(value: string): string {
@@ -263,13 +79,6 @@ function formatTime(value: string): string {
     minute: "2-digit",
     hour12: false
   }).format(date);
-}
-
-function countWords(content: string): number {
-  const plain = stripMarkdown(content);
-  const cjk = plain.match(/[\u3400-\u9fff]/g)?.length ?? 0;
-  const latin = plain.replace(/[\u3400-\u9fff]/g, " ").match(/[A-Za-z0-9]+/g)?.length ?? 0;
-  return cjk + latin;
 }
 
 function createNote(folder = "个人"): Note {
@@ -287,144 +96,9 @@ function createNote(folder = "个人"): Note {
   };
 }
 
-function normalizeExcalidrawElements(
-  elements: readonly Record<string, unknown>[]
-): readonly Record<string, unknown>[] {
-  const now = Date.now();
-  return elements.map((element, index) => {
-    const type = String(element.type ?? "rectangle");
-    const width = Math.max(1, Number(element.width ?? 120));
-    const height = Math.max(1, Number(element.height ?? 80));
-    const common = {
-      id: String(element.id ?? `element-${index}`),
-      type,
-      x: Number(element.x ?? 0),
-      y: Number(element.y ?? 0),
-      strokeColor: String(element.strokeColor ?? "#172f38"),
-      backgroundColor: String(element.backgroundColor ?? "transparent"),
-      fillStyle: "solid",
-      strokeWidth: Number(element.strokeWidth ?? 2),
-      strokeStyle: "solid",
-      roundness: type === "rectangle" ? { type: 3 } : null,
-      roughness: Number(element.roughness ?? 1),
-      opacity: 100,
-      width,
-      height,
-      angle: 0,
-      seed: 1000 + index,
-      version: 1,
-      versionNonce: 2000 + index,
-      index: null,
-      isDeleted: false,
-      groupIds: [],
-      frameId: null,
-      boundElements: null,
-      updated: now,
-      link: null,
-      locked: false
-    };
-
-    if (type === "arrow" || type === "line") {
-      return {
-        ...common,
-        type,
-        points: [
-          [0, 0],
-          [width, height]
-        ],
-        lastCommittedPoint: null,
-        startBinding: null,
-        endBinding: null,
-        startArrowhead: null,
-        endArrowhead: type === "arrow" ? "arrow" : null,
-        elbowed: false
-      };
-    }
-
-    if (type === "text") {
-      const text = String(element.text ?? "文字");
-      return {
-        ...common,
-        type: "text",
-        text,
-        originalText: text,
-        fontSize: 20,
-        fontFamily: 1,
-        textAlign: "left",
-        verticalAlign: "top",
-        containerId: null,
-        autoResize: true,
-        lineHeight: 1.25
-      };
-    }
-
-    return common;
-  });
-}
-
-function CanvasEditor({
-  scene,
-  onCancel,
-  onSave
-}: {
-  scene?: CanvasScene;
-  onCancel: () => void;
-  onSave: (elements: readonly Record<string, unknown>[]) => void;
-}) {
-  const sceneRef = useRef<readonly Record<string, unknown>[]>(
-    normalizeExcalidrawElements(scene?.elements ?? [])
-  );
-  const initialData = useMemo(
-    () => ({
-      elements: sceneRef.current as never,
-      appState: {
-        viewBackgroundColor: "#f8faf9",
-        currentItemStrokeColor: "#172f38",
-        currentItemBackgroundColor: "#e9f0ee"
-      }
-    }),
-    []
-  );
-
-  return (
-    <div className="canvas-modal" role="dialog" aria-modal="true" aria-label="Excalidraw 画布">
-      <div className="canvas-modal-head">
-        <div>
-          <span className="section-label">EXCALIDRAW 场景</span>
-          <strong>{scene?.title ?? "自由画布"}</strong>
-        </div>
-        <div className="canvas-modal-actions">
-          <span className="canvas-save-note">场景文件与 Markdown 分开保存</span>
-          <button className="top-action secondary-action" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button className="top-action" type="button" onClick={() => onSave(sceneRef.current)}>
-            <Check size={15} /> 保存画布
-          </button>
-        </div>
-      </div>
-      <div className="excalidraw-shell">
-        <Suspense fallback={<div className="canvas-loading">正在加载画布引擎…</div>}>
-          <LazyExcalidraw
-            initialData={initialData}
-            onChange={(elements: readonly Record<string, unknown>[]) => {
-              sceneRef.current = [...elements];
-            }}
-          />
-        </Suspense>
-      </div>
-    </div>
-  );
-}
-
 function App() {
-  const [notes, setNotes] = useState<Note[]>(loadNotes);
-  const [activeId, setActiveId] = useState<string>(() => {
-    const stored = localStorage.getItem(ACTIVE_KEY);
-    return stored && loadNotes().some((note) => note.id === stored)
-      ? stored
-      : loadNotes()[0]?.id ?? "";
-  });
+  const [notes, setNotes] = useState<Note[]>(() => [...initialWorkspace.notes]);
+  const [activeId, setActiveId] = useState(initialWorkspace.activeId);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [query, setQuery] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -460,11 +134,7 @@ function App() {
 
   const outline = useMemo(() => {
     if (!activeNote) return [];
-    return [...activeNote.content.matchAll(/^(#{1,3})\s+(.+)$/gm)].map((match) => ({
-      depth: match[1].length,
-      text: match[2].replace(/[*_`~]/g, ""),
-      id: slugify(match[2])
-    }));
+    return extractHeadings(activeNote.content);
   }, [activeNote]);
 
   const backlinks = useMemo(() => {
@@ -477,42 +147,8 @@ function App() {
   }, [activeNote, notes]);
 
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "base",
-      fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif',
-      themeVariables: {
-        primaryColor: "#eef4f2",
-        primaryTextColor: "#172f38",
-        primaryBorderColor: "#5f7d77",
-        lineColor: "#6c7b7e",
-        secondaryColor: "#f7efe2",
-        tertiaryColor: "#f7faf9",
-        fontSize: "15px"
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
-    const nodes = previewRef.current?.querySelectorAll<HTMLElement>(".mermaid-block");
-    if (!nodes) return;
-
-    nodes.forEach(async (node, index) => {
-      const code = node.querySelector(".mermaid-source")?.textContent ?? "";
-      if (!code) return;
-      try {
-        const result = await mermaid.render(`inkloom-diagram-${Date.now()}-${index}`, code);
-        if (!cancelled) node.innerHTML = result.svg;
-      } catch {
-        if (!cancelled) {
-          node.innerHTML = `<div class="diagram-error">图表语法需要检查<br><code>${escapeHtml(
-            code.split("\n")[0]
-          )}</code></div>`;
-        }
-      }
-    });
+    void renderMermaidBlocks(previewRef.current, () => cancelled);
 
     return () => {
       cancelled = true;
@@ -526,14 +162,14 @@ function App() {
     }
     setSaveState("saving");
     const timer = window.setTimeout(() => {
-      localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+      persistBrowserWorkspace(notes, activeId);
       setSaveState("saved");
     }, 500);
     return () => window.clearTimeout(timer);
   }, [notes]);
 
   useEffect(() => {
-    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
+    if (activeId) persistBrowserActiveDocument(activeId);
   }, [activeId]);
 
   useEffect(() => {
@@ -544,14 +180,14 @@ function App() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+        persistBrowserWorkspace(notes, activeId);
         setSaveState("saved");
         showToast("当前工作区已保存");
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [notes]);
+  }, [activeId, notes]);
 
   function showToast(message: string) {
     setToast(message);

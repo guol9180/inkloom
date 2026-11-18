@@ -3,6 +3,7 @@ import type {
   DocumentId,
   DocumentMeta,
   DocumentSnapshot,
+  DocumentExtensions,
   Revision,
   WorkspaceId,
   WorkspacePath
@@ -55,6 +56,9 @@ export type WriteDocumentInput = {
   documentId: DocumentId;
   markdown: string;
   baseRevision: Revision;
+  title?: string;
+  tags?: readonly string[];
+  extensions?: DocumentExtensions;
 };
 
 export type MoveNodeInput = {

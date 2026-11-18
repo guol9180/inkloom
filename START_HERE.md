@@ -12,4 +12,4 @@ Read in this order:
 6. [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — `inkloom.imhgl.com` deployment layout.
 7. [docs/adr/0005-mobile-ready-foundation.md](./docs/adr/0005-mobile-ready-foundation.md) — HarmonyOS and mobile platform boundaries.
 
-Current next task: **T3 — extract `@inkloom/core`, `@inkloom/storage`, and `@inkloom/diagrams` from the Web prototype, then complete T9 adapter contract hardening.**
+Current next task: **T9 — complete adapter contract tests and Bridge validation, then proceed to T4 desktop workspace.**

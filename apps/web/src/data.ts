@@ -1,7 +1,6 @@
-export type CanvasScene = {
-  title: string;
-  elements: readonly Record<string, unknown>[];
-};
+import type { CanvasScene } from "@inkloom/diagrams";
+
+export type { CanvasScene } from "@inkloom/diagrams";
 
 export type Note = {
   id: string;
@@ -622,7 +621,7 @@ sequenceDiagram
 ## 可以体验
 
 - 新建、搜索、切换和删除文档
-- Markdown 自动保存到浏览器 localStorage
+- Markdown 通过浏览器本地 adapter 自动保存
 - 源码、分栏、阅读三种模式
 - Mermaid 图表实时渲染
 - 打开并编辑 Excalidraw 画布
@@ -635,7 +634,7 @@ sequenceDiagram
 3. 图表在正文中是否仍然保持“可编辑资产”的身份。
 4. 自动保存状态是否清楚，但不打扰写作。
 
-> 工程实现时，localStorage 会替换为本地文件 + SQLite 索引；界面与交互可以沿用。
+> 工程实现时，浏览器本地 adapter 会替换为本地文件 + SQLite 索引；界面与交互可以沿用。
 `
   }
 ];

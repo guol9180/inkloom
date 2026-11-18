@@ -31,9 +31,9 @@ npm run build
 
 - 新建、搜索、切换、删除文档
 - Markdown 源码、分栏、阅读三种模式
-- 500ms 防抖自动保存到浏览器 `localStorage`
-- Mermaid fenced code block 实时渲染
-- Excalidraw 按需加载、场景编辑与恢复
+- 500ms 防抖自动保存，Web 仅通过 `@inkloom/storage` 的 `BrowserLocalAdapter` 访问浏览器存储
+- Mermaid fenced code block 由 `@inkloom/diagrams` 按需加载并安全渲染
+- Excalidraw 由 `@inkloom/diagrams` 按需加载，场景编辑与恢复
 - Markdown 文件导入、单文档导出
 - Chromium 目录导入（只读原型）
 
@@ -41,7 +41,7 @@ npm run build
 
 这个版本验证交互和图表模型，不是生产文件系统：
 
-- 正文保存在浏览器 `localStorage`，不是磁盘 `.md`
+- 正文保存在浏览器本地 adapter，不是磁盘 `.md`
 - 文件夹导入是只读，不能写回
 - 没有账号、云同步和实时协作
 - Excalidraw 使用简化场景，正式实现应保存完整 `.excalidraw` JSON 和 SVG 预览

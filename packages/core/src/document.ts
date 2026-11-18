@@ -29,7 +29,18 @@ export type DocumentMeta = {
 export type DocumentSnapshot = {
   meta: DocumentMeta;
   markdown: string;
+  extensions?: DocumentExtensions;
 };
+
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+
+export type DocumentExtensions = Readonly<Record<string, JsonValue>>;
 
 export function workspacePath(value: string): WorkspacePath {
   const normalized = value.replaceAll("\\", "/").replace(/^\/+/, "");

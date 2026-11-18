@@ -9,6 +9,8 @@ export type {
   WriteDocumentInput
 } from "@inkloom/core";
 
+export * from "./browser-local";
+
 export const SUPPORTED_STORAGE_KINDS = [
   "browser-local",
   "browser-opfs",
