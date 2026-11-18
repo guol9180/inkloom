@@ -256,9 +256,13 @@
   - `https://inkloom.imhgl.com` 可访问 Web，`https://api.inkloom.imhgl.com/api/health` 返回健康状态。
   - 部署步骤、环境变量、备份与回滚方式同步到 `docs/DEPLOYMENT.md`。
 - 边界：不进行 M2 离线同步、桌面或移动端发布。
-- 状态：planned
+- 状态：in-progress
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-18 计划 跟随 T15 建立生产发布与上线验证任务卡。
+  - 2026-11-18 执行 启动 T16；补齐生产运行镜像、反向代理、数据库持久化与备份/回滚说明，运行全量自动化和浏览器回归后准备部署约定域名。
+  - 2026-11-18 执行 新增 Playwright 端到端流程、Caddy/Docker 生产配置、GitHub Actions 手动部署与生产健康检查脚本；安全覆盖后审计从 8 high/3 moderate/1 low 收敛到 1 high/1 low，剩余 high 仅在 Excalidraw 的 Sass 构建链且不在生产 Web bundle 中。
+  - 2026-11-18 验证 `pnpm typecheck` 通过；`pnpm test` 31 项通过；`pnpm build` 通过；Playwright 1 项完整流程通过，覆盖注册、编辑保存、刷新恢复、导出、删除、冲突隔离和退出；`apps/web/dist` 扫描确认不含 `@parcel/watcher`、`chokidar` 或 `picomatch`。
+  - 2026-11-18 等待 生产域名尚未解析、目标服务器未提供可用部署凭据；用户要求部署前等待指令，因此不执行 DNS、SSH、容器或线上变更，T16 保持 in-progress。
 
 ## 状态枚举
 

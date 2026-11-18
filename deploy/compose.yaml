@@ -1,0 +1,54 @@
+name: inkloom
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      INKLOOM_DATABASE_PATH: /data/inkloom.sqlite
+      INKLOOM_WEB_ORIGINS: https://inkloom.imhgl.com
+    expose:
+      - "3001"
+    volumes:
+      - inkloom-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        VITE_API_ORIGIN: https://api.inkloom.imhgl.com
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  inkloom-data:
+  caddy-data:
+  caddy-config:

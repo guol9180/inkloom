@@ -920,7 +920,7 @@ WebSocket：
 | 中文全文搜索效果 | 搜索不可用 | 双字/trigram 索引，独立分词基准测试 |
 | 图表依赖链漏洞 | 供应链与脚本执行风险 | 锁定版本、`npm audit` 门禁、跟进 Excalidraw/Mermaid 修复版本 |
 
-原型依赖检查显示：生产依赖存在 9 个 high、1 个 moderate、2 个 low 的已知问题，主要来自 Excalidraw 的 Mermaid 转换依赖链和传递依赖。它们不等同于已可利用漏洞，但正式产品上线前必须升级、替换或明确隔离，不能用演示原型直接进入生产。
+2026-11-18 的 Web MVP 依赖检查从初始 8 high、3 moderate、1 low 收敛到 1 high、1 low。剩余 high 是 `@excalidraw/excalidraw → sass → @parcel/watcher → picomatch` 的构建链问题，当前 npm 尚无已修复版本；该链未进入 `apps/web/dist` 的生产脚本。剩余 low 是 Excalidraw 内嵌 Mermaid 转换依赖使用的旧 KaTeX。上线验证必须继续检查生产 bundle 不含 `picomatch`/`chokidar`/`@parcel/watcher`，并在上游修复版本发布后移除覆盖或升级依赖。
 
 ---
 

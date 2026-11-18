@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+**/dist
+**/target
+**/.vite
+**/*.tsbuildinfo
+.git
+.github
+.inkloom
+data
+coverage
+playwright-report
+test-results
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

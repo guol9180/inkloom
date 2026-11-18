@@ -28,9 +28,10 @@ InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、�
 
 启动 API 和已构建的 Web：
 
-```bash
+```powershell
 pnpm build
-INKLOOM_DATABASE_PATH=.inkloom/inkloom.sqlite pnpm start:api
+$env:INKLOOM_DATABASE_PATH=".inkloom/inkloom.sqlite"
+pnpm start:api
 node apps/web/serve.mjs
 ```
 
