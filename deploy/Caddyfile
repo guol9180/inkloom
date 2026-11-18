@@ -8,6 +8,11 @@
   }
 }
 
+api.imhgl.com {
+  import security_headers
+  reverse_proxy workbench:8080
+}
+
 inkloom.imhgl.com {
   import security_headers
   encode zstd gzip

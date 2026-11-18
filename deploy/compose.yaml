@@ -2,9 +2,9 @@ name: inkloom
 
 services:
   api:
-    build:
-      context: ..
-      dockerfile: deploy/api.Dockerfile
+    container_name: inkloom-api
+    image: ghcr.io/guol9180/inkloom-api:${INKLOOM_IMAGE_TAG:-latest}
+    pull_policy: always
     environment:
       NODE_ENV: production
       PORT: "3001"
@@ -15,9 +15,16 @@ services:
     volumes:
       - inkloom-data:/data
     read_only: true
+    init: true
+    mem_limit: 256m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
     tmpfs:
       - /tmp
     restart: unless-stopped
+    networks:
+      - edge
     healthcheck:
       test:
         [
@@ -30,25 +37,51 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   web:
-    build:
-      context: ..
-      dockerfile: deploy/web.Dockerfile
-      args:
-        VITE_API_ORIGIN: https://api.inkloom.imhgl.com
+    container_name: inkloom-edge
+    image: ghcr.io/guol9180/inkloom-edge:${INKLOOM_IMAGE_TAG:-latest}
+    pull_policy: always
     depends_on:
       api:
         condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+    read_only: true
+    init: true
+    mem_limit: 128m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     restart: unless-stopped
+    networks:
+      - edge
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
 volumes:
   inkloom-data:
+    name: inkloom-data
   caddy-data:
+    name: inkloom-caddy-data
   caddy-config:
+    name: inkloom-caddy-config
+
+networks:
+  edge:
+    name: inkloom-edge

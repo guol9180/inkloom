@@ -9,7 +9,7 @@ RUN corepack enable \
   && pnpm install --frozen-lockfile \
   && pnpm --filter @inkloom/web build
 
-FROM caddy:2.10-alpine
+FROM caddy:2.11.4-alpine
 
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/apps/web/dist /srv/inkloom/web

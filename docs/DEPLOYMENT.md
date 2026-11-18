@@ -4,8 +4,9 @@
 
 | Host | Service | Notes |
 | --- | --- | --- |
-| `inkloom.imhgl.com` | Web static app | Public browser app |
-| `api.inkloom.imhgl.com` | HTTP API | REST API and login session |
+| `inkloom.imhgl.com` | Web static app | Public browser app served by the shared edge container |
+| `api.inkloom.imhgl.com` | HTTP API | REST API and login session, reachable only through the edge network |
+| `api.imhgl.com` | workbench | Optional companion app; the route stays available when workbench rejoins `inkloom-edge` |
 | `sync.inkloom.imhgl.com` | WebSocket | Reserved for M2 collaboration |
 | `cdn.inkloom.imhgl.com` | Object storage/CDN | Reserved for diagram assets |
 
@@ -16,9 +17,18 @@ Create `A` records for the Web and API hosts pointing to the deployment server b
 The M1 deployment consists of two containers:
 
 - `api`: Node.js 22 with a persistent SQLite volume.
-- `web`: Caddy serving the built Web app and reverse-proxying `api.inkloom.imhgl.com` to the API container.
+- `web`: Caddy serving the built Web app and acting as the single public edge for Inkloom and optional companion apps.
 
-Required server ports are `80/tcp` and `443/tcp`. Docker Engine with the Compose plugin is required. The API container is not exposed directly.
+Required server ports are `80/tcp`, `443/tcp`, and optionally `443/udp` for HTTP/3. Docker Engine with the Compose plugin is required. The API container is not exposed directly. Both containers join the named `inkloom-edge` network; future workbench deployments must join the same network as `workbench`.
+
+Resource and operational defaults:
+
+- `api` is limited to `256m`, runs with a read-only root filesystem, and writes only to its data volume and `/tmp`.
+- `web` is limited to `128m` and owns ports `80/443`.
+- Container logs rotate at `10m` per file with three files.
+- Caddy certificates persist in `inkloom-caddy-data`; SQLite data persists in `inkloom-data`.
+- Deploy immutable commits or release artifacts. Do not deploy a dirty worktree.
+- Images are built outside the production host. GitHub Actions publishes commit-tagged `linux/amd64` images to GHCR; the server only pulls and starts them.
 
 ## Environment
 
@@ -42,19 +52,19 @@ INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com
 
 ## First Deploy
 
+GitHub Actions is the supported build and deployment path. Configure the deployment secrets below, then run the `Deploy Web MVP` workflow. It tests the release, builds and pushes `inkloom-api` and `inkloom-edge`, updates the server Compose files, pulls the commit-tagged images, restarts the two containers, and runs production verification.
+
+Manual server commands are limited to pull and runtime operations:
+
 ```bash
-git clone https://github.com/guol9180/inkloom.git /srv/inkloom
+mkdir -p /srv/inkloom/deploy
 cd /srv/inkloom
-git switch main
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:e2e
-docker compose -f deploy/compose.yaml up -d --build
+docker login ghcr.io
+INKLOOM_IMAGE_TAG=<release-commit> docker compose -f deploy/compose.yaml pull
+INKLOOM_IMAGE_TAG=<release-commit> docker compose -f deploy/compose.yaml up -d --remove-orphans
 ```
 
-Wait for both services:
+Run tests and image builds in CI or another build environment, never on the production server. Wait for both services:
 
 ```bash
 docker compose -f deploy/compose.yaml ps
@@ -79,17 +89,7 @@ Expected API health:
 
 ## Updates
 
-```bash
-cd /srv/inkloom
-git pull --ff-only
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:e2e
-docker compose -f deploy/compose.yaml up -d --build
-pnpm verify:production
-```
+Run the manual `Deploy Web MVP` workflow with the desired immutable Git ref. The workflow publishes a new commit-tagged pair of images, deploys that exact tag, and runs `pnpm verify:production`. Production hosts must not build application images.
 
 Use a service restart window for M1. Database writes are revision-checked, but this version does not yet provide blue/green deployment.
 
@@ -102,7 +102,7 @@ cd /srv/inkloom
 mkdir -p /srv/inkloom-backups
 docker compose -f deploy/compose.yaml stop api
 docker run --rm \
-  -v inkloom_inkloom-data:/data:ro \
+  -v inkloom-data:/data:ro \
   -v /srv/inkloom-backups:/backup \
   alpine:3.21 \
   tar czf "/backup/inkloom-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C /data .
@@ -117,7 +117,7 @@ To restore:
 cd /srv/inkloom
 docker compose -f deploy/compose.yaml stop api
 docker run --rm \
-  -v inkloom_inkloom-data:/data \
+  -v inkloom-data:/data \
   -v /srv/inkloom-backups:/backup:ro \
   alpine:3.21 \
   sh -c "rm -rf /data/* && tar xzf /backup/<backup-file>.tgz -C /data"
