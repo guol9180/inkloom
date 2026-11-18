@@ -15,7 +15,10 @@
 - API 域名：`https://api.inkloom.imhgl.com`。
 - 开源仓库：`https://github.com/guol9180/inkloom`，默认分支 `main`。
 - T15 已提交为 `4415b6d`：Web + API 的账号、云端 SQLite、revision、历史恢复和冲突副本闭环可本地运行。
-- T16 的自动化测试、容器、Caddy、CI/CD 和上线校验已准备；生产部署等待用户明确指令。
+- T16 已完成：Inkloom Web 与 API 已部署到生产，GitHub Actions 负责外部构建、GHCR 推送、自动部署与线上验证。
+- 当前生产 release 为 `f71fe4e4308713ec2852541371b91426ac50631d`。
+- workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
+- 1Panel 已完整卸载，其旧数据与迁移备份已删除。
 - 用户要求 M1 上线后暂停后续开发，T4 桌面、M2 离线同步等不得自行继续。
 
 ## 已验证
@@ -25,7 +28,7 @@ pnpm typecheck
 结果：全部 workspace 通过
 
 pnpm test
-结果：31 项通过
+结果：26 项通过（干净 release checkout；不含本地未提交的 T4 测试）
 
 pnpm build
 结果：Web 与 API 生产构建成功；仅有图表大 chunk 警告
@@ -35,18 +38,21 @@ pnpm test:e2e
 
 pnpm audit --prod
 结果：1 high + 1 low；high 为 Excalidraw 的 Sass 构建链 picomatch，生产 Web bundle 未包含该链
+
+GitHub Actions run 44280666039
+结果：typecheck、单元/集成测试、Playwright、镜像构建、自动部署与生产验证全部通过
 ```
 
 验证日期：2026-11-18。
 
-## 部署前置条件
+## 生产部署
 
-- 创建 `inkloom.imhgl.com` 与 `api.inkloom.imhgl.com` 的 DNS 记录。
-- 目标 Linux 主机安装 Docker Engine 与 Compose 插件，并开放 80/443。
-- 提供 SSH 部署用户、私钥和绝对部署目录，或配置 `Deploy Web MVP` workflow 的同名 secrets。
-- 用户明确下达部署指令后，再执行 `docker compose -f deploy/compose.yaml up -d --build`。
-
-当前机器没有生产域名解析、可用 SSH 部署凭据或 Docker 运行时；未执行任何线上变更。
+- DNS：`inkloom.imhgl.com` 与 `api.inkloom.imhgl.com` 均已指向生产服务器。
+- 生产目录：`/srv/inkloom`，由专用 `inkloom-deploy` 用户拥有。
+- 运行容器：`inkloom-edge` 与 `inkloom-api`，共享 `inkloom-edge` 网络。
+- 数据卷：`inkloom-data`、`inkloom-caddy-data`、`inkloom-caddy-config`。
+- 发布方式：手动运行 GitHub Actions `Deploy Web MVP`；服务器只执行镜像 `pull + up`，不运行应用构建。
+- 安全：Actions 固定到提交 SHA，SSH host key 固定，部署与 GHCR 凭据只存在 GitHub Secrets；开源仓库不保存任何部署秘密。
 
 ## 已知边界
 

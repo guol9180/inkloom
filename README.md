@@ -12,7 +12,10 @@ InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、�
 
 ## 项目状态
 
-当前仓库包含一个已验证可本地运行的 Web 云端工作区：
+当前仓库包含一个已部署的 Web 云端工作区：
+
+- Web：`https://inkloom.imhgl.com`
+- API：`https://api.inkloom.imhgl.com`
 
 - 邮箱注册、登录、退出和 HttpOnly 会话
 - 每用户独立工作区，文档和 revision 持久化到服务端 SQLite
