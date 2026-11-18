@@ -256,13 +256,20 @@
   - `https://inkloom.imhgl.com` 可访问 Web，`https://api.inkloom.imhgl.com/api/health` 返回健康状态。
   - 部署步骤、环境变量、备份与回滚方式同步到 `docs/DEPLOYMENT.md`。
 - 边界：不进行 M2 离线同步、桌面或移动端发布。
-- 状态：in-progress
+- 状态：done
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-18 计划 跟随 T15 建立生产发布与上线验证任务卡。
   - 2026-11-18 执行 启动 T16；补齐生产运行镜像、反向代理、数据库持久化与备份/回滚说明，运行全量自动化和浏览器回归后准备部署约定域名。
   - 2026-11-18 执行 新增 Playwright 端到端流程、Caddy/Docker 生产配置、GitHub Actions 手动部署与生产健康检查脚本；安全覆盖后审计从 8 high/3 moderate/1 low 收敛到 1 high/1 low，剩余 high 仅在 Excalidraw 的 Sass 构建链且不在生产 Web bundle 中。
   - 2026-11-18 验证 `pnpm typecheck` 通过；`pnpm test` 31 项通过；`pnpm build` 通过；Playwright 1 项完整流程通过，覆盖注册、编辑保存、刷新恢复、导出、删除、冲突隔离和退出；`apps/web/dist` 扫描确认不含 `@parcel/watcher`、`chokidar` 或 `picomatch`。
   - 2026-11-18 等待 生产域名尚未解析、目标服务器未提供可用部署凭据；用户要求部署前等待指令，因此不执行 DNS、SSH、容器或线上变更，T16 保持 in-progress。
+  - 2026-11-18 计划 用户授权部署 `3afe1c7` 并建立生产规范；移除旧 workbench 容器但保留其镜像和数据卷，统一 Caddy 为 Inkloom Web/Edge 容器，API 仅在内网 `inkloom-edge` 网络暴露，沿用现有证书卷并补齐内存、日志与健康检查约束。
+  - 2026-11-18 执行 用户要求禁止生产服务器构建应用；Compose 改为仅拉取 GHCR 中带 commit SHA 的 `inkloom-api` 与 `inkloom-edge` 镜像，GitHub Actions 负责测试、构建、推送、部署和生产验证。
+  - 2026-11-18 执行 删除旧 workbench 容器并保留镜像与 `workbench_workbench-docs` 数据卷；Docker 全局启用 `10m × 3` 日志轮转；创建专用 `inkloom-deploy` 用户，部署密钥、固定 host key 与 GHCR 凭据仅存放在 GitHub Secrets。
+  - 2026-11-18 执行 修复 release checkout 的 lockfile/悬空导出问题，并将 API 容器监听地址改为可配置 `HOST`；生产设置为 `0.0.0.0`，Caddy 通过 `inkloom-edge` 内网访问 API。
+  - 2026-11-18 验证 干净 release worktree 通过 frozen install、`pnpm typecheck`、26 项单元/集成测试与 `pnpm build`；GitHub Actions run `44280666039` 通过 Playwright E2E、外部构建、GHCR 推送、自动部署和生产验证。
+  - 2026-11-18 验证 `https://inkloom.imhgl.com` 返回 HTTP/2 200，`https://api.inkloom.imhgl.com/api/health` 返回 `{"ok":true,"service":"inkloom-api"}`；CSP、HSTS、frame、MIME 和 referrer 安全头生效，容器无 OOM，系统无 failed unit。
+  - 2026-11-18 交付 Inkloom API 与共享 Caddy Edge 已部署到生产，release SHA 为 `f71fe4e4308713ec2852541371b91426ac50631d`；workbench 当前停止，镜像和数据卷保留供后续重新部署。剩余差距：无。
 
 ## 状态枚举
 
