@@ -55,6 +55,8 @@ INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com
 
 GitHub Actions is the supported build and deployment path. Configure the deployment secrets below, then run the `Deploy Web MVP` workflow. It tests the release, builds and pushes `inkloom-api` and `inkloom-edge`, updates the server Compose files, pulls the commit-tagged images, restarts the two containers, and runs production verification.
 
+`deploy/migrate-legacy-edge.sh` is a one-time, idempotent migration from the legacy `workbench` Compose edge. It copies the legacy Caddy certificate volume only when present and removes the old container only when its Compose project label is exactly `workbench`.
+
 Manual server commands are limited to pull and runtime operations:
 
 ```bash
