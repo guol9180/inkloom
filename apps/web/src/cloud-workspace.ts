@@ -13,6 +13,7 @@ import type { CanvasScene } from "@inkloom/diagrams";
 import { folderOrder, type Note } from "./data";
 
 const SESSION_ACTIVE_PREFIX = "inkloom.active.";
+const ACTIVE_WORKSPACE_KEY = "inkloom.active-workspace";
 const DRAFT_PREFIX = "inkloom.draft.";
 
 export const cloudClient = new CloudClient({
@@ -68,13 +69,33 @@ export async function ensureCloudWorkspace(): Promise<CloudWorkspace> {
   return cloudClient.createWorkspace("我的工作区");
 }
 
+export async function loadCloudWorkspaces(): Promise<{
+  workspaces: CloudWorkspace[];
+  activeWorkspace: CloudWorkspace;
+}> {
+  let workspaces = await cloudClient.listWorkspaces();
+  if (workspaces.length === 0) {
+    workspaces = [await cloudClient.createWorkspace("我的工作区")];
+  }
+  const storedId = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+  const activeWorkspace =
+    workspaces.find((workspace) => workspace.id === storedId) ?? workspaces[0];
+  persistActiveCloudWorkspace(activeWorkspace.id as WorkspaceId);
+  return { workspaces, activeWorkspace };
+}
+
+export function persistActiveCloudWorkspace(workspaceId: WorkspaceId): void {
+  localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
+}
+
 export function snapshotToNote(snapshot: DocumentSnapshot): Note {
   const segments = snapshot.meta.path.split("/");
   const fallbackFolder = folderOrder[0] ?? "个人";
   return {
     id: snapshot.meta.id,
     title: snapshot.meta.title,
-    folder: segments.length > 1 ? segments[0] : fallbackFolder,
+    folder:
+      segments.length > 1 ? segments.slice(0, -1).join("/") : fallbackFolder,
     filePath: snapshot.meta.path,
     revision: snapshot.meta.revision,
     tags: [...snapshot.meta.tags],

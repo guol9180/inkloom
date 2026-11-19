@@ -313,19 +313,59 @@ export class DocumentDatabase {
       createdAt: timestamp,
       updatedAt: timestamp
     };
+    const documentId = this.createId();
+    const path = workspacePath("开始使用/欢迎.md");
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workspaces (id, user_id, name, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(
+          workspace.id,
+          userId,
+          workspace.name,
+          workspace.createdAt,
+          workspace.updatedAt
+        );
+      this.db
+        .prepare(
+          `INSERT INTO documents
+            (id, workspace_id, path, title, tags_json, markdown, extensions_json,
+             revision, content_hash, created_at, updated_at, deleted_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?, NULL)`
+        )
+        .run(
+          documentId,
+          workspace.id,
+          path,
+          "欢迎使用墨织",
+          JSON.stringify(["入门", "云端保存"]),
+          WELCOME_MARKDOWN,
+          contentHash(WELCOME_MARKDOWN),
+          timestamp,
+          timestamp
+        );
+    });
+    return workspace;
+  }
+
+  renameWorkspace(
+    userId: string,
+    workspaceId: string,
+    name: string
+  ): ApiWorkspace {
+    this.requireWorkspace(userId, workspaceId);
+    const timestamp = this.now();
+    const normalizedName = normalizeWorkspaceName(name);
     this.db
       .prepare(
-        `INSERT INTO workspaces (id, user_id, name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`
+        `UPDATE workspaces
+         SET name = ?, updated_at = ?
+         WHERE id = ? AND user_id = ?`
       )
-      .run(
-        workspace.id,
-        userId,
-        workspace.name,
-        workspace.createdAt,
-        workspace.updatedAt
-      );
-    return workspace;
+      .run(normalizedName, timestamp, workspaceId, userId);
+    return this.requireWorkspace(userId, workspaceId);
   }
 
   getWorkspace(userId: string, workspaceId: string): ApiWorkspace | undefined {

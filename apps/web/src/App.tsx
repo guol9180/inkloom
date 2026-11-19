@@ -37,11 +37,13 @@ import {
   ChevronDown,
   ChevronRight,
   CirclePlus,
+  Cloud,
   Code2,
   Columns2,
   Download,
   Eye,
   FileText,
+  FolderPlus,
   FolderInput,
   FolderClosed,
   FolderOpen,
@@ -53,37 +55,58 @@ import {
   Italic,
   Link2,
   List,
+  LogOut,
   Menu,
   MoreHorizontal,
   Network,
   PanelLeftClose,
   PanelRightClose,
+  Pencil,
   Search,
   Settings,
   SquarePen,
   Tag,
+  Trash2,
   Upload,
   X
 } from "lucide-react";
 import {
   clearDraft,
   cloudClient,
-  ensureCloudWorkspace,
   loadCloudWorkspace,
+  loadCloudWorkspaces,
+  persistActiveCloudWorkspace,
   persistActiveWorkspace,
   saveDraft,
   snapshotToNote
 } from "./cloud-workspace";
+import { Dialog } from "./Dialog";
 import { folderOrder, type Note } from "./data";
 
 type ViewMode = MarkdownViewMode;
 type SaveState = "loading" | "saved" | "saving" | "error" | "conflict";
+type DialogKind =
+  | "workspace"
+  | "workspace-create"
+  | "workspace-rename"
+  | "settings"
+  | "move"
+  | "tags"
+  | "delete"
+  | "restore"
+  | "logout"
+  | null;
 
 type SavedNoteShape = {
   title: string;
   content: string;
   tags: string[];
   canvas?: CanvasScene;
+};
+
+type PendingSave = {
+  noteId: string;
+  adapter: CloudWorkspaceAdapter;
 };
 
 function formatTime(value: string): string {
@@ -106,6 +129,7 @@ function WorkspaceApp({
 }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState("");
+  const [workspaces, setWorkspaces] = useState<CloudWorkspace[]>([]);
   const [workspace, setWorkspace] = useState<CloudWorkspace>();
   const [adapter, setAdapter] = useState<CloudWorkspaceAdapter>();
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
@@ -119,23 +143,49 @@ function WorkspaceApp({
     new Set(folderOrder)
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [documentMenuOpen, setDocumentMenuOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [dialog, setDialog] = useState<DialogKind>(null);
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
+  const [movePathDraft, setMovePathDraft] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
+  const [dialogError, setDialogError] = useState("");
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [pendingRestore, setPendingRestore] =
+    useState<CloudDocumentRevision>();
   const [toast, setToast] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const documentMenuRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<Note[]>([]);
   const lastSavedRef = useRef(new Map<string, SavedNoteShape>());
-  const savingRef = useRef(false);
+  const revisionRef = useRef(new Map<string, number>());
+  const pendingSavesRef = useRef(new Map<string, PendingSave>());
+  const drainingSavesRef = useRef(false);
+  const saveDrainRef = useRef<Promise<void>>(Promise.resolve());
   const conflictLockedRef = useRef(false);
   const saveTimerRef = useRef<number | undefined>(undefined);
 
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0];
-  const visibleFolders = useMemo(
-    () => [...new Set([...folderOrder, ...notes.map((note) => note.folder)])],
-    [notes]
-  );
+  const visibleFolders = useMemo(() => {
+    const folders = new Set<string>();
+    for (const folder of folderOrder) folders.add(folder);
+    for (const note of notes) {
+      const segments = note.folder.split("/").filter(Boolean);
+      for (let index = 1; index <= segments.length; index += 1) {
+        folders.add(segments.slice(0, index).join("/"));
+      }
+    }
+    return [...folders].sort((left, right) => {
+      const leftDepth = left.split("/").length;
+      const rightDepth = right.split("/").length;
+      if (leftDepth !== rightDepth) return leftDepth - rightDepth;
+      return left.localeCompare(right, "zh-CN");
+    });
+  }, [notes]);
   const filteredNotes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return notes;
@@ -182,23 +232,10 @@ function WorkspaceApp({
       setWorkspaceError("");
       setSaveState("loading");
       try {
-        const nextWorkspace = await ensureCloudWorkspace();
+        const session = await loadCloudWorkspaces();
         if (cancelled) return;
-        const nextAdapter = cloudClient.workspace(nextWorkspace.id as WorkspaceId);
-        const loaded = await loadCloudWorkspace(nextAdapter, nextWorkspace);
-        if (cancelled) return;
-        lastSavedRef.current = new Map(
-          loaded.notes.map((note) => [note.id, noteShape(note)])
-        );
-        setWorkspace(nextWorkspace);
-        setAdapter(nextAdapter);
-        setNotes(loaded.notes);
-        setActiveId(loaded.activeId);
-        setWorkspaceLoading(false);
-        setSaveState("saved");
-        if (loaded.recoveredDraft) {
-          showToast("已恢复上次未成功保存到云端的本地草稿");
-        }
+        setWorkspaces(session.workspaces);
+        await activateWorkspace(session.activeWorkspace, () => cancelled);
       } catch (error) {
         if (cancelled) return;
         setWorkspaceError(
@@ -214,7 +251,11 @@ function WorkspaceApp({
   }, []);
 
   useEffect(() => {
-    if (!adapter || !activeNote || workspaceLoading || savingRef.current) return;
+    notesRef.current = notes;
+  }, [notes]);
+
+  useEffect(() => {
+    if (!adapter || !activeNote || workspaceLoading) return;
     if (conflictLockedRef.current) return;
     const saved = lastSavedRef.current.get(activeNote.id);
     if (!saved || noteShapesEqual(saved, noteShape(activeNote))) {
@@ -224,7 +265,7 @@ function WorkspaceApp({
     setSaveState("saving");
     setSaveError("");
     saveTimerRef.current = window.setTimeout(() => {
-      void persistNote(activeNote, adapter);
+      queueSave(activeNote.id, adapter);
     }, 550);
     return () => {
       if (saveTimerRef.current !== undefined) {
@@ -232,6 +273,49 @@ function WorkspaceApp({
       }
     };
   }, [activeNote, adapter, workspaceLoading]);
+
+  useEffect(() => {
+    const desktopInspector = window.matchMedia("(min-width: 1241px)");
+    const syncInspector = () => setInspectorOpen(desktopInspector.matches);
+    syncInspector();
+    desktopInspector.addEventListener("change", syncInspector);
+    return () => desktopInspector.removeEventListener("change", syncInspector);
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const current = notesRef.current.find((note) => note.id === activeId);
+      if (!current) return;
+      const saved = lastSavedRef.current.get(current.id);
+      if (saved && noteShapesEqual(saved, noteShape(current))) return;
+      saveDraft(current);
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [activeId]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSidebarOpen(false);
+      setDocumentMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  useEffect(() => {
+    if (!documentMenuOpen) return;
+    const closeMenu = (event: PointerEvent) => {
+      if (!documentMenuRef.current?.contains(event.target as Node)) {
+        setDocumentMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", closeMenu);
+    return () => window.removeEventListener("pointerdown", closeMenu);
+  }, [documentMenuOpen]);
 
   useEffect(() => {
     if (workspace && activeId) persistActiveWorkspace(workspace.id as WorkspaceId, activeId);
@@ -279,6 +363,13 @@ function WorkspaceApp({
     window.setTimeout(() => setToast(""), 2400);
   }
 
+  function closeDialog() {
+    if (dialogBusy) return;
+    setDialog(null);
+    setDialogError("");
+    setPendingRestore(undefined);
+  }
+
   function noteShape(note: Note): SavedNoteShape {
     return {
       title: note.title,
@@ -297,78 +388,181 @@ function WorkspaceApp({
     );
   }
 
-  async function persistNote(
-    note: Note,
-    targetAdapter: CloudWorkspaceAdapter
+  function updateNotes(updater: (current: Note[]) => Note[]): void {
+    setNotes((current) => {
+      const next = updater(current);
+      notesRef.current = next;
+      return next;
+    });
+  }
+
+  async function activateWorkspace(
+    nextWorkspace: CloudWorkspace,
+    isCancelled: () => boolean = () => false
   ): Promise<void> {
-    if (savingRef.current) return;
-    const savedShape = lastSavedRef.current.get(note.id);
-    if (savedShape && noteShapesEqual(savedShape, noteShape(note))) {
-      clearDraft(note.id);
-      setSaveState("saved");
+    const nextAdapter = cloudClient.workspace(nextWorkspace.id as WorkspaceId);
+    const loaded = await loadCloudWorkspace(nextAdapter, nextWorkspace);
+    if (isCancelled()) return;
+    notesRef.current = loaded.notes;
+    lastSavedRef.current = new Map(
+      loaded.notes.map((note) => [note.id, noteShape(note)])
+    );
+    revisionRef.current = new Map(
+      loaded.notes.map((note) => [note.id, note.revision])
+    );
+    pendingSavesRef.current.clear();
+    conflictLockedRef.current = false;
+    setWorkspace(nextWorkspace);
+    setAdapter(nextAdapter);
+    setNotes(loaded.notes);
+    setActiveId(loaded.activeId);
+    setExpandedFolders(
+      new Set([
+        ...folderOrder,
+        ...loaded.notes.flatMap((note) => folderHierarchy(note.folder))
+      ])
+    );
+    setWorkspaceLoading(false);
+    setSaveState("saved");
+    setSaveError("");
+    persistActiveCloudWorkspace(nextWorkspace.id as WorkspaceId);
+    if (loaded.recoveredDraft) {
+      showToast("已恢复上次未成功保存到云端的本地草稿");
+    }
+  }
+
+  async function switchWorkspace(nextWorkspace: CloudWorkspace): Promise<void> {
+    if (nextWorkspace.id === workspace?.id) {
+      setDialog(null);
       return;
     }
+    setDialogBusy(true);
+    setDialogError("");
+    try {
+      if (adapter && activeNote) await queueSave(activeNote.id, adapter);
+      await saveDrainRef.current;
+      setWorkspaceLoading(true);
+      await activateWorkspace(nextWorkspace);
+      setDialog(null);
+      setSidebarOpen(false);
+      showToast(`已切换到“${nextWorkspace.name}”`);
+    } catch (error) {
+      setDialogError(
+        error instanceof Error ? error.message : "切换工作区失败。"
+      );
+    } finally {
+      setDialogBusy(false);
+    }
+  }
+
+  function queueSave(
+    noteId: string,
+    targetAdapter: CloudWorkspaceAdapter
+  ): Promise<void> {
     if (saveTimerRef.current !== undefined) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = undefined;
     }
-    savingRef.current = true;
-    const sentShape = noteShape(note);
-    saveDraft(note);
+    const latest = notesRef.current.find((note) => note.id === noteId);
+    if (latest) saveDraft(latest);
+    pendingSavesRef.current.set(noteId, { noteId, adapter: targetAdapter });
     setSaveState("saving");
     setSaveError("");
+    saveDrainRef.current = saveDrainRef.current.then(drainSaves);
+    return saveDrainRef.current;
+  }
+
+  async function drainSaves(): Promise<void> {
+    if (drainingSavesRef.current) return;
+    drainingSavesRef.current = true;
+    let failed = false;
     try {
-      const saved = await targetAdapter.writeDocument({
-        documentId: note.id,
-        baseRevision: note.revision,
-        markdown: note.content,
-        title: note.title,
-        tags: note.tags,
-        extensions: note.canvas
-          ? { canvas: note.canvas as unknown as JsonValue }
-          : undefined
-      });
-      const savedNote = snapshotToNote(saved);
-      lastSavedRef.current.set(
-        savedNote.id,
-        noteShape(savedNote)
-      );
-      clearDraft(savedNote.id);
-      setNotes((current) =>
-        current.map((item) => {
-          if (item.id !== savedNote.id) return item;
-          return noteShapesEqual(sentShape, noteShape(item))
-            ? savedNote
-            : {
-                ...item,
-                revision: savedNote.revision,
-                updatedAt: savedNote.updatedAt
-              };
-        })
-      );
-      setSaveState("saved");
-    } catch (error) {
-      saveDraft(note);
-      if (error instanceof RevisionConflictError) {
-        conflictLockedRef.current = true;
-        setSaveState("conflict");
-        setSaveError("云端已有更新，本地内容已保留为冲突副本。");
-        try {
-          await preserveConflictCopy(note, targetAdapter);
-        } catch {
-          setSaveError("保存冲突。请保留此页面并刷新后处理，云端内容不会被覆盖。");
+      while (pendingSavesRef.current.size > 0) {
+        const [noteId, pending] = pendingSavesRef.current.entries().next().value as [
+          string,
+          PendingSave
+        ];
+        pendingSavesRef.current.delete(noteId);
+        const latest = notesRef.current.find((note) => note.id === noteId);
+        if (!latest) continue;
+        const savedShape = lastSavedRef.current.get(noteId);
+        if (savedShape && noteShapesEqual(savedShape, noteShape(latest))) {
+          clearDraft(noteId);
+          continue;
         }
-      } else {
-        setSaveState("error");
-        setSaveError(
-          error instanceof Error
-            ? `保存失败：${error.message}`
-            : "保存失败，本地草稿已保留。"
-        );
+        const sentShape = noteShape(latest);
+        try {
+          const saved = await pending.adapter.writeDocument({
+            documentId: latest.id,
+            baseRevision:
+              revisionRef.current.get(latest.id) ?? latest.revision,
+            markdown: latest.content,
+            title: latest.title,
+            tags: latest.tags,
+            extensions: latest.canvas
+              ? { canvas: latest.canvas as unknown as JsonValue }
+              : undefined
+          });
+          const savedNote = snapshotToNote(saved);
+          revisionRef.current.set(savedNote.id, savedNote.revision);
+          lastSavedRef.current.set(savedNote.id, noteShape(savedNote));
+          updateNotes((current) => {
+            const next = current.map((item) => {
+              if (item.id !== savedNote.id) return item;
+              return noteShapesEqual(sentShape, noteShape(item))
+                ? savedNote
+                : {
+                    ...item,
+                    revision: savedNote.revision,
+                    updatedAt: savedNote.updatedAt
+                  };
+            });
+            return next;
+          });
+          const current = notesRef.current.find((note) => note.id === noteId);
+          if (current && noteShapesEqual(sentShape, noteShape(current))) {
+            clearDraft(noteId);
+          }
+        } catch (error) {
+          const localNote =
+            notesRef.current.find((note) => note.id === noteId) ?? latest;
+          saveDraft(localNote);
+          if (error instanceof RevisionConflictError) {
+            pendingSavesRef.current.delete(noteId);
+            conflictLockedRef.current = true;
+            setSaveState("conflict");
+            setSaveError("云端已有更新，正在保留本地副本。");
+            try {
+              await preserveConflictCopy(localNote, pending.adapter);
+            } catch {
+              failed = true;
+              setSaveError(
+                "保存冲突。请保留此页面并刷新后处理，云端内容不会被覆盖。"
+              );
+            }
+          } else {
+            failed = true;
+            setSaveState("error");
+            setSaveError(
+              error instanceof Error
+                ? `保存失败：${error.message}`
+                : "保存失败，本地草稿已保留。"
+            );
+          }
+        }
       }
+      if (!failed && pendingSavesRef.current.size === 0) setSaveState("saved");
     } finally {
-      savingRef.current = false;
+      drainingSavesRef.current = false;
     }
+  }
+
+  function persistNote(
+    note: Note,
+    targetAdapter: CloudWorkspaceAdapter
+  ): Promise<void> {
+    saveDraft(note);
+    return queueSave(note.id, targetAdapter);
   }
 
   async function preserveConflictCopy(
@@ -379,9 +573,13 @@ function WorkspaceApp({
     const copyTitle = nextAvailableTitle(
       `${localNote.title}（本地冲突副本）`,
       localNote.folder,
-      notes
+      notesRef.current
     );
-    const copyPath = uniqueFilePath(localNote.folder, copyTitle, notes);
+    const copyPath = uniqueFilePath(
+      localNote.folder,
+      copyTitle,
+      notesRef.current
+    );
     const created = await targetAdapter.createDocument({
       workspaceId: targetAdapter.workspaceId,
       path: workspacePath(copyPath),
@@ -396,9 +594,11 @@ function WorkspaceApp({
     const copyNote = snapshotToNote(created);
     lastSavedRef.current.set(serverNote.id, noteShape(serverNote));
     lastSavedRef.current.set(copyNote.id, noteShape(copyNote));
+    revisionRef.current.set(serverNote.id, serverNote.revision);
+    revisionRef.current.set(copyNote.id, copyNote.revision);
     clearDraft(localNote.id);
     clearDraft(copyNote.id);
-    setNotes((current) =>
+    updateNotes((current) =>
       current.flatMap((item) =>
         item.id === localNote.id ? [serverNote, copyNote] : [item]
       )
@@ -421,7 +621,8 @@ function WorkspaceApp({
     });
     const note = snapshotToNote(snapshot);
     lastSavedRef.current.set(note.id, noteShape(note));
-    setNotes((current) => [...current, note]);
+    revisionRef.current.set(note.id, note.revision);
+    updateNotes((current) => [...current, note]);
     setActiveId(note.id);
     setSaveState("saved");
     return note;
@@ -429,7 +630,7 @@ function WorkspaceApp({
 
   function updateActiveNote(patch: Partial<Note>) {
     if (!activeNote) return;
-    setNotes((current) =>
+    updateNotes((current) =>
       current.map((note) =>
         note.id === activeNote.id
           ? { ...note, ...patch, updatedAt: new Date().toISOString() }
@@ -465,7 +666,9 @@ function WorkspaceApp({
       setSaveError(error instanceof Error ? error.message : "新建文档失败。");
       return;
     }
-    setExpandedFolders((current) => new Set([...current, folder]));
+    setExpandedFolders(
+      (current) => new Set([...current, ...folderHierarchy(folder)])
+    );
     window.setTimeout(() => {
       const titleInput = document.querySelector<HTMLInputElement>(".document-title");
       titleInput?.focus();
@@ -475,32 +678,45 @@ function WorkspaceApp({
 
   async function deleteActiveNote() {
     if (!activeNote || !adapter) return;
-    if (!window.confirm(`删除“${activeNote.title}”？该操作会从云端工作区删除文档。`)) {
-      return;
-    }
-    setSaveState("saving");
+    setDialogBusy(true);
+    setDialogError("");
     try {
+      pendingSavesRef.current.delete(activeNote.id);
       await adapter.deleteNode({
         nodeId: activeNote.id,
-        baseRevision: activeNote.revision
+        baseRevision:
+          revisionRef.current.get(activeNote.id) ?? activeNote.revision
       });
       clearDraft(activeNote.id);
       lastSavedRef.current.delete(activeNote.id);
-      const remaining = notes.filter((note) => note.id !== activeNote.id);
-      setNotes(remaining);
+      revisionRef.current.delete(activeNote.id);
+      const remaining = notesRef.current.filter(
+        (note) => note.id !== activeNote.id
+      );
+      updateNotes(() => remaining);
       setActiveId(remaining[0]?.id ?? "");
       setSaveState("saved");
       if (remaining.length === 0) await createServerNote();
+      setDialog(null);
       showToast("文档已删除");
     } catch (error) {
       setSaveState("error");
-      setSaveError(error instanceof Error ? error.message : "删除失败。");
+      setDialogError(error instanceof Error ? error.message : "删除失败。");
+    } finally {
+      setDialogBusy(false);
     }
   }
 
   function insertAtCursor(before: string, after = "", placeholder = "文字") {
     const textarea = textareaRef.current;
-    if (!textarea || !activeNote) return;
+    if (!activeNote) return;
+    if (!textarea) {
+      updateActiveNote({
+        content: `${activeNote.content.trimEnd()}\n\n${before}${placeholder}${after}\n`
+      });
+      setViewMode("split");
+      return;
+    }
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selected = activeNote.content.slice(start, end) || placeholder;
@@ -617,10 +833,10 @@ function WorkspaceApp({
             pending.push({
               name,
               text: await file.text(),
-              folder: prefix.split("/")[0] || "个人"
+              folder: prefix.replace(/\/$/, "") || "个人"
             });
           }
-          if (entry.kind === "directory" && prefix.split("/").length < 2) {
+          if (entry.kind === "directory" && prefix.split("/").length < 8) {
             await scan(entry, `${prefix}${name}/`);
           }
         }
@@ -648,7 +864,10 @@ function WorkspaceApp({
           setActiveId(imported[0].id);
           setExpandedFolders(
             (current) =>
-              new Set([...current, ...imported.map((note) => note.folder)])
+              new Set([
+                ...current,
+                ...imported.flatMap((note) => folderHierarchy(note.folder))
+              ])
           );
         }
       }
@@ -666,7 +885,8 @@ function WorkspaceApp({
     tags: string[]
   ): Promise<Note> {
     if (!adapter) throw new Error("工作区尚未加载。");
-    const baseTitle = fileName.replace(/\.md$/i, "");
+    const heading = /^#\s+(.+)$/m.exec(text)?.[1]?.trim();
+    const baseTitle = heading || fileName.replace(/\.md$/i, "");
     const title = nextAvailableTitle(baseTitle, folder, notes);
     const path = uniqueFilePath(folder, title, notes);
     const markdown = /^#\s/m.test(text) ? text : `# ${title}\n\n${text}`;
@@ -679,24 +899,43 @@ function WorkspaceApp({
     });
     const note = snapshotToNote(snapshot);
     lastSavedRef.current.set(note.id, noteShape(note));
-    setNotes((current) => [...current, note]);
+    revisionRef.current.set(note.id, note.revision);
+    updateNotes((current) => [...current, note]);
     return note;
+  }
+
+  function openMoveDialog() {
+    if (!activeNote || !adapter) return;
+    setMovePathDraft(activeNote.filePath);
+    setDialogError("");
+    setDialog("move");
   }
 
   async function moveActiveNote() {
     if (!activeNote || !adapter) return;
-    const targetPath = window.prompt("输入新的工作区路径", activeNote.filePath);
-    if (!targetPath || targetPath === activeNote.filePath) return;
-    setSaveState("saving");
+    const targetPath = movePathDraft.trim();
+    if (!targetPath || targetPath === activeNote.filePath) {
+      setDialog(null);
+      return;
+    }
+    setDialogBusy(true);
+    setDialogError("");
     try {
+      await queueSave(activeNote.id, adapter);
+      await saveDrainRef.current;
+      const baseRevision =
+        revisionRef.current.get(activeNote.id) ?? activeNote.revision;
       const moved = await adapter.moveNode({
         nodeId: activeNote.id,
         targetPath: workspacePath(targetPath),
-        baseRevision: activeNote.revision
+        baseRevision
       });
-      const folder = targetPath.split("/")[0] || "个人";
-      lastSavedRef.current.set(activeNote.id, noteShape(activeNote));
-      setNotes((current) =>
+      const folder =
+        targetPath.split("/").slice(0, -1).join("/") || "个人";
+      if (moved.kind === "document") {
+        revisionRef.current.set(activeNote.id, moved.meta.revision);
+      }
+      updateNotes((current) =>
         current.map((note) =>
           note.id === activeNote.id
             ? {
@@ -711,48 +950,167 @@ function WorkspaceApp({
             : note
         )
       );
-      setExpandedFolders((current) => new Set([...current, folder]));
+      const updated = notesRef.current.find((note) => note.id === activeNote.id);
+      if (updated) {
+        lastSavedRef.current.set(activeNote.id, noteShape(updated));
+      }
+      setExpandedFolders(
+        (current) => new Set([...current, ...folderHierarchy(folder)])
+      );
       setSaveState("saved");
+      setDialog(null);
       showToast("文档路径已更新");
     } catch (error) {
       setSaveState("error");
-      setSaveError(error instanceof Error ? error.message : "移动文档失败。");
+      setDialogError(error instanceof Error ? error.message : "移动文档失败。");
+    } finally {
+      setDialogBusy(false);
     }
   }
 
-  async function restoreVersion(revision: CloudDocumentRevision) {
+  function requestRestoreVersion(revision: CloudDocumentRevision) {
+    setPendingRestore(revision);
+    setDialogError("");
+    setDialog("restore");
+  }
+
+  async function restoreVersion() {
     if (!activeNote || !adapter) return;
-    if (!window.confirm(`恢复 revision ${revision.meta.revision}？当前内容会先保存为历史版本。`)) {
-      return;
-    }
-    setSaveState("saving");
+    const revision = pendingRestore;
+    if (!revision) return;
+    setDialogBusy(true);
+    setDialogError("");
     try {
+      await queueSave(activeNote.id, adapter);
+      await saveDrainRef.current;
       const restored = await cloudClient.restoreRevision(
         adapter.workspaceId,
         activeNote.id,
         revision.revisionId,
-        activeNote.revision
+        revisionRef.current.get(activeNote.id) ?? activeNote.revision
       );
       const restoredNote = snapshotToNote(restored);
       lastSavedRef.current.set(restoredNote.id, noteShape(restoredNote));
+      revisionRef.current.set(restoredNote.id, restoredNote.revision);
       clearDraft(restoredNote.id);
-      setNotes((current) =>
+      updateNotes((current) =>
         current.map((note) => (note.id === restoredNote.id ? restoredNote : note))
       );
       setSaveState("saved");
+      setPendingRestore(undefined);
+      setDialog(null);
       showToast("历史版本已恢复并保存为新 revision");
     } catch (error) {
       setSaveState("error");
-      setSaveError(error instanceof Error ? error.message : "恢复历史版本失败。");
+      setDialogError(
+        error instanceof Error ? error.message : "恢复历史版本失败。"
+      );
+    } finally {
+      setDialogBusy(false);
     }
   }
 
   async function logout() {
-    if (!window.confirm("退出当前账号？")) return;
+    setDialogBusy(true);
+    setDialogError("");
     try {
       await onLogout();
-    } catch {
-      showToast("退出失败，请稍后重试");
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : "退出失败，请稍后重试");
+    } finally {
+      setDialogBusy(false);
+    }
+  }
+
+  function openTagDialog() {
+    setTagDraft("");
+    setDialogError("");
+    setDialog("tags");
+  }
+
+  function addTag() {
+    if (!activeNote) return;
+    const tag = tagDraft.trim();
+    if (!tag) return;
+    if (activeNote.tags.includes(tag)) {
+      setDialogError("这个标签已经添加过了。");
+      return;
+    }
+    if (activeNote.tags.length >= 30) {
+      setDialogError("每篇文档最多添加 30 个标签。");
+      return;
+    }
+    updateActiveNote({ tags: [...activeNote.tags, tag] });
+    setTagDraft("");
+    setDialogError("");
+  }
+
+  function removeTag(tag: string) {
+    if (!activeNote) return;
+    updateActiveNote({
+      tags: activeNote.tags.filter((item) => item !== tag)
+    });
+  }
+
+  function openWorkspaceDialog() {
+    setDialogError("");
+    setDialog("workspace");
+  }
+
+  function openWorkspaceRename() {
+    setWorkspaceNameDraft(workspace?.name ?? "");
+    setDialogError("");
+    setDialog("workspace-rename");
+  }
+
+  async function renameWorkspace() {
+    if (!workspace) return;
+    const name = workspaceNameDraft.trim();
+    if (!name) {
+      setDialogError("工作区名称不能为空。");
+      return;
+    }
+    setDialogBusy(true);
+    setDialogError("");
+    try {
+      const renamed = await cloudClient.renameWorkspace(
+        workspace.id as WorkspaceId,
+        name
+      );
+      setWorkspace(renamed);
+      setWorkspaces((current) =>
+        current.map((item) => (item.id === renamed.id ? renamed : item))
+      );
+      setDialog("workspace");
+      showToast("工作区名称已更新");
+    } catch (error) {
+      setDialogError(
+        error instanceof Error ? error.message : "工作区重命名失败。"
+      );
+    } finally {
+      setDialogBusy(false);
+    }
+  }
+
+  async function createWorkspace() {
+    const name = workspaceNameDraft.trim();
+    if (!name) {
+      setDialogError("请输入新工作区名称。");
+      return;
+    }
+    setDialogBusy(true);
+    setDialogError("");
+    try {
+      const created = await cloudClient.createWorkspace(name);
+      setWorkspaces((current) => [...current, created]);
+      await switchWorkspace(created);
+      showToast(`已创建并切换到“${created.name}”`);
+    } catch (error) {
+      setDialogError(
+        error instanceof Error ? error.message : "创建工作区失败。"
+      );
+    } finally {
+      setDialogBusy(false);
     }
   }
 
@@ -832,9 +1190,15 @@ function WorkspaceApp({
 
         <div className="workspace-switcher">
           <span className="workspace-kicker">工作区</span>
-          <span className="workspace-title">
+          <button
+            className="workspace-title"
+            type="button"
+            aria-label="切换工作区"
+            onClick={openWorkspaceDialog}
+          >
             {workspace?.name ?? "我的工作区"}
-          </span>
+            <ChevronDown size={14} />
+          </button>
         </div>
 
         <div className="topbar-actions">
@@ -871,9 +1235,12 @@ function WorkspaceApp({
           <button
             className="avatar"
             type="button"
-            title={`${user.displayName} · 退出登录`}
-            aria-label="退出登录"
-            onClick={() => void logout()}
+            title={`${user.displayName} · 账号设置`}
+            aria-label="账号设置"
+            onClick={() => {
+              setDialogError("");
+              setDialog("settings");
+            }}
           >
             {user.displayName.slice(0, 1)}
           </button>
@@ -904,6 +1271,19 @@ function WorkspaceApp({
             </button>
           </div>
 
+          <button
+            className="sidebar-workspace-switcher"
+            type="button"
+            onClick={openWorkspaceDialog}
+          >
+            <Cloud size={15} />
+            <span>
+              <small>当前工作区</small>
+              <strong>{workspace?.name ?? "我的工作区"}</strong>
+            </span>
+            <ChevronDown size={14} />
+          </button>
+
           <label className="search-box">
             <Search size={15} />
             <input
@@ -919,12 +1299,22 @@ function WorkspaceApp({
             {visibleFolders.map((folder) => {
               const folderNotes = filteredNotes.filter((note) => note.folder === folder);
               const expanded = expandedFolders.has(folder);
-              if (query && folderNotes.length === 0) return null;
+              const segments = folder.split("/");
+              const parentPath = segments.slice(0, -1).join("/");
+              const folderName = segments.at(-1) ?? folder;
+              const matchingNotes = filteredNotes.filter(
+                (note) =>
+                  note.folder === folder ||
+                  note.folder.startsWith(`${folder}/`)
+              );
+              if (parentPath && !expandedFolders.has(parentPath)) return null;
+              if (query && matchingNotes.length === 0) return null;
               return (
                 <section className="tree-folder" key={folder}>
                   <button
                     className="folder-row"
                     type="button"
+                    style={{ paddingLeft: `${8 + (segments.length - 1) * 12}px` }}
                     onClick={() =>
                       setExpandedFolders((current) => {
                         const next = new Set(current);
@@ -936,8 +1326,8 @@ function WorkspaceApp({
                   >
                     {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     {expanded ? <FolderOpen size={16} /> : <FolderClosed size={16} />}
-                    <span>{folder}</span>
-                    <em>{folderNotes.length}</em>
+                    <span>{folderName}</span>
+                    <em>{matchingNotes.length}</em>
                   </button>
                   {expanded && (
                     <div className="folder-children">
@@ -980,24 +1370,33 @@ function WorkspaceApp({
                 type="button"
                 onClick={() => {
                   setInspectorOpen(true);
-                  showToast("最近版本显示在右侧信息栏");
+                  setSidebarOpen(false);
                 }}
               >
                 <History size={15} /> 版本历史
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  window.alert(
-                    `账号：${user.email}\n工作区：${workspace?.name ?? "我的工作区"}\n存储：云端 SQLite`
-                  )
-                }
+                onClick={() => {
+                  setDialogError("");
+                  setDialog("settings");
+                  setSidebarOpen(false);
+                }}
               >
                 <Settings size={15} /> 工作区设置
               </button>
             </div>
           </div>
         </aside>
+
+        {sidebarOpen && (
+          <button
+            className="drawer-scrim is-sidebar"
+            type="button"
+            aria-label="关闭文件栏"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         <main className="editor-column">
           <div className="document-topline">
@@ -1072,13 +1471,94 @@ function WorkspaceApp({
                 type="button"
                 aria-label="移动或重命名文档路径"
                 title="移动或重命名文档路径"
-                onClick={() => void moveActiveNote()}
+                onClick={openMoveDialog}
               >
                 <FolderInput size={17} />
               </button>
-              <button className="icon-button" type="button" aria-label="更多操作" onClick={deleteActiveNote}>
-                <MoreHorizontal size={18} />
-              </button>
+              <div className="document-menu" ref={documentMenuRef}>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="更多操作"
+                  aria-haspopup="menu"
+                  aria-expanded={documentMenuOpen}
+                  onClick={() => setDocumentMenuOpen((value) => !value)}
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {documentMenuOpen && (
+                  <div className="document-menu-popover" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        openMoveDialog();
+                      }}
+                    >
+                      <FolderInput size={15} />
+                      移动或重命名路径
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        openTagDialog();
+                      }}
+                    >
+                      <Tag size={15} />
+                      管理标签
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        exportMarkdown();
+                      }}
+                    >
+                      <Download size={15} />
+                      导出 Markdown
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        importRef.current?.click();
+                      }}
+                    >
+                      <Upload size={15} />
+                      导入 Markdown
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        void importFolder();
+                      }}
+                    >
+                      <FolderOpen size={15} />
+                      导入文件夹
+                    </button>
+                    <button
+                      className="is-danger"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDocumentMenuOpen(false);
+                        setDialogError("");
+                        setDialog("delete");
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      删除文档
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1094,6 +1574,11 @@ function WorkspaceApp({
                   className="document-title"
                   value={activeNote.title}
                   onChange={(event) => updateTitle(event.target.value)}
+                  onBlur={() => {
+                    const title = activeNote.title.trim() || "未命名文档";
+                    if (title !== activeNote.title) updateTitle(title);
+                  }}
+                  maxLength={200}
                   aria-label="文档标题"
                 />
                 <div className="tag-line">
@@ -1103,13 +1588,9 @@ function WorkspaceApp({
                       {tag}
                     </span>
                   ))}
-                  <button type="button" onClick={() => {
-                    const tag = window.prompt("添加标签");
-                    if (tag?.trim()) {
-                      updateActiveNote({ tags: [...new Set([...activeNote.tags, tag.trim()])] });
-                    }
-                  }}>
-                    <CirclePlus size={12} /> 标签
+                  <button type="button" onClick={openTagDialog}>
+                    <CirclePlus size={12} />
+                    {activeNote.tags.length > 0 ? "管理标签" : "添加标签"}
                   </button>
                 </div>
               </header>
@@ -1188,6 +1669,15 @@ function WorkspaceApp({
             </article>
           </div>
         </main>
+
+        {inspectorOpen && (
+          <button
+            className="drawer-scrim is-inspector"
+            type="button"
+            aria-label="关闭信息栏"
+            onClick={() => setInspectorOpen(false)}
+          />
+        )}
 
         <aside className={`inspector ${inspectorOpen ? "" : "is-collapsed"}`}>
           <div className="inspector-head">
@@ -1286,7 +1776,7 @@ function WorkspaceApp({
                 <button
                   type="button"
                   key={revision.revisionId}
-                  onClick={() => void restoreVersion(revision)}
+                  onClick={() => requestRestoreVersion(revision)}
                   title="恢复为这个历史版本"
                 >
                   <span className="version-dot" />
@@ -1312,6 +1802,423 @@ function WorkspaceApp({
         />
       )}
 
+      <Dialog
+        open={dialog === "workspace"}
+        title="工作区"
+        description="每个工作区拥有独立的云端文档，切换前会先保存当前修改。"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={openWorkspaceRename}
+            >
+              <Pencil size={15} />
+              重命名当前工作区
+            </button>
+            <button
+              className="dialog-button primary"
+              type="button"
+              onClick={() => {
+                setWorkspaceNameDraft("");
+                setDialogError("");
+                setDialog("workspace-create");
+              }}
+            >
+              <FolderPlus size={15} />
+              新建工作区
+            </button>
+          </>
+        }
+      >
+        {dialogError && <p className="dialog-error">{dialogError}</p>}
+        <div className="workspace-list">
+          {workspaces.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              className={item.id === workspace?.id ? "is-current" : ""}
+              aria-pressed={item.id === workspace?.id}
+              disabled={dialogBusy}
+              onClick={() => void switchWorkspace(item)}
+            >
+              <span className="workspace-list-icon">
+                <Cloud size={17} />
+              </span>
+              <span>
+                <strong>{item.name}</strong>
+                <small>
+                  {item.id === workspace?.id ? "当前工作区" : "切换到此工作区"}
+                </small>
+              </span>
+              {item.id === workspace?.id && <Check size={17} />}
+            </button>
+          ))}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "workspace-create"}
+        title="新建工作区"
+        description="适合按项目、主题或客户隔离文档。"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={() => setDialog("workspace")}
+              disabled={dialogBusy}
+            >
+              返回
+            </button>
+            <button
+              className="dialog-button primary"
+              type="submit"
+              form="workspace-create-form"
+              disabled={dialogBusy}
+            >
+              {dialogBusy ? "正在创建…" : "创建并切换"}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="workspace-create-form"
+          className="dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createWorkspace();
+          }}
+        >
+          <label className="dialog-field">
+            <span>工作区名称</span>
+            <input
+              value={workspaceNameDraft}
+              onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+              maxLength={80}
+              placeholder="例如：客户项目"
+              autoFocus
+            />
+          </label>
+          {dialogError && <p className="dialog-error">{dialogError}</p>}
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "workspace-rename"}
+        title="重命名工作区"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={() => setDialog("workspace")}
+              disabled={dialogBusy}
+            >
+              取消
+            </button>
+            <button
+              className="dialog-button primary"
+              type="submit"
+              form="workspace-rename-form"
+              disabled={dialogBusy}
+            >
+              {dialogBusy ? "正在保存…" : "保存名称"}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="workspace-rename-form"
+          className="dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void renameWorkspace();
+          }}
+        >
+          <label className="dialog-field">
+            <span>工作区名称</span>
+            <input
+              value={workspaceNameDraft}
+              onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+              maxLength={80}
+              autoFocus
+            />
+          </label>
+          {dialogError && <p className="dialog-error">{dialogError}</p>}
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "settings"}
+        title="账号与工作区"
+        description="当前账号的云端存储和会话信息。"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button danger-quiet"
+              type="button"
+              onClick={() => setDialog("logout")}
+            >
+              <LogOut size={15} />
+              退出登录
+            </button>
+            <button
+              className="dialog-button primary"
+              type="button"
+              onClick={closeDialog}
+            >
+              完成
+            </button>
+          </>
+        }
+      >
+        <div className="settings-profile">
+          <span className="settings-avatar" aria-hidden="true">
+            {user.displayName.slice(0, 1)}
+          </span>
+          <span>
+            <strong>{user.displayName}</strong>
+            <small>{user.email}</small>
+          </span>
+        </div>
+        <div className="settings-list">
+          <button type="button" onClick={openWorkspaceDialog}>
+            <Cloud size={17} />
+            <span>
+              <strong>{workspace?.name ?? "我的工作区"}</strong>
+              <small>{workspaces.length} 个工作区 · 切换或新建</small>
+            </span>
+            <ChevronRight size={16} />
+          </button>
+          <div className="settings-row">
+            <HardDrive size={17} />
+            <span>
+              <strong>云端持久化</strong>
+              <small>文档、标签、画布和版本保存在服务端 SQLite</small>
+            </span>
+            <Check size={16} />
+          </div>
+          <button type="button" onClick={openWorkspaceRename}>
+            <Pencil size={17} />
+            <span>
+              <strong>重命名工作区</strong>
+              <small>只改变显示名称，不影响文档内容</small>
+            </span>
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "move"}
+        title="移动或重命名文档"
+        description="使用工作区内相对路径；文件夹和文件名会自动创建。"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={closeDialog}
+              disabled={dialogBusy}
+            >
+              取消
+            </button>
+            <button
+              className="dialog-button primary"
+              type="submit"
+              form="move-document-form"
+              disabled={dialogBusy}
+            >
+              {dialogBusy ? "正在移动…" : "保存路径"}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="move-document-form"
+          className="dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void moveActiveNote();
+          }}
+        >
+          <label className="dialog-field">
+            <span>工作区路径</span>
+            <input
+              value={movePathDraft}
+              onChange={(event) => setMovePathDraft(event.target.value)}
+              placeholder="目录/文档.md"
+              spellCheck={false}
+              autoFocus
+            />
+          </label>
+          <p className="dialog-hint">
+            当前路径：{activeNote.filePath}
+          </p>
+          {dialogError && <p className="dialog-error">{dialogError}</p>}
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "tags"}
+        title="管理标签"
+        description="标签会随文档保存在云端，并可用于左侧搜索。"
+        onClose={closeDialog}
+        footer={
+          <button
+            className="dialog-button primary"
+            type="button"
+            onClick={closeDialog}
+          >
+            完成
+          </button>
+        }
+      >
+        <div className="tag-editor">
+          <div className="tag-editor-list">
+            {activeNote.tags.length === 0 && (
+              <p className="dialog-hint">还没有标签。</p>
+            )}
+            {activeNote.tags.map((tag) => (
+              <span key={tag} className="tag-editor-chip">
+                {tag}
+                <button
+                  type="button"
+                  aria-label={`移除标签 ${tag}`}
+                  onClick={() => removeTag(tag)}
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+          <form
+            className="tag-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addTag();
+            }}
+          >
+            <label className="dialog-field">
+              <span>新标签</span>
+              <input
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                maxLength={30}
+                placeholder="输入标签后按 Enter"
+                autoFocus
+              />
+            </label>
+            <button className="dialog-button secondary" type="submit">
+              <CirclePlus size={15} />
+              添加
+            </button>
+          </form>
+          {dialogError && <p className="dialog-error">{dialogError}</p>}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "delete"}
+        title="删除这篇文档？"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={() => setDialog(null)}
+              disabled={dialogBusy}
+            >
+              保留文档
+            </button>
+            <button
+              className="dialog-button danger"
+              type="button"
+              onClick={() => void deleteActiveNote()}
+              disabled={dialogBusy}
+            >
+              <Trash2 size={15} />
+              {dialogBusy ? "正在删除…" : "确认删除"}
+            </button>
+          </>
+        }
+      >
+        <p className="dialog-copy">
+          “{activeNote.title}”会从当前云端工作区移除。删除前请确认已经导出仍需保留的内容。
+        </p>
+        {dialogError && <p className="dialog-error">{dialogError}</p>}
+      </Dialog>
+
+      <Dialog
+        open={dialog === "restore"}
+        title={`恢复 revision ${pendingRestore?.meta.revision ?? ""}`}
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={closeDialog}
+              disabled={dialogBusy}
+            >
+              取消
+            </button>
+            <button
+              className="dialog-button primary"
+              type="button"
+              onClick={() => void restoreVersion()}
+              disabled={dialogBusy}
+            >
+              {dialogBusy ? "正在恢复…" : "恢复此版本"}
+            </button>
+          </>
+        }
+      >
+        <p className="dialog-copy">
+          当前内容会先进入历史记录，然后生成一个新的 revision。可以在信息栏继续恢复较新的版本。
+        </p>
+        {dialogError && <p className="dialog-error">{dialogError}</p>}
+      </Dialog>
+
+      <Dialog
+        open={dialog === "logout"}
+        title="退出当前账号？"
+        onClose={closeDialog}
+        footer={
+          <>
+            <button
+              className="dialog-button secondary"
+              type="button"
+              onClick={() => setDialog("settings")}
+              disabled={dialogBusy}
+            >
+              返回设置
+            </button>
+            <button
+              className="dialog-button danger"
+              type="button"
+              onClick={() => void logout()}
+              disabled={dialogBusy}
+            >
+              <LogOut size={15} />
+              {dialogBusy ? "正在退出…" : "退出登录"}
+            </button>
+          </>
+        }
+      >
+        <p className="dialog-copy">
+          未保存的修改会先保留在本机草稿中；下次登录同一浏览器时可继续恢复。
+        </p>
+        {dialogError && <p className="dialog-error">{dialogError}</p>}
+      </Dialog>
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -1330,6 +2237,11 @@ type DirectoryEntry =
       kind: "directory";
       entries(): AsyncIterableIterator<[string, DirectoryEntry]>;
     };
+
+function folderHierarchy(folder: string): string[] {
+  const segments = folder.split("/").filter(Boolean);
+  return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
+}
 
 function nextAvailableTitle(
   baseTitle: string,
@@ -1352,7 +2264,12 @@ function uniqueFilePath(
   title: string,
   notes: readonly Note[]
 ): string {
-  const safeFolder = folder.replaceAll("/", "-").trim() || "个人";
+  const safeFolder =
+    folder
+      .split("/")
+      .map((segment) => segment.replace(/[\\:*?"<>|]/g, "-").trim())
+      .filter(Boolean)
+      .join("/") || "个人";
   const safeTitle = title.replace(/[\\/:*?"<>|]/g, "-").trim() || "未命名文档";
   const existing = new Set(notes.map((note) => note.filePath));
   let path = `${safeFolder}/${safeTitle}.md`;

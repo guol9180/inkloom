@@ -227,6 +227,40 @@ describe("InkLoom API", () => {
     );
     expect(traversal.status).toBe(400);
   });
+
+  it("renames a workspace without exposing it to another user", async () => {
+    const fixture = await startServer();
+    const alice = await register(fixture, "rename@example.com", "secret-123");
+    const bob = await register(fixture, "rename-other@example.com", "secret-456");
+    const workspaces = await json<{ workspaces: Array<{ id: string; name: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: alice.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+
+    const renamed = await json<{ workspace: { name: string } }>(
+      fixture,
+      `/api/workspaces/${workspaceId}`,
+      {
+        method: "PATCH",
+        cookie: alice.cookie,
+        body: { name: "长期写作" }
+      }
+    );
+    expect(renamed.workspace.name).toBe("长期写作");
+
+    const forbidden = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}`,
+      {
+        method: "PATCH",
+        cookie: bob.cookie,
+        body: { name: "越权修改" }
+      }
+    );
+    expect(forbidden.status).toBe(404);
+  });
 });
 
 async function startServer(): Promise<TestServer> {

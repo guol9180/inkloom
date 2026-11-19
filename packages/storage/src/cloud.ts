@@ -139,6 +139,17 @@ export class CloudClient {
     return response.workspace;
   }
 
+  async renameWorkspace(
+    workspaceId: WorkspaceId,
+    name: string
+  ): Promise<CloudWorkspace> {
+    const response = await this.request<{ workspace: CloudWorkspace }>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+      { method: "PATCH", body: { name } }
+    );
+    return response.workspace;
+  }
+
   workspace(workspaceId: WorkspaceId): CloudWorkspaceAdapter {
     return new CloudWorkspaceAdapter(this, workspaceId);
   }

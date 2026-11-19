@@ -82,7 +82,7 @@ export function createApiServer(options: ApiServerOptions = {}) {
         response.statusCode = 204;
         response.setHeader(
           "Access-Control-Allow-Methods",
-          "GET, POST, PUT, DELETE, OPTIONS"
+          "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         );
         response.setHeader(
           "Access-Control-Allow-Headers",
@@ -249,6 +249,17 @@ async function route({
         extensions: optionalExtensions(input.extensions)
       });
       sendJson(response, 201, { document });
+      return;
+    }
+
+    if (method === "PATCH" && segments.length === 3) {
+      const input = parseRecord(body);
+      const workspace = database.renameWorkspace(
+        user.id,
+        workspaceId,
+        requiredString(input.name, "工作区名称", 80)
+      );
+      sendJson(response, 200, { workspace });
       return;
     }
 
