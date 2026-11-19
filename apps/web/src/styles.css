@@ -681,6 +681,8 @@ a {
 }
 
 .document-topline {
+  position: relative;
+  z-index: 25;
   flex: 0 0 48px;
   min-width: 0;
   display: flex;
@@ -724,6 +726,8 @@ a {
 
 .document-menu {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .document-menu-popover {
