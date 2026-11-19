@@ -674,7 +674,7 @@
 - 目标：用自动化与逐图验收证明编辑器、工作流和数据安全达到发布条件。
 - 验收标准：
   - Markdown golden corpus、API 集成、资产、保存冲突、归档、预览编辑和搜索全部通过。
-  - Playwright 覆盖六档视口和主要业务流，截图输出到 `artifacts/ui-review/`。
+  - Playwright 覆盖六档视口和主要业务流，截图输出到已忽略的 `test-results/ui-review/`，不提交版本库。
   - `pnpm typecheck`、`pnpm test`、`pnpm build` 和 `pnpm test:e2e` 通过。
   - 性能、无横向溢出、200% 缩放、键盘和 reduced-motion 有实机记录。
   - 所有未解决风险如实写入报告。
@@ -695,6 +695,22 @@
 - 状态：planned
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 建立生产迁移任务卡，依赖 T43 和用户明确授权。
+
+### T45: 移除仓库内 UI Review 截图归档（P0）
+
+- 目标：删除无长期价值的版本化 UI 截图和报告，同时保留六档视口的自动化溢出与业务流检查。
+- 验收标准：
+  - `artifacts/ui-review/` 中全部已跟踪截图和报告从仓库删除。
+  - `tests/e2e/ui-review.spec.ts` 继续执行，截图改写为 `test-results/ui-review/`。
+  - `test-results/` 保持被 `.gitignore` 忽略，测试不会重新污染工作树。
+  - 当前计划和后续验收不再要求提交整套截图。
+- 边界：不删除跨视口测试，不改变产品代码、生产数据或部署。
+- 状态：done
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-19 计划 用户确认仓库内 UI Review 截图没有长期价值，建立测试产物清理任务。
+  - 2026-11-19 执行 删除 `artifacts/ui-review/` 下 27 个已跟踪截图和报告；跨视口 Playwright 测试保留，截图目录改为 `test-results/ui-review/`，该路径已被 `.gitignore` 覆盖。
+  - 2026-11-19 验证 `pnpm typecheck` 通过；Playwright 六档视口共 6 项通过（25.5s），确认测试产物不会污染工作树。
+  - 2026-11-19 交付 仓库不再跟踪整套 UI Review 截图；剩余差距：无。
 
 ## 状态枚举
 

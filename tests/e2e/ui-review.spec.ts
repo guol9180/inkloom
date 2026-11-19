@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-const reviewDirectory = resolve("artifacts", "ui-review");
+const reviewDirectory = resolve("test-results", "ui-review");
 const viewports = [
   { width: 320, height: 720 },
   { width: 375, height: 812 },
