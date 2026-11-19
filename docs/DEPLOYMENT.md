@@ -4,9 +4,9 @@
 
 | Host | Service | Notes |
 | --- | --- | --- |
-| `inkloom.imhgl.com` | Web static app | Public browser app served by the shared edge container |
-| `api.inkloom.imhgl.com` | HTTP API | REST API and login session, reachable only through the edge network |
-| `api.imhgl.com` | workbench | Optional companion app; the route stays available when workbench rejoins `inkloom-edge` |
+| `inkloom.imhgl.com` | Web static app | Internal `inkloom-web` service proxied by the shared `platform-edge` |
+| `api.inkloom.imhgl.com` | HTTP API | Internal `inkloom-api` service proxied by the shared `platform-edge` |
+| `api.imhgl.com` | workbench | Optional companion app; the route stays available when workbench rejoins `platform-edge` |
 | `sync.inkloom.imhgl.com` | WebSocket | Reserved for M2 collaboration |
 | `cdn.inkloom.imhgl.com` | Object storage/CDN | Reserved for diagram assets |
 
@@ -14,17 +14,19 @@ Create `A` records for the Web and API hosts pointing to the deployment server b
 
 ## Runtime
 
-The M1 deployment consists of two containers:
+The deployment consists of three containers:
 
-- `api`: Node.js 22 with a persistent SQLite volume.
-- `web`: Caddy serving the built Web app and acting as the single public edge for Inkloom and optional companion apps.
+- `platform-edge`: Shared Caddy entry managed by the private control plane; owns TLS, public ports and domain routing.
+- `inkloom-web`: Internal Caddy serving only the built static Web app on `8080`.
+- `inkloom-api`: Node.js 22 serving the API and using the persistent SQLite volume.
 
-Required server ports are `80/tcp`, `443/tcp`, and optionally `443/udp` for HTTP/3. Docker Engine with the Compose plugin is required. The API container is not exposed directly. Both containers join the named `inkloom-edge` network; future workbench deployments must join the same network as `workbench`.
+Required server ports are `80/tcp`, `443/tcp`, and optionally `443/udp` for HTTP/3. Docker Engine with the Compose plugin is required. Only `platform-edge` publishes host ports. Inkloom services join the external `platform-edge` network under unique aliases; future projects must do the same.
 
 Resource and operational defaults:
 
-- `api` is limited to `256m`, runs with a read-only root filesystem, and writes only to its data volume and `/tmp`.
-- `web` is limited to `128m` and owns ports `80/443`.
+- `inkloom-api` is limited to `256m` and `0.75 CPU`, runs with a read-only root filesystem, and writes only to its data volume and `/tmp`.
+- `inkloom-web` is limited to `128m` and `0.50 CPU`; it has no public ports.
+- `platform-edge` is limited to `128m` and `0.50 CPU`; it alone owns ports `80/443`.
 - Container logs rotate at `10m` per file with three files.
 - Caddy certificates persist in `inkloom-caddy-data`; SQLite data persists in `inkloom-data`.
 - Deploy immutable commits or release artifacts. Do not deploy a dirty worktree.
@@ -54,7 +56,7 @@ The private deployment control plane sets these values. Server-only variables mu
 
 ## Image Publishing
 
-Run the manual `Build and publish images` workflow with the desired immutable Git ref. It runs typecheck, unit and integration tests, the production build and Playwright, then publishes commit-tagged `inkloom-api` and `inkloom-edge` images to GHCR.
+Run the manual `Build and publish images` workflow with the desired immutable Git ref. It runs typecheck, unit and integration tests, the production build and Playwright, then publishes commit-tagged `inkloom-api` and `inkloom-web` images to GHCR.
 
 This workflow never connects to the production server and has no deployment secrets.
 
@@ -62,7 +64,7 @@ This workflow never connects to the production server and has no deployment secr
 
 Deploy the published full commit SHA from the private `guol9180/imhgl-ops` control plane. Its `verify` mode checks the dedicated deployment identity without changing containers; its `deploy` mode uploads the production Compose manifest, pulls the exact image tag and recreates the service.
 
-Each successful deployment records the active commit in `/srv/inkloom/DEPLOYED_RELEASE`.
+Each successful deployment records the active commit in `/srv/apps/inkloom/DEPLOYED_RELEASE`. The shared entry records its control-plane revision in `/srv/platform/edge/DEPLOYED_RELEASE`.
 
 Production verification runs after deployment:
 
@@ -91,7 +93,7 @@ Use a service restart window for M1. Database writes are revision-checked, but t
 
 Before starting the workflow:
 
-1. Read `/srv/inkloom/DEPLOYED_RELEASE` through the private control plane and retain the previous release SHA for rollback.
+1. Read `/srv/apps/inkloom/DEPLOYED_RELEASE` through the private control plane and retain the previous release SHA for rollback.
 2. Run the database backup procedure below and confirm the archive is non-empty.
 3. Confirm DNS still resolves both production hosts to the intended edge.
 4. Confirm the deployment workflow uses the full commit SHA and the private control plane's Environment Secrets.
@@ -102,15 +104,15 @@ Before starting the workflow:
 Back up before each release and on a daily schedule. Stop the API briefly so SQLite WAL files are quiescent, copy the named volume, then restart:
 
 ```bash
-cd /srv/inkloom
+cd /srv/apps/inkloom
 mkdir -p /srv/inkloom-backups
-docker compose -f deploy/compose.yaml stop api
+docker compose stop api
 docker run --rm \
   -v inkloom-data:/data:ro \
   -v /srv/inkloom-backups:/backup \
   alpine:3.21 \
   tar czf "/backup/inkloom-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C /data .
-docker compose -f deploy/compose.yaml start api
+docker compose start api
 ```
 
 Retain at least seven daily backups and one pre-release backup. Store copies outside the deployment server.
@@ -118,14 +120,14 @@ Retain at least seven daily backups and one pre-release backup. Store copies out
 To restore:
 
 ```bash
-cd /srv/inkloom
-docker compose -f deploy/compose.yaml stop api
+cd /srv/apps/inkloom
+docker compose stop api
 docker run --rm \
   -v inkloom-data:/data \
   -v /srv/inkloom-backups:/backup:ro \
   alpine:3.21 \
   sh -c "rm -rf /data/* && tar xzf /backup/<backup-file>.tgz -C /data"
-docker compose -f deploy/compose.yaml start api
+docker compose start api
 pnpm verify:production
 ```
 
@@ -142,9 +144,10 @@ If a release changed the database schema incompatibly, restore the matching pre-
 ## Operations
 
 ```bash
-docker compose -f deploy/compose.yaml logs -f api
-docker compose -f deploy/compose.yaml logs -f web
-docker compose -f deploy/compose.yaml restart api
+docker compose -f /srv/apps/inkloom/compose.yaml logs -f api
+docker compose -f /srv/apps/inkloom/compose.yaml logs -f web
+docker compose -f /srv/apps/inkloom/compose.yaml restart api
+docker compose -f /srv/platform/edge/compose.yaml logs -f edge
 ```
 
 The API writes only `INKLOOM_DATABASE_PATH` and its SQLite WAL/SHM companions. Logs must not contain document bodies or passwords.
@@ -180,7 +183,7 @@ The production lessons from the M1 launch are:
 - Build only in GitHub Actions or another trusted build environment. A small production host must remain a runtime target.
 - Keep production deployment credentials in one private control-plane repository; public application repositories publish images only.
 - Tag both images with the full resolved commit SHA. Never deploy a floating `latest` tag.
-- Keep one public edge proxy. Additional projects join `inkloom-edge` and expose only internal ports.
+- Keep one public edge proxy. Additional projects join `platform-edge` and expose only internal ports.
 - Bind containerized services to `0.0.0.0` inside the container; retain loopback as the safe local-development default.
 - Treat memory limits as ceilings, not capacity. Confirm actual headroom before adding services; swap is a fallback, not normal capacity.
 - Configure Docker and Compose log rotation before publishing logs. A stopped or noisy container must not grow without bounds.

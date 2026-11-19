@@ -387,6 +387,21 @@
   - 2026-11-19 验证 非桌面 workspace typecheck 通过；`pnpm test` 32 项通过；`pnpm build` 的 Web/API 构建通过；Playwright 10 项通过，覆盖空白默认文档、Milkdown 编辑、快捷格式、图表菜单插入、工作区往返、刷新恢复、冲突副本、历史恢复和六档视口。
   - 2026-11-19 交付 产出正式路由与前端分层、Milkdown 编辑器、响应式完整工具栏、图表插入菜单、Tailwind 设计系统、`artifacts/ui-review/REPORT.md` 和 27 张截图；剩余差距：尚未部署，发布继续等待用户指令。
 
+### T23: 共享边缘拆分与最新版生产发布（P0）
+
+- 目标：按多项目生产架构把全局 Caddy、Inkloom 静态 Web 和 Inkloom API 拆成独立运行单元，并把当前 `main` 的最新代码部署到生产。
+- 验收标准：
+  - 公开仓库只构建并发布 `inkloom-api` 与 `inkloom-web`，不再发布包含全局 Caddy 的 `inkloom-edge`。
+  - `platform-edge` 由私有控制面管理，只负责 TLS、安全头和多项目路由。
+  - `inkloom-web` 与 `inkloom-api` 只加入共享外部网络，不公开宿主机业务端口。
+  - 迁移前生成并验证 SQLite 备份，迁移后保留原数据卷和回滚材料。
+  - `https://inkloom.imhgl.com`、`https://api.inkloom.imhgl.com/api/health`、安全响应头和容器健康检查全部通过。
+  - 新代码使用公开仓库完整 commit SHA，不在服务器构建。
+- 边界：不恢复 Workbench，不改业务数据模型，不删除 `workbench_workbench-docs`，不在服务器运行包管理或容器构建。
+- 状态：in-progress
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-19 计划 拆分共享边缘、静态 Web 和 API，备份后以短维护窗口迁移并发布最新 main
+
 ## 状态枚举
 
 | 状态 | 含义 |

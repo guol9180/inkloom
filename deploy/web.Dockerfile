@@ -11,5 +11,6 @@ RUN corepack enable \
 
 FROM caddy:2.11.4-alpine
 
-COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY deploy/web.Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/apps/web/dist /srv/inkloom/web
+RUN caddy validate --config /etc/caddy/Caddyfile
