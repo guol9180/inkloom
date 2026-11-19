@@ -196,7 +196,7 @@ test("applies Markdown styles by shortcut and quick heading buttons", async ({
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("快捷键");
-  await page.keyboard.press("Shift+Home");
+  await selectEditorText(page, "快捷键");
   await page.keyboard.press("Control+b");
   await expect(
     page.locator(".ProseMirror strong").filter({ hasText: "快捷键" })
@@ -244,6 +244,32 @@ async function renameDocumentTitle(page: Page, title: string) {
   await page.getByRole("menuitem", { name: "重命名标题" }).click();
   await page.getByRole("dialog").getByLabel("文档标题").fill(title);
   await page.getByRole("button", { name: "保存标题" }).click();
+}
+
+async function selectEditorText(page: Page, text: string) {
+  await page.locator(".ProseMirror").evaluate((root, target) => {
+    const editor = root as HTMLElement;
+    editor.focus();
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const value = node.textContent ?? "";
+      const start = value.lastIndexOf(target);
+      if (start < 0) continue;
+
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + target.length);
+
+      const selection = window.getSelection();
+      if (!selection) throw new Error("Browser selection is unavailable.");
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+
+    throw new Error(`Editor text not found: ${target}`);
+  }, text);
 }
 
 async function registerUser(page: Page, displayName: string) {
