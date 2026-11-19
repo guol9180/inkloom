@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="InkLoom mark">
-  <rect x="1.5" y="1.5" width="61" height="61" rx="18" fill="#e5f5ee" stroke="#cfe8de" stroke-width="2"/>
-  <path d="M16 11h17l11 11v30H16Z" fill="#fcfffd" stroke="#2d7563" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M33 11v11h11" fill="#cfeade" stroke="#2d7563" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M23 35h7c3 0 3 4 0 4h-2c-3 0-3 4 0 4h9" fill="none" stroke="#efa174" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

@@ -3,7 +3,6 @@
 ## Name
 
 - English: InkLoom
-- Chinese: 墨织
 - Repository/package stem: `inkloom`
 - Browser origin: `https://inkloom.imhgl.com`
 
@@ -13,12 +12,11 @@ InkLoom combines “ink” as writing and knowledge with “loom” as the weavi
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Ink | `#24463f` | Primary text |
-| Mist | `#edf6f2` | Workspace background |
-| Mint | `#e5f5ee` | Brand surface and selected states |
-| Teal | `#2d7563` | Primary action and woven logo line |
-| Sky | `#6da5be` | Secondary information |
-| Apricot | `#efa174` | Small brand and focus accent |
+| Ink | `#20352c` | Primary text |
+| Mist | `#f2f5ef` | Workspace background |
+| Mint | `#dcefe6` | Brand surface and selected states |
+| Pine | `#285e49` | Primary action and icon |
+| Sun | `#d58d22` | Save and focus accent |
 
 ## Visual Direction
 
@@ -26,15 +24,15 @@ The interface is a “quiet morning weaving room”: a pale mint file rail, a cr
 
 The distinctive surface is the diagram block: a drafting-grid asset area where Mermaid and Excalidraw remain visibly editable rather than becoming anonymous images.
 
-The mark is a folded page with one apricot thread moving through it. The page keeps the Markdown-first meaning direct, while the thread adds the InkLoom weaving idea without relying on a language-specific glyph.
+The visible logo is Lucide `PenLine`. It represents writing directly and is rendered as a code-owned icon component rather than a separately generated illustration. User-facing brand text is English-only.
 
 ## Typography
 
-- UI: MiSans, PingFang SC, Microsoft YaHei
-- Editorial body: Source Han Serif SC, Noto Serif SC, Songti SC
-- Code and labels: Cascadia Code, JetBrains Mono, Consolas
+- UI: Aptos, Segoe UI Variable, Noto Sans SC, Microsoft YaHei
+- Editorial body: Iowan Old Style, Baskerville, Noto Serif SC, Songti SC
+- Code and labels: IBM Plex Mono, SFMono-Regular, Consolas
 
 ## Assets
 
-- `logo-mark.svg`
-- `logo-lockup.svg`
+- `apps/web/public/favicon.svg`（Lucide `PenLine`）
+- `apps/web/src/components/brand-mark.tsx`

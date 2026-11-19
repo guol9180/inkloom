@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./design/logo-lockup.svg" alt="InkLoom" width="440">
-</p>
-
 # InkLoom
 
 Markdown-native, file-first knowledge workspace for text, diagrams, and the web.
@@ -19,7 +15,7 @@ InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、�
 
 - 邮箱注册、登录、退出和 HttpOnly 会话
 - 每用户独立工作区，文档和 revision 持久化到服务端 SQLite
-- Markdown 源码、分栏与阅读模式
+- Markdown 原生的单区所见即所得编辑与完整格式工具栏
 - 文档目录、搜索、自动保存、移动、版本恢复和导入导出
 - Mermaid 图表渲染
 - Excalidraw 场景编辑与保存
@@ -88,7 +84,7 @@ inkloom/
 
 ## 技术方向
 
-Web、桌面、图表与同步技术选型，以及移动端基础约束，见 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)。
+Web 正式前端基线为 React 19、TypeScript、Vite、React Router、Tailwind CSS 4、TanStack Query、Milkdown Crepe、Radix Primitives 和 Lucide。桌面、图表与同步技术选型，以及移动端基础约束，见 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)。
 
 ## 参与开发
 

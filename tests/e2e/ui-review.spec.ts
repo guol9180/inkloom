@@ -29,7 +29,9 @@ for (const viewport of viewports) {
       });
 
       await registerUser(page);
-      await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用 InkLoom");
+      await expect(page.locator(".breadcrumbs strong")).toHaveText(
+        "未命名文档"
+      );
       await expectNoHorizontalOverflow(page);
       await page.screenshot({
         path: resolve(reviewDirectory, `workspace-${size}.png`)
@@ -64,6 +66,7 @@ for (const viewport of viewports) {
           .locator(".inspector-head")
           .getByRole("button", { name: "关闭信息栏" })
           .click();
+        await waitForInspectorClosed(page);
       }
 
       if (viewport.width <= 480) {
@@ -72,7 +75,8 @@ for (const viewport of viewports) {
         await page.screenshot({
           path: resolve(reviewDirectory, `document-menu-${size}.png`)
         });
-        await page.getByRole("button", { name: "更多操作" }).click();
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".document-menu-popover")).toHaveCount(0);
       }
 
       if (viewport.width === 768) {
@@ -99,14 +103,26 @@ for (const viewport of viewports) {
       }
 
       if (viewport.width === 1440) {
-        await page.getByTitle("阅读模式").click();
+        const editor = page.getByLabel("Markdown 正文");
+        await editor.click();
+        await page.keyboard.press("Control+End");
+        await page.keyboard.press("Enter");
+        await page.keyboard.type("快捷标题");
+        await page.getByLabel("段落类型").selectOption("heading-2");
+        await expect(
+          page.locator(".ProseMirror h2").filter({ hasText: "快捷标题" })
+        ).toBeVisible();
         await page.screenshot({
-          path: resolve(reviewDirectory, `read-mode-${size}.png`)
+          path: resolve(reviewDirectory, `style-controls-${size}.png`)
         });
-        await page.getByTitle("分栏模式").click();
-        await page
-          .getByRole("button", { name: "画布", exact: true })
-          .click();
+        await page.getByRole("button", { name: "插入内容" }).click();
+        await expect(page.getByText("Mermaid 流程图")).toBeVisible();
+        await page.screenshot({
+          path: resolve(reviewDirectory, `diagram-menu-${size}.png`)
+        });
+        await page.keyboard.press("Escape");
+        await page.getByRole("button", { name: "插入内容" }).click();
+        await page.getByRole("menuitem", { name: /Excalidraw 画板/ }).click();
         await expect(
           page.getByRole("dialog", { name: "Excalidraw 画布" })
         ).toBeVisible();
@@ -154,4 +170,14 @@ async function waitForDrawer(
     },
     { selector, open }
   );
+}
+
+async function waitForInspectorClosed(page: Page) {
+  await page.waitForFunction(() => {
+    const drawer = document.querySelector<HTMLElement>(".inspector");
+    if (!drawer) return true;
+    if (getComputedStyle(drawer).display === "none") return true;
+    const bounds = drawer.getBoundingClientRect();
+    return bounds.left >= window.innerWidth - 1;
+  });
 }

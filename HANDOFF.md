@@ -18,7 +18,8 @@
 - T16 已完成：Inkloom Web 与 API 已部署到生产。公开仓库负责外部构建与 GHCR 推送，私有 `guol9180/imhgl-ops` 控制面负责受控部署与线上验证。
 - T18 已提交为 `8dba537`：补齐工作区管理、标签、移动/删除/历史恢复、账号设置和串行自动保存；T19 已提交为 `4f6b3d5`：完成 320–2560px 连续自适应。
 - T20 已完成本地验收：26 张多视口截图与报告位于 `artifacts/ui-review/`；新版本尚未部署，继续等待用户发布指令。
-- T21 已完成新版视觉：浅薄荷工作区、折页穿线 Logo 和明亮登录页；品牌展示统一使用英文 `InkLoom`，界面业务文案仍使用中文。
+- T21 已完成新版视觉；T22 已将 Web 前端迁移至 React Router、Tailwind CSS 4、TanStack Query、Radix、Lucide 和 Milkdown Crepe，品牌展示统一使用英文 `InkLoom`。
+- T22 文档区为类语雀/Typora 的单区所见即所得编辑器：不再显示源码/预览切换，顶部是一行完整格式工具栏；默认账号、工作区和新文档改用空白 `个人/未命名文档.md`。
 - 当前生产 release 为 `f71fe4e4308713ec2852541371b91426ac50631d`。
 - workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
 - 1Panel 已完整卸载，其旧数据与迁移备份已删除。
@@ -29,14 +30,14 @@
 ## 已验证
 
 ```text
-pnpm typecheck
-结果：全部 workspace 通过
+pnpm --filter '!@inkloom/desktop' typecheck
+结果：Web/API/共享包通过
 
 pnpm test
 结果：32 项通过
 
-pnpm test:e2e
-结果：8 项通过（6 项多视口截图验收 + 2 项完整业务流）
+pnpm exec playwright test
+结果：10 项通过（6 项多视口截图验收 + 4 项完整业务流）
 
 pnpm build
 结果：Web 与 API 生产构建成功；仅有图表大 chunk 警告
@@ -45,7 +46,7 @@ pnpm audit --prod
 结果：1 high + 1 low；high 为 Excalidraw 的 Sass 构建链 picomatch，生产 Web bundle 未包含该链
 ```
 
-验证日期：2026-11-19。现有工作树中的 T4 桌面未提交改动会导致全仓库 typecheck 失败；M1 相关包已通过 `pnpm --filter '!@inkloom/desktop' typecheck`，未修改或混入 T4 改动。
+验证日期：2026-11-19。现有工作树中的 T4 桌面未提交改动会导致全仓库 typecheck 失败；M1 相关包已通过排除 desktop 的 typecheck。最新截图共 27 张，报告位于 `artifacts/ui-review/REPORT.md`。
 
 ## 生产部署
 

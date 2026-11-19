@@ -94,19 +94,9 @@ type MutableFolderNode = Extract<WorkspaceNode, { kind: "folder" }> & {
   children: WorkspaceNode[];
 };
 
-const WELCOME_MARKDOWN = `# 欢迎使用 InkLoom
-
-这是一篇已保存到云端的 Markdown 文档。
-
-## 从这里开始
-
-- 直接编辑正文、标题和标签，InkLoom 会自动保存。
-- 使用 **Mermaid** 插入流程图。
-- 使用 **画布** 打开 Excalidraw，并把场景与 Markdown 一起持久化。
-- 右上角显示服务端保存状态；失败时不会静默覆盖。
-
-Markdown 是正文事实源，账号工作区负责跨浏览器保存。
-`;
+const DEFAULT_DOCUMENT_TITLE = "未命名文档";
+const DEFAULT_DOCUMENT_PATH = "个人/未命名文档.md";
+const DEFAULT_DOCUMENT_MARKDOWN = "";
 
 export class DocumentDatabase {
   readonly db: DatabaseSync;
@@ -203,7 +193,7 @@ export class DocumentDatabase {
     const email = normalizeEmail(input.email);
     const displayName = normalizeDisplayName(input.displayName, email);
     const workspaceName = `${displayName}的工作区`;
-    const path = workspacePath("开始使用/欢迎.md");
+    const path = workspacePath(DEFAULT_DOCUMENT_PATH);
 
     this.transaction(() => {
       this.db
@@ -237,10 +227,10 @@ export class DocumentDatabase {
           documentId,
           workspaceId,
           path,
-          "欢迎使用 InkLoom",
-          JSON.stringify(["入门", "云端保存"]),
-          WELCOME_MARKDOWN,
-          contentHash(WELCOME_MARKDOWN),
+          DEFAULT_DOCUMENT_TITLE,
+          JSON.stringify([]),
+          DEFAULT_DOCUMENT_MARKDOWN,
+          contentHash(DEFAULT_DOCUMENT_MARKDOWN),
           timestamp,
           timestamp
         );
@@ -314,7 +304,7 @@ export class DocumentDatabase {
       updatedAt: timestamp
     };
     const documentId = this.createId();
-    const path = workspacePath("开始使用/欢迎.md");
+    const path = workspacePath(DEFAULT_DOCUMENT_PATH);
     this.transaction(() => {
       this.db
         .prepare(
@@ -339,10 +329,10 @@ export class DocumentDatabase {
           documentId,
           workspace.id,
           path,
-          "欢迎使用 InkLoom",
-          JSON.stringify(["入门", "云端保存"]),
-          WELCOME_MARKDOWN,
-          contentHash(WELCOME_MARKDOWN),
+          DEFAULT_DOCUMENT_TITLE,
+          JSON.stringify([]),
+          DEFAULT_DOCUMENT_MARKDOWN,
+          contentHash(DEFAULT_DOCUMENT_MARKDOWN),
           timestamp,
           timestamp
         );

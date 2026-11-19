@@ -2,8 +2,8 @@
 
 ## 产品与技术调研、实现方案
 
-版本：0.1  
-日期：2026-11-13  
+版本：0.2
+日期：2026-11-19
 项目名：InkLoom  
 中文名：墨织  
 浏览器域名：`inkloom.imhgl.com`  
@@ -19,9 +19,10 @@
 
 | 领域 | 推荐方案 |
 | --- | --- |
-| 前端 | React + TypeScript + Vite |
-| 富文本编辑 | Milkdown Crepe，底层 ProseMirror + Remark |
-| 源码编辑 | CodeMirror 6 |
+| Web 前端 | React 19 + TypeScript + Vite + React Router |
+| 样式与组件 | Tailwind CSS 4 + Radix Primitives + CVA + Lucide |
+| 服务端状态 | TanStack Query；工作区缓存按 workspace 隔离 |
+| 所见即所得编辑 | Milkdown Crepe，ProseMirror + Remark；正文序列化回 Markdown 并按 revision 持久化 |
 | Markdown 图表 | Mermaid fenced code block，源码直接保存在 `.md` |
 | 自由画布 | `@excalidraw/excalidraw`，场景 JSON 独立保存，SVG 作为预览 |
 | 桌面客户端 | Tauri 2；Rust 负责文件系统、SQLite、文件监听和系统集成 |
@@ -119,7 +120,7 @@ Web 前端部署至 `inkloom.imhgl.com`，API 与 Web 使用独立子域，避�
 - 打开一个普通文件夹，把它直接当作知识库。
 - 新建文档后立即得到可读的 `.md` 文件。
 - 在所见即所得环境中写表格、代码、公式和图表。
-- 随时切回源码，确认 Markdown 没有被隐藏格式污染。
+- 导出的原始 Markdown 必须保持可读，隐藏格式不能污染或丢失正文。
 - 通过全文搜索、标签、双向链接和大纲找回内容。
 - 保存 Mermaid 文本图与 Excalidraw 自由画布，并且以后还能编辑。
 - 误删或误改后恢复历史版本。
@@ -141,7 +142,7 @@ Web 前端部署至 `inkloom.imhgl.com`，API 与 Web 使用独立子域，避�
 **P0：本地单人 MVP**
 
 - 工作区文件夹、目录树、新建/重命名/移动/删除
-- Markdown 源码、富文本、分栏、阅读模式
+- Markdown 原生、单区所见即所得的块级与行内格式体验
 - 自动保存、崩溃恢复、基础版本历史
 - 标题/标签/全文搜索
 - 相对链接、反向链接、大纲
@@ -203,7 +204,7 @@ Milkdown 官方把自己定位为 Markdown 编辑器，技术上基于 ProseMirr
 
 - Markdown 解析、编辑和序列化链路更直接。
 - 自定义 `mermaid` 和 `excalidraw` 节点比较自然。
-- 源码模式和富文本模式可以共享 Markdown 文档模型。
+- 富文本界面通过 Milkdown 序列化回 Markdown，保留代码块、表格、链接和未知源码内容。
 - 许可和扩展方式更适合自建产品。
 
 Tiptap 的优势是协同生态和商业 UI 完整度，但如果产品原则是“Markdown 是事实源”，则必须额外处理富文本节点到 Markdown 的无损映射。最终建议仍保留 Tiptap 作为备选，尤其是团队重心更偏协作而非文件系统时。
@@ -442,7 +443,7 @@ preview: ./assets/b84f1c....svg
 flowchart TB
   subgraph Client["共享前端"]
     UI["React UI"]
-    Editor["Milkdown / CodeMirror"]
+    Editor["Milkdown Crepe WYSIWYG"]
     Diagrams["Mermaid / Excalidraw"]
     Cache["本地缓存与离线队列"]
   end
@@ -555,11 +556,11 @@ Tauri 2 官方支持桌面、Android 和 iOS，不支持 HarmonyOS。鸿蒙采�
 
 ### 6.1 编辑器
 
-推荐提供三个视图：
+采用单区所见即所得：
 
-- WYSIWYG：默认写作。
-- Source：CodeMirror 6 编辑原始 Markdown。
-- Split：源码与预览同步滚动。
+- 编辑和排版结果在同一区域呈现，不提供源码/预览切换。
+- 工具栏提供撤销重做、段落类型、行内格式、列表、任务、链接、引用、分隔线、代码块和表格。
+- 编辑器必须持续序列化回 Markdown；导出、历史版本和冲突副本保留原始文本可审查性。
 
 统一文档接口：
 
@@ -830,7 +831,7 @@ WebSocket：
 
 - Tauri 2 客户端
 - 打开/创建工作区文件夹
-- Milkdown + CodeMirror 双模式
+- Milkdown Crepe 单区所见即所得编辑器
 - SQLite 索引与全文搜索
 - Mermaid/Excalidraw 完整保存
 - 历史版本、回收站、原子写
@@ -910,7 +911,7 @@ WebSocket：
 
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
-| Markdown 往返丢格式 | 用户不信任编辑器 | golden corpus、未知节点保源、可切源码 |
+| Markdown 往返丢格式 | 用户不信任编辑器 | golden corpus、未知节点保源、导出与版本快照校验 |
 | 浏览器本地写能力碎片化 | Web 版承诺过大 | 能力分级，Chromium 目录模式，其他走 OPFS/云 |
 | Excalidraw 包体积大 | 首屏慢 | 懒加载、独立 chunk、SVG 预览缓存 |
 | 文件监听循环写入 | 数据重复或冲突 | 内容哈希、写入租约、忽略自身事件 |
