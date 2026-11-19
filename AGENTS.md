@@ -12,6 +12,7 @@
 
 - 项目定位、功能快照、运行方式和环境要求：`README.md`
 - 产品原则、架构、数据模型和技术取舍：`docs/PRODUCT_AND_ARCHITECTURE.md`
+- Web 信息架构、编辑器、视觉、动效、响应式和交互验收：`docs/UX_AND_EDITOR_SPEC.md`
 - 任务范围、状态和验收：`DEVELOP_PLAN.md`
 - 下个会话的接手步骤：`HANDOFF.md`
 - 部署域名、子域和环境变量：`docs/DEPLOYMENT.md`
@@ -43,6 +44,17 @@ services/api ─> packages/core
 - ArkUI 原生页面不得直接操作 Markdown 文档；通过 ArkWeb 编辑器和版本化 Bridge 访问。
 - Tauri Android/iOS 与桌面端必须复用 storage/sync adapter，不复制业务逻辑。
 
+## 当前交付与扩展边界
+
+- M1.1 只实现 Web 端；桌面、移动、HarmonyOS 和实时协作保持暂停。
+- 当前只保留未来 host 的领域、adapter、revision、asset 和命令接入口，不为尚未出现的第二实现预先拆包。
+- 随记、知识库、文档生命周期、逻辑路径和 revision 语义属于平台无关领域，不得写死在前端页面。
+- Web 页面通过 Cloud adapter 访问数据；未来 Tauri、移动和 Harmony 通过相同契约注入各自 adapter。
+- 编辑器命令注册表必须与工具栏、斜杠菜单和快捷键共用同一套命令定义。
+- 主文档编辑器使用 Milkdown / ProseMirror；CodeMirror 只允许进入代码块和图表源码节点。
+- 图片、附件、Excalidraw 场景和 SVG 预览必须采用 content-addressed asset 契约，不把二进制或大 JSON 放入 Markdown 正文。
+- API 错误码、revision 冲突和 write contract 必须可被未来非 Web host 直接复用。
+
 ## 移动平台约束
 
 - `WorkspacePath` 是逻辑路径；Android URI、iOS security-scoped URL 和 Harmony sandbox 绝对路径不得进入共享状态。
@@ -61,6 +73,9 @@ services/api ─> packages/core
 - Markdown AST、文档 ID、路径和 revision 类型集中在 `packages/core`。
 - 所有文件路径先在领域层标准化；UI 不拼接磁盘绝对路径。
 - 样式 token 统一放在 `packages/ui`，页面不得重复定义品牌色和字体。
+- 白色主题、Geist 字体、圆角、阴影和动效参数必须来自语义 token，页面不得写任意品牌色。
+- 按钮、菜单、弹窗和骨架屏必须实现 hover、focus-visible、pressed、disabled、loading 等适用状态。
+- 动画优先使用 `transform` 与 `opacity`，并支持 `prefers-reduced-motion`。
 - 新增第三方依赖前先说明体积、许可证和安全影响。
 
 ## 流程要求
@@ -79,6 +94,11 @@ services/api ─> packages/core
 - 禁止在生成 HTML 时跳过 DOMPurify；Mermaid 必须使用 strict 安全级别。
 - 禁止允许工作区路径穿越或越界符号链接。
 - 禁止把 Excalidraw 场景大 JSON 写入正文主体。
+- 禁止恢复固定文件夹、知识库内分组或嵌套知识库作为 M1.1 的 Web 信息架构。
+- 禁止在知识库中直接创建文档；知识库文档必须来自随记归档或导入。
+- 禁止知识库文档默认进入编辑；必须预览优先并等待用户显式点击编辑。
+- 禁止把全工作区正文下载到浏览器后执行客户端全文搜索。
+- 禁止跳过题述的 320–2560px、键盘、触控和 reduced-motion 验收。
 - 禁止在未通过 AST 往返测试时宣称“Markdown 无损”。
 - 禁止把演示用 localStorage 存储直接作为生产数据层。
 - 禁止在 `packages/core` 中出现平台条件分支、DOM、ArkTS、Tauri 或数据库 SDK。

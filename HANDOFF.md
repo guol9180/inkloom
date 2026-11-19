@@ -1,77 +1,78 @@
-# InkLoom 会话交接
+# InkLoom Session Handoff
 
-## 接手顺序
+## Reading Order
 
-1. 先读 [README.md](./README.md)，了解项目定位、结构和最短运行方式。
-2. 再读 [AGENTS.md](./AGENTS.md)，确认依赖方向和禁止事项。
-3. 打开 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，查看 T15/T16、T18–T23 与 M1 状态。
-4. 产品、数据和同步设计只在 [docs/PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md) 维护。
-5. 部署域名、环境变量、备份和回滚只在 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) 维护。
+1. [README.md](./README.md): product snapshot, structure and commands.
+2. [AGENTS.md](./AGENTS.md): engineering rules and package boundaries.
+3. [DEVELOP_PLAN.md](./DEVELOP_PLAN.md): current task, scope and acceptance.
+4. [PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md): product,
+   data, API and host architecture.
+5. [UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md): canonical editor and
+   interaction design.
+6. [DEPLOYMENT.md](./docs/DEPLOYMENT.md): production release, backup and rollback.
 
-## 当前结论
+## Current State
 
-- 产品名：InkLoom / 墨织。
-- 浏览器域名：`https://inkloom.imhgl.com`。
-- API 域名：`https://api.inkloom.imhgl.com`。
-- 开源仓库：`https://github.com/guol9180/inkloom`，默认分支 `main`。
-- T15 已提交为 `4415b6d`：Web + API 的账号、云端 SQLite、revision、历史恢复和冲突副本闭环可本地运行。
-- T16 已完成：Inkloom Web 与 API 已部署到生产。公开仓库负责外部构建与 GHCR 推送，私有 `guol9180/imhgl-ops` 控制面负责受控部署与线上验证。
-- T18 已提交为 `8dba537`：补齐工作区管理、标签、移动/删除/历史恢复、账号设置和串行自动保存；T19 已提交为 `4f6b3d5`：完成 320–2560px 连续自适应。
-- T20 已完成验收：多视口截图与报告位于 `artifacts/ui-review/`。
-- T21 已完成新版视觉；T22 已将 Web 前端迁移至 React Router、Tailwind CSS 4、TanStack Query、Radix、Lucide 和 Milkdown Crepe，品牌展示统一使用英文 `InkLoom`。
-- T22 文档区为类语雀/Typora 的单区所见即所得编辑器：不再显示源码/预览切换，顶部是一行完整格式工具栏；默认账号、工作区和新文档改用空白 `个人/未命名文档.md`。
-- 当前生产 release 为 `68578214d526c132c0b8ee9af4d744b2004ea45d`，运行 `platform-edge`、`inkloom-web` 与 `inkloom-api` 三个健康容器。
-- workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
-- 1Panel 已完整卸载，其旧数据与迁移备份已删除。
-- 生产主机已清除旧 1Panel 安装包、`.zai`、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh 和不再使用的主机 Node/npm 环境；服务器只负责拉取和运行镜像。
-- 一次由残留交互式 `1pctl` 脚本导致的高 CPU 已定位并处理；当前 CPU 约 99% 空闲，容器 CPU 为 0%，API 健康。
-- 用户要求 M1 上线后暂停后续开发，T4 桌面、M2 离线同步等不得自行继续。
+- Product: InkLoom, English-only visible brand text.
+- Web: `https://inkloom.imhgl.com`.
+- API: `https://api.inkloom.imhgl.com`.
+- Repository: `https://github.com/guol9180/inkloom`, branch `main`.
+- Production application release remains
+  `68578214d526c132c0b8ee9af4d744b2004ea45d`.
+- Current production is the completed M1 Web cloud workspace.
+- The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
+  and must not enter the Web release image.
 
-## 已验证
+M1.1 has been re-planned as **product-grade editor and knowledge workflow**.
+The product and UX decisions are documented; implementation is tracked from
+T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
-```text
-pnpm --filter '!@inkloom/desktop' typecheck
-结果：Web/API/共享包通过
+## Locked Product Decisions
 
-pnpm test
-结果：32 项通过
+- M1.1 implements Web only.
+- Future desktop, mobile, HarmonyOS and sync hosts retain adapter and command
+  entry points, but no future host implementation starts in M1.1.
+- Workspace navigation has two modes: Scratch and Knowledge.
+- Scratch notes are flat and directly editable.
+- The new button is integrated into the `+` menu to the right of search; there
+  is no separate scratch-note creation button.
+- Knowledge bases are directly created top-level containers.
+- Knowledge-base documents are flat Markdown files with no groups or nesting.
+- Knowledge-base documents open in preview by default and require explicit
+  editing.
+- Milkdown / ProseMirror remains the editor kernel; the product-level editor
+  shell and custom NodeViews are rebuilt around it.
+- The visual theme is white/near-white.
+- UI typography follows a Codex-like precise and restrained hierarchy using
+  Geist Sans, system Chinese fonts and Geist Mono.
+- All content loading uses layout-stable skeleton screens.
+- Markdown source is canonical; unknown syntax and untouched source slices must
+  be preserved.
 
-pnpm exec playwright test
-结果：10 项通过（6 项多视口截图验收 + 4 项完整业务流）
+## Next Work
 
-pnpm build
-结果：Web 与 API 生产构建成功；仅有图表大 chunk 警告
+Start with T25 after the documentation reset is committed:
 
-pnpm audit --prod
-结果：1 high + 1 low；high 为 Excalidraw 的 Sass 构建链 picomatch，生产 Web bundle 未包含该链
+- Add schema migrations for knowledge bases, document lifecycle and assets.
+- Preserve existing production documents by migrating them to scratch notes.
+- Do not invent knowledge bases or folders during migration.
+- Back up the production SQLite database before any production migration.
 
-GitHub Actions CI run 44487148562
-结果：最新提交 typecheck、32 项测试、生产构建和 10 项 Playwright 全部通过
+Do not resume desktop, M2 synchronization, real-time collaboration or mobile
+work without explicit user confirmation.
 
-GitHub Actions image run 44487180919
-结果：外部构建并推送 `inkloom-api` 与 `inkloom-web` 的完整 SHA 镜像
+## Verified Before Handoff
 
-GitHub Actions migration run 44488275293
-结果：备份 SQLite 后迁移到 platform-edge + inkloom-web + inkloom-api，公网验证通过
+The last production check returned:
 
-pnpm verify:production
-结果：Web 200、API 200、CORS 204、securityHeaders true
+```json
+{
+  "web": 200,
+  "api": 200,
+  "cors": 204,
+  "securityHeaders": true
+}
 ```
 
-验证日期：2026-11-19。T4 桌面 WIP 已提交，但本机文件夹完整验收仍未完成，T4 保持 in-progress；该提交不进入 Web 发版镜像。最新截图共 27 张，报告位于 `artifacts/ui-review/REPORT.md`。
-
-## 生产部署
-
-- DNS：`inkloom.imhgl.com` 与 `api.inkloom.imhgl.com` 均已指向生产服务器。
-- 生产目录：共享入口 `/srv/platform/edge`，Inkloom 应用 `/srv/apps/inkloom`；旧栈保留在 `/srv/inkloom` 供回滚。
-- 运行容器：`platform-edge`、`inkloom-web` 与 `inkloom-api`，共享 `platform-edge` 网络。
-- 数据卷：`inkloom-data`、`inkloom-caddy-data`、`inkloom-caddy-config`。
-- 发布方式：公开仓库手动运行 `Build and publish images`，随后在私有 `guol9180/imhgl-ops` 控制面按完整 SHA 部署 `inkloom` 或独立的 `platform`；服务器只执行镜像 `pull + up`，不运行应用构建。
-- 安全：公开仓库只保留 GHCR 写入所需的 `GITHUB_TOKEN`，不再保存 SSH host、部署密钥、服务器路径或部署身份。部署凭据集中在私有控制面的 `production` Environment Secrets，Actions 固定到提交 SHA，SSH host key 固定。
-
-## 已知边界
-
-- 正文事实源是服务端 SQLite 中的 Markdown；localStorage 仅保存未成功写入的临时草稿。
-- 尚无跨设备离线队列、实时协作、团队权限和对象存储。
-- Excalidraw 仍使用当前原型场景数据模型。
-- 审计剩余 high 位于构建链而非生产 bundle；上游发布修复后应移除依赖覆盖并重跑审计。
+The documentation reset itself must be verified in the T24 progress entry before
+this handoff is considered current.

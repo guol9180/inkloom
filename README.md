@@ -1,94 +1,143 @@
 # InkLoom
 
-Markdown-native, file-first knowledge workspace for text, diagrams, and the web.
+Markdown-native notes and knowledge workspace for text, diagrams and the web.
 
-InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、同时提供 Web 与桌面客户端的知识工作台。正文、Mermaid 图表和 Excalidraw 画布都可以编辑、版本化和迁移。
+InkLoom helps users capture quickly as scratch notes, then archive selected
+documents into flat knowledge bases for long-term reading and maintenance.
+Markdown remains the canonical document format.
 
-![InkLoom Web workspace](./apps/web/preview-main.png)
+## Current Status
 
-## 项目状态
+The production Web MVP is available at:
 
-当前仓库包含一个已部署的 Web 云端工作区：
+- Web: `https://inkloom.imhgl.com`
+- API: `https://api.inkloom.imhgl.com`
 
-- Web：`https://inkloom.imhgl.com`
-- API：`https://api.inkloom.imhgl.com`
+The current production release supports:
 
-- 邮箱注册、登录、退出和 HttpOnly 会话
-- 每用户独立工作区，文档和 revision 持久化到服务端 SQLite
-- Markdown 原生的单区所见即所得编辑与完整格式工具栏
-- 文档目录、搜索、自动保存、移动、版本恢复和导入导出
-- Mermaid 图表渲染
-- Excalidraw 场景编辑与保存
-- revision 冲突时保留云端版本和本地冲突副本
+- Email registration, login, logout and HttpOnly sessions.
+- User-isolated cloud workspaces.
+- Markdown documents, tags, revisions, history and conflict copies.
+- Single-area Milkdown editing and responsive Web UI.
+- Mermaid and Excalidraw editing.
 
-桌面客户端、真实磁盘工作区和跨设备离线同步已经完成技术设计，尚未实现。当前任务状态见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，产品与技术方案见 [docs/PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md)。
+InkLoom is now preparing the next Web release, **M1.1: product-grade editor and
+knowledge workflow**. M1.1 changes the navigation model to scratch notes and
+flat knowledge bases, rebuilds the product-level editor shell, adds
+content-addressed assets and introduces preview-first knowledge-base reading.
 
-## 快速开始
+The implementation is not complete until its task cards in
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md) are closed. Production continues to run the
+previous M1 release until a later approved deployment.
 
-启动 API 和已构建的 Web：
+## Product Model
 
-```powershell
-pnpm build
-$env:INKLOOM_DATABASE_PATH=".inkloom/inkloom.sqlite"
-pnpm start:api
-node apps/web/serve.mjs
+```text
+Workspace
+  ├─ Scratch
+  │    └─ flat, directly editable Markdown notes with tags
+  └─ Knowledge
+       └─ user-created knowledge bases
+            └─ flat Markdown documents, preview-first
 ```
 
-打开 `http://127.0.0.1:4173`。API 默认位于 `http://127.0.0.1:3001`。
+- Scratch notes do not use user-managed folders.
+- A knowledge base is a top-level library, not a group.
+- Knowledge-base documents have no internal folder hierarchy.
+- Archiving moves one scratch note into one knowledge base.
+- Deleting a knowledge base returns its documents to scratch.
 
-开发模式需要两个终端：
+## Architecture Snapshot
+
+```text
+apps/
+  web/             active Web client
+  desktop/         parked Tauri scaffold
+  mobile-tauri/    future mobile host placeholder
+  harmony/         future HarmonyOS host placeholder
+
+packages/
+  core/            platform-neutral domain contracts
+  editor/          Markdown helpers and editor contracts
+  diagrams/        Mermaid and Excalidraw integration
+  storage/         workspace and asset adapters
+  sync/            future offline and collaboration boundary
+  ui/              shared design primitives
+
+services/
+  api/             Web API and persistence
+```
+
+M1.1 implements only Web UI and cloud persistence. Domain contracts, storage
+adapters and editor commands must remain host-independent so desktop, mobile,
+HarmonyOS and future sync clients can integrate without redefining document
+semantics.
+
+## Web Stack
+
+- React 19 and TypeScript.
+- Vite and React Router.
+- Tailwind CSS 4 with semantic design tokens.
+- TanStack Query, React Hook Form, Zod and Zustand.
+- Milkdown / ProseMirror / Remark for Markdown.
+- CodeMirror 6 only inside code and diagram source nodes.
+- Radix primitives and Lucide icons.
+- Node.js 22, SQLite WAL, SQLite FTS5 and content-addressed assets.
+
+The product and architecture rationale is in
+[PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md). Detailed
+editor, UI, motion, typography, save and responsive behavior is in
+[UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md).
+
+## Quick Start
+
+Requirements:
+
+- Node.js 22.12 or newer.
+- pnpm 12.5.1.
+
+Install dependencies:
 
 ```bash
 corepack enable
 pnpm install
+```
+
+Run API and Web in separate terminals:
+
+```bash
 pnpm dev:api
 pnpm dev:web
 ```
 
-生产构建：
+Local URLs:
+
+- Web: `http://127.0.0.1:4173`
+- API: `http://127.0.0.1:3001`
+
+Build and verification:
 
 ```bash
+pnpm typecheck
+pnpm test
 pnpm build
+pnpm test:e2e
 ```
 
-环境要求：Node.js 22.12+、pnpm 12.5.1。API 数据文件及服务端环境变量示例见 [.env.example](./.env.example)，生产要求见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。桌面端后续要求 Rust stable 与 Tauri 2 所需系统依赖。
+Additional environment details are in [.env.example](./.env.example) and
+[DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
-## 仓库结构
+## Documentation
 
-```text
-inkloom/
-├─ apps/
-│  ├─ web/           @inkloom/web
-│  ├─ desktop/       @inkloom/desktop
-│  ├─ mobile-tauri/  @inkloom/mobile-tauri
-│  └─ harmony/       ArkUI + ArkWeb
-├─ packages/
-│  ├─ core/          @inkloom/core
-│  ├─ editor/        @inkloom/editor
-│  ├─ diagrams/      @inkloom/diagrams
-│  ├─ storage/       @inkloom/storage
-│  ├─ sync/          @inkloom/sync
-│  └─ ui/            @inkloom/ui
-├─ services/
-│  └─ api/           @inkloom/api
-├─ docs/
-├─ design/
-├─ AGENTS.md
-├─ DEVELOP_PLAN.md
-└─ HANDOFF.md
-```
-
-## 域名与部署
-
-公开仓库负责测试、构建与发布镜像；生产部署凭据和发布编排位于私有 `imhgl-ops` 控制面。部署域名、环境变量与拆分方式见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)。
-
-## 技术方向
-
-Web 正式前端基线为 React 19、TypeScript、Vite、React Router、Tailwind CSS 4、TanStack Query、Milkdown Crepe、Radix Primitives 和 Lucide。桌面、图表与同步技术选型，以及移动端基础约束，见 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)。
-
-## 参与开发
-
-开发规范见 [AGENTS.md](./AGENTS.md)，贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。浏览器 localStorage 只用于未完成保存的临时草稿，正文事实源是服务端持久化文档；桌面文件版尚未实现。
+- [START_HERE.md](./START_HERE.md): reading order and next task.
+- [AGENTS.md](./AGENTS.md): engineering rules and package boundaries.
+- [DEVELOP_PLAN.md](./DEVELOP_PLAN.md): tasks, progress and acceptance.
+- [HANDOFF.md](./HANDOFF.md): current state and handoff instructions.
+- [PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md): product,
+  data, API and host architecture.
+- [UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md): detailed Web and editor
+  experience specification.
+- [DEPLOYMENT.md](./docs/DEPLOYMENT.md): production domains, release and rollback.
 
 ## License
 

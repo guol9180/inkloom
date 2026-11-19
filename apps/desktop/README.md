@@ -1,14 +1,28 @@
 # @inkloom/desktop
 
-Tauri 2 桌面客户端。目标是把普通文件夹作为知识库，提供真实文件读写、原子保存、文件监听、SQLite 索引、系统托盘和自动更新。
+Tauri 2 desktop scaffold for a future file-first InkLoom host.
 
-## 当前状态
+## Current State
 
-尚未创建 Tauri 工程。依赖方向与实施顺序见 [AGENTS.md](../../AGENTS.md) 和 [DEVELOP_PLAN.md](../../DEVELOP_PLAN.md) T4。
+- Tauri shell, platform icons and a Rust filesystem command surface exist.
+- The current UI is a WIP scaffold and still uses a source/split/read layout.
+- It does not yet share the M1.1 product editor shell.
+- T4 remains `in-progress` and is parked until the Web editor, document model and
+  asset contracts settle.
 
-## 标识符
+This package is never included in the Web release image.
 
-- Tauri identifier：`com.imhgl.inkloom`
-- 产品名：`InkLoom`
+## Future Target
 
-不得把磁盘访问直接写进 React 页面；必须通过 `@inkloom/storage` 的 adapter 注入。
+A desktop host will reuse the same:
+
+- Document lifecycle and revision contracts.
+- Markdown codec and unknown-syntax preservation.
+- Editor command registry and product-level editor shell.
+- Asset adapter contract.
+
+Platform-specific disk access belongs in `@inkloom/storage` adapters and Rust
+commands; React pages must not import native filesystem APIs directly.
+
+See [PRODUCT_AND_ARCHITECTURE.md](../../docs/PRODUCT_AND_ARCHITECTURE.md) and
+[DEVELOP_PLAN.md](../../DEVELOP_PLAN.md).

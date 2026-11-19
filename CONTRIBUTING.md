@@ -12,11 +12,15 @@ pnpm dev:web
 
 ```bash
 pnpm typecheck
-pnpm build
 pnpm test
+pnpm build
 ```
 
-`pnpm test` will be available once the first package tests are added.
+For UI or workflow changes, also run:
+
+```bash
+pnpm test:e2e
+```
 
 ## Rules
 
@@ -25,6 +29,8 @@ pnpm test
 - Use Conventional Commits.
 - Include verification evidence in the PR description.
 - Never commit `node_modules/`, secrets, build caches, or user documents.
+- UI and editor behavior must follow
+  [docs/UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md).
 
 ## Areas That Need Extra Review
 
