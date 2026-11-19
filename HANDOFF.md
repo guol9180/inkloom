@@ -46,7 +46,7 @@ pnpm audit --prod
 结果：1 high + 1 low；high 为 Excalidraw 的 Sass 构建链 picomatch，生产 Web bundle 未包含该链
 ```
 
-验证日期：2026-11-19。现有工作树中的 T4 桌面未提交改动会导致全仓库 typecheck 失败；M1 相关包已通过排除 desktop 的 typecheck。最新截图共 27 张，报告位于 `artifacts/ui-review/REPORT.md`。
+验证日期：2026-11-19。T4 桌面 WIP 已提交，但本机文件夹完整验收仍未完成，T4 保持 in-progress；该提交不进入 Web 发版镜像。最新截图共 27 张，报告位于 `artifacts/ui-review/REPORT.md`。
 
 ## 生产部署
 

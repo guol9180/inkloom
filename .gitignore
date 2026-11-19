@@ -11,6 +11,8 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+target/
+**/src-tauri/gen/
 .inkloom/
 .idea/
 .vscode/*

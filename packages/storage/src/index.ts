@@ -11,6 +11,7 @@ export type {
 
 export * from "./browser-local";
 export * from "./cloud";
+export * from "./tauri-folder";
 
 export const SUPPORTED_STORAGE_KINDS = [
   "browser-local",
