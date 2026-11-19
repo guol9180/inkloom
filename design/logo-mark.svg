@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 72" role="img" aria-label="InkLoom mark">
-  <rect width="64" height="72" rx="10" fill="#122830"/>
-  <path d="M0 10h64v52H0z" fill="#172f38"/>
-  <path d="M8 0v72" stroke="#a46624" stroke-width="5"/>
-  <path d="M21 43c8-15 13 13 22-8 4-9 8-7 13 0" fill="none" stroke="#f4e8d7" stroke-width="3" stroke-linecap="round"/>
-  <path d="M22 29c8 15 14-13 22 7 4 9 8 8 12 1" fill="none" stroke="#6ea197" stroke-width="2" stroke-linecap="round" opacity=".9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="InkLoom mark">
+  <rect x="1.5" y="1.5" width="61" height="61" rx="18" fill="#e5f5ee" stroke="#cfe8de" stroke-width="2"/>
+  <path d="M16 11h17l11 11v30H16Z" fill="#fcfffd" stroke="#2d7563" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M33 11v11h11" fill="#cfeade" stroke="#2d7563" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M23 35h7c3 0 3 4 0 4h-2c-3 0-3 4 0 4h9" fill="none" stroke="#efa174" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

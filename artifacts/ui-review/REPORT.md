@@ -1,6 +1,7 @@
 # InkLoom Web UI Review
 
 - 验收日期：2026-11-19
+- 视觉版本：清新织室主题，英文品牌 InkLoom
 - 验收环境：Windows、Google Chrome、Playwright、Vite 生产构建
 - 本地地址：Web `http://127.0.0.1:4173`，API `http://127.0.0.1:3001`
 - 验收范围：登录页、云端工作区、三种编辑视图、移动端侧栏、信息栏、文档操作菜单、工作区/标签/设置弹窗、Excalidraw 画布
@@ -51,5 +52,6 @@ pnpm exec playwright test tests/e2e/ui-review.spec.ts
 - 6 个视口测试全部通过。
 - 每个视口在登录页、工作区、抽屉和菜单关键状态执行 `scrollWidth <= clientWidth` 检查，均无页面横向溢出。
 - 首轮截图发现的 320px 登录页裁切、超宽桌面稿纸未撑满、手机工具栏文字挤排、抽屉动画中途截图和菜单层级问题均已修正并重新截图。
+- T21 品牌改版后已重新生成全部截图；Logo 区、登录页品牌、浏览器标题和欢迎文档统一使用英文品牌 `InkLoom`。
 - 最终 `pnpm test:e2e` 共 8 项通过：6 项多视口截图 + 2 项完整业务流。
 - 最终 `pnpm test` 共 32 项通过。

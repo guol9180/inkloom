@@ -24,5 +24,5 @@ createServer((request, response) => {
   response.setHeader("Cache-Control", extname(target) === ".html" ? "no-cache" : "public, max-age=3600");
   createReadStream(target).pipe(response);
 }).listen(port, "127.0.0.1", () => {
-  console.log(`墨织 InkLoom 原型: http://127.0.0.1:${port}`);
+  console.log(`InkLoom Web: http://127.0.0.1:${port}`);
 });

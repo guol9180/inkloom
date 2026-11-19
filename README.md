@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="./design/logo-lockup.svg" alt="InkLoom 墨织" width="440">
+  <img src="./design/logo-lockup.svg" alt="InkLoom" width="440">
 </p>
 
-# InkLoom · 墨织
+# InkLoom
 
 Markdown-native, file-first knowledge workspace for text, diagrams, and the web.
 
 InkLoom 是一套以 Markdown 为事实源、以普通文件为内容边界、同时提供 Web 与桌面客户端的知识工作台。正文、Mermaid 图表和 Excalidraw 画布都可以编辑、版本化和迁移。
 
-![InkLoom Web prototype](./apps/web/preview-main.png)
+![InkLoom Web workspace](./apps/web/preview-main.png)
 
 ## 项目状态
 

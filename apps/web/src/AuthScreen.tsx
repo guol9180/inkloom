@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, FileText, Network, ShieldCheck } from "lucide-react";
 import type { CloudUser } from "@inkloom/storage";
+import { BrandMark } from "./BrandMark";
 
 type AuthMode = "login" | "register";
 
@@ -36,7 +37,7 @@ export function AuthScreen({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "无法连接墨织服务，请稍后重试。"
+          : "无法连接 InkLoom 服务，请稍后重试。"
       );
     } finally {
       setBusy(false);
@@ -50,43 +51,41 @@ export function AuthScreen({
 
   return (
     <main className="auth-shell">
-      <section className="auth-spine" aria-label="墨织产品说明">
+      <section className="auth-spine" aria-label="InkLoom 产品说明">
         <div className="auth-brand">
-          <span className="brand-mark auth-brand-mark" aria-hidden="true">
-            <span>墨</span>
-          </span>
+          <BrandMark className="auth-brand-mark" />
           <div>
-            <strong>墨织</strong>
-            <span>INKLOOM</span>
+            <strong>InkLoom</strong>
+            <span>Markdown workspace</span>
           </div>
         </div>
 
         <div className="auth-statement">
-          <p className="auth-chapter">Markdown 工作台</p>
+          <p className="auth-chapter">安静、清晰、属于你的写作空间</p>
           <h1>
-            写下的文字，
+            让每个想法，
             <br />
-            应该属于你。
+            都有生长的余地。
           </h1>
           <p>
-            正文保持为 Markdown，图表保留可编辑源码。登录后，文档会保存到你的云端工作区。
+            Markdown 保留原文，图表保留源码。文字、画布与版本，都安放在同一个清爽的云端工作区。
           </p>
         </div>
 
         <ul className="auth-capabilities">
           <li>
             <FileText size={16} />
-            <span>Markdown 原文随时可导出</span>
+            <span>正文始终可以随时导出</span>
             <Check size={14} />
           </li>
           <li>
             <Network size={16} />
-            <span>Mermaid 与 Excalidraw 独立保留</span>
+            <span>图表与画布保持可编辑</span>
             <Check size={14} />
           </li>
           <li>
             <ShieldCheck size={16} />
-            <span>revision 冲突保护，不静默覆盖</span>
+            <span>版本冲突会明确保留两份</span>
             <Check size={14} />
           </li>
         </ul>
@@ -116,11 +115,11 @@ export function AuthScreen({
           </div>
 
           <header className="auth-card-head">
-            <h2>{mode === "login" ? "回到你的工作区" : "建立第一本知识册"}</h2>
+            <h2>{mode === "login" ? "欢迎回来" : "开始新的知识空间"}</h2>
             <p>
               {mode === "login"
-                ? "使用邮箱和密码继续写作。"
-                : "创建后会自动获得一个云端工作区。"}
+                ? "登录后，继续上一次未完的想法。"
+                : "创建账号后，会自动准备好第一篇云端文档。"}
             </p>
           </header>
 
@@ -177,7 +176,7 @@ export function AuthScreen({
           </form>
 
           <p className="auth-fineprint">
-            密码只以 scrypt 强哈希保存；会话使用 HttpOnly Cookie。
+            密码使用强哈希保存，会话通过安全的 HttpOnly Cookie 传递。
           </p>
         </div>
       </section>

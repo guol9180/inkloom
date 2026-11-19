@@ -81,6 +81,7 @@ import {
   snapshotToNote
 } from "./cloud-workspace";
 import { Dialog } from "./Dialog";
+import { BrandMark } from "./BrandMark";
 import { folderOrder, type Note } from "./data";
 
 type ViewMode = MarkdownViewMode;
@@ -1145,9 +1146,7 @@ function WorkspaceApp({
   if (workspaceLoading) {
     return (
       <main className="session-loading">
-        <span className="brand-mark" aria-hidden="true">
-          <span>墨</span>
-        </span>
+        <BrandMark />
         <p>正在载入云端文档…</p>
       </main>
     );
@@ -1156,9 +1155,7 @@ function WorkspaceApp({
   if (workspaceError) {
     return (
       <main className="workspace-load-error">
-        <span className="brand-mark" aria-hidden="true">
-          <span>墨</span>
-        </span>
+        <BrandMark />
         <h1>工作区暂时无法打开</h1>
         <p>{workspaceError}</p>
         <button className="auth-submit" type="button" onClick={() => window.location.reload()}>
@@ -1171,9 +1168,7 @@ function WorkspaceApp({
   if (!activeNote) {
     return (
       <main className="workspace-load-error">
-        <span className="brand-mark" aria-hidden="true">
-          <span>墨</span>
-        </span>
+        <BrandMark />
         <h1>工作区还是空的</h1>
         <p>新建一篇 Markdown，开始记录第一篇云端文档。</p>
         <button className="auth-submit" type="button" onClick={() => void addNote("个人")}>
@@ -1195,12 +1190,10 @@ function WorkspaceApp({
           >
             <Menu size={18} />
           </button>
-          <div className="brand-mark" aria-hidden="true">
-            <span>墨</span>
-          </div>
+          <BrandMark />
           <div className="brand-copy">
-            <strong>墨织</strong>
-            <span>InkLoom · Markdown workspace</span>
+            <strong>InkLoom</strong>
+            <span>Markdown workspace</span>
           </div>
         </div>
 
@@ -1646,7 +1639,7 @@ function WorkspaceApp({
                 {viewMode !== "read" && (
                   <section className="source-pane">
                     <div className="pane-caption">
-                      <span>MARKDOWN</span>
+                      <span>Markdown</span>
                       <span>UTF-8</span>
                     </div>
                     <textarea
@@ -1662,7 +1655,7 @@ function WorkspaceApp({
                 {viewMode !== "source" && (
                   <section className="preview-pane">
                     <div className="pane-caption">
-                      <span>PREVIEW</span>
+                      <span>预览</span>
                       <span className="preview-live">
                         <span /> LIVE
                       </span>

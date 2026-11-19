@@ -29,7 +29,7 @@ for (const viewport of viewports) {
       });
 
       await registerUser(page);
-      await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用墨织");
+      await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用 InkLoom");
       await expectNoHorizontalOverflow(page);
       await page.screenshot({
         path: resolve(reviewDirectory, `workspace-${size}.png`)

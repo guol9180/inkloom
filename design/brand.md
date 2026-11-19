@@ -13,19 +13,20 @@ InkLoom combines “ink” as writing and knowledge with “loom” as the weavi
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Ink | `#172f38` | Primary text and deep surfaces |
-| Spine | `#122830` | File/book-spine navigation |
-| Paper | `#fbfcfb` | Editor canvas |
-| Cool canvas | `#e9eeec` | Workspace background |
-| Teal | `#2e6a62` | Primary action |
-| Copper | `#a46624` | Diagram and chapter accent |
-| Paper cream | `#f4e8d7` | Brand mark detail |
+| Ink | `#24463f` | Primary text |
+| Mist | `#edf6f2` | Workspace background |
+| Mint | `#e5f5ee` | Brand surface and selected states |
+| Teal | `#2d7563` | Primary action and woven logo line |
+| Sky | `#6da5be` | Secondary information |
+| Apricot | `#efa174` | Small brand and focus accent |
 
 ## Visual Direction
 
-The interface is a “foldable engineering manual”: a dark file spine, a quiet paper work surface, and an inspector for outline, backlinks, assets, and versions.
+The interface is a “quiet morning weaving room”: a pale mint file rail, a crisp paper work surface, and an inspector for outline, backlinks, assets, and versions.
 
 The distinctive surface is the diagram block: a drafting-grid asset area where Mermaid and Excalidraw remain visibly editable rather than becoming anonymous images.
+
+The mark is a folded page with one apricot thread moving through it. The page keeps the Markdown-first meaning direct, while the thread adds the InkLoom weaving idea without relying on a language-specific glyph.
 
 ## Typography
 

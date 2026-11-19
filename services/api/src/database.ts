@@ -94,13 +94,13 @@ type MutableFolderNode = Extract<WorkspaceNode, { kind: "folder" }> & {
   children: WorkspaceNode[];
 };
 
-const WELCOME_MARKDOWN = `# 欢迎使用墨织
+const WELCOME_MARKDOWN = `# 欢迎使用 InkLoom
 
 这是一篇已保存到云端的 Markdown 文档。
 
 ## 从这里开始
 
-- 直接编辑正文、标题和标签，墨织会自动保存。
+- 直接编辑正文、标题和标签，InkLoom 会自动保存。
 - 使用 **Mermaid** 插入流程图。
 - 使用 **画布** 打开 Excalidraw，并把场景与 Markdown 一起持久化。
 - 右上角显示服务端保存状态；失败时不会静默覆盖。
@@ -237,7 +237,7 @@ export class DocumentDatabase {
           documentId,
           workspaceId,
           path,
-          "欢迎使用墨织",
+          "欢迎使用 InkLoom",
           JSON.stringify(["入门", "云端保存"]),
           WELCOME_MARKDOWN,
           contentHash(WELCOME_MARKDOWN),
@@ -339,7 +339,7 @@ export class DocumentDatabase {
           documentId,
           workspace.id,
           path,
-          "欢迎使用墨织",
+          "欢迎使用 InkLoom",
           JSON.stringify(["入门", "云端保存"]),
           WELCOME_MARKDOWN,
           contentHash(WELCOME_MARKDOWN),

@@ -13,11 +13,11 @@ test("manages workspaces, tags, imports, moves and restores cloud documents", as
   const account = await registerUser(page, "工作区作者");
   const marker = `E2E_RELIABLE_${Date.now()}`;
 
-  await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用墨织");
+  await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用 InkLoom");
   const firstSave = page.waitForResponse(isSuccessfulDocumentSave);
   await page
     .getByLabel("Markdown 源码")
-    .fill(`# 欢迎使用墨织\n\n${marker}\n\n刷新后仍然存在。\n`);
+    .fill(`# 欢迎使用 InkLoom\n\n${marker}\n\n刷新后仍然存在。\n`);
   await firstSave;
   await expectSaved(page);
 
@@ -44,7 +44,7 @@ test("manages workspaces, tags, imports, moves and restores cloud documents", as
   await expect(
     page.getByRole("button", { name: "切换工作区" })
   ).toContainText("项目验收");
-  await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用墨织");
+  await expect(page.getByLabel("文档标题")).toHaveValue("欢迎使用 InkLoom");
 
   await page.getByRole("button", { name: "新建文档" }).first().click();
   await expect(page.getByLabel("文档标题")).toHaveValue("未命名文档");

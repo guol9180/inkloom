@@ -3,6 +3,7 @@ import type { CloudUser } from "@inkloom/storage";
 import WorkspaceApp from "./App";
 import { AuthScreen } from "./AuthScreen";
 import { cloudClient } from "./cloud-workspace";
+import { BrandMark } from "./BrandMark";
 
 type SessionState =
   | { status: "checking" }
@@ -42,9 +43,7 @@ export default function RootApp() {
   if (session.status === "checking") {
     return (
       <main className="session-loading">
-        <span className="brand-mark" aria-hidden="true">
-          <span>墨</span>
-        </span>
+        <BrandMark />
         <p>正在打开你的工作区…</p>
       </main>
     );
