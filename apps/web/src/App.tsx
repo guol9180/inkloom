@@ -370,6 +370,22 @@ function WorkspaceApp({
     setPendingRestore(undefined);
   }
 
+  function toggleSidebar() {
+    setSidebarOpen((current) => {
+      const next = !current;
+      if (next) setInspectorOpen(false);
+      return next;
+    });
+  }
+
+  function toggleInspector() {
+    setInspectorOpen((current) => {
+      const next = !current;
+      if (next) setSidebarOpen(false);
+      return next;
+    });
+  }
+
   function noteShape(note: Note): SavedNoteShape {
     return {
       title: note.title,
@@ -1174,7 +1190,7 @@ function WorkspaceApp({
           <button
             className="icon-button mobile-menu"
             type="button"
-            onClick={() => setSidebarOpen((value) => !value)}
+            onClick={toggleSidebar}
             aria-label="打开文件栏"
           >
             <Menu size={18} />
@@ -1254,7 +1270,9 @@ function WorkspaceApp({
         />
       </header>
 
-      <div className="main-grid">
+      <div
+        className={`main-grid ${inspectorOpen ? "" : "is-inspector-collapsed"}`}
+      >
         <aside className={`sidebar ${sidebarOpen ? "is-open" : ""}`}>
           <div className="sidebar-head">
             <div>
@@ -1292,7 +1310,7 @@ function WorkspaceApp({
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索标题、正文或标签"
             />
-            <kbd>⌘ K</kbd>
+            <kbd>Ctrl K</kbd>
           </label>
 
           <div className="file-tree">
@@ -1461,7 +1479,7 @@ function WorkspaceApp({
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setInspectorOpen((value) => !value)}
+                onClick={toggleInspector}
                 aria-label="切换信息栏"
               >
                 <PanelRightClose size={17} />
@@ -1682,7 +1700,12 @@ function WorkspaceApp({
         <aside className={`inspector ${inspectorOpen ? "" : "is-collapsed"}`}>
           <div className="inspector-head">
             <strong>文档信息</strong>
-            <button className="icon-button" type="button" onClick={() => setInspectorOpen(false)}>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="关闭信息栏"
+              onClick={() => setInspectorOpen(false)}
+            >
               <X size={16} />
             </button>
           </div>
