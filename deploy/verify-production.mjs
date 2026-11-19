@@ -6,7 +6,7 @@ const webResponse = await fetch(webUrl, {
 });
 assert(webResponse.ok, `Web returned HTTP ${webResponse.status}.`);
 const webHtml = await webResponse.text();
-assert(/<title>墨织 InkLoom/i.test(webHtml), "Web response is not the InkLoom app.");
+assert(/<title>InkLoom/i.test(webHtml), "Web response is not the InkLoom app.");
 for (const header of [
   "strict-transport-security",
   "content-security-policy",

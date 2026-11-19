@@ -4,7 +4,7 @@
 
 1. 先读 [README.md](./README.md)，了解项目定位、结构和最短运行方式。
 2. 再读 [AGENTS.md](./AGENTS.md)，确认依赖方向和禁止事项。
-3. 打开 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，查看 T15/T16、T18–T20 与 M1 状态。
+3. 打开 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，查看 T15/T16、T18–T23 与 M1 状态。
 4. 产品、数据和同步设计只在 [docs/PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md) 维护。
 5. 部署域名、环境变量、备份和回滚只在 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) 维护。
 
@@ -17,10 +17,10 @@
 - T15 已提交为 `4415b6d`：Web + API 的账号、云端 SQLite、revision、历史恢复和冲突副本闭环可本地运行。
 - T16 已完成：Inkloom Web 与 API 已部署到生产。公开仓库负责外部构建与 GHCR 推送，私有 `guol9180/imhgl-ops` 控制面负责受控部署与线上验证。
 - T18 已提交为 `8dba537`：补齐工作区管理、标签、移动/删除/历史恢复、账号设置和串行自动保存；T19 已提交为 `4f6b3d5`：完成 320–2560px 连续自适应。
-- T20 已完成本地验收：26 张多视口截图与报告位于 `artifacts/ui-review/`；新版本尚未部署，继续等待用户发布指令。
+- T20 已完成验收：多视口截图与报告位于 `artifacts/ui-review/`。
 - T21 已完成新版视觉；T22 已将 Web 前端迁移至 React Router、Tailwind CSS 4、TanStack Query、Radix、Lucide 和 Milkdown Crepe，品牌展示统一使用英文 `InkLoom`。
 - T22 文档区为类语雀/Typora 的单区所见即所得编辑器：不再显示源码/预览切换，顶部是一行完整格式工具栏；默认账号、工作区和新文档改用空白 `个人/未命名文档.md`。
-- 当前生产 release 为 `f71fe4e4308713ec2852541371b91426ac50631d`。
+- 当前生产 release 为 `68578214d526c132c0b8ee9af4d744b2004ea45d`，运行 `platform-edge`、`inkloom-web` 与 `inkloom-api` 三个健康容器。
 - workbench 容器已移除，但 `ghcr.io/guol9180/workbench:v1.5.0` 镜像与 `workbench_workbench-docs` 数据卷保留，等待后续重新部署。
 - 1Panel 已完整卸载，其旧数据与迁移备份已删除。
 - 生产主机已清除旧 1Panel 安装包、`.zai`、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh 和不再使用的主机 Node/npm 环境；服务器只负责拉取和运行镜像。
@@ -44,6 +44,18 @@ pnpm build
 
 pnpm audit --prod
 结果：1 high + 1 low；high 为 Excalidraw 的 Sass 构建链 picomatch，生产 Web bundle 未包含该链
+
+GitHub Actions CI run 44487148562
+结果：最新提交 typecheck、32 项测试、生产构建和 10 项 Playwright 全部通过
+
+GitHub Actions image run 44487180919
+结果：外部构建并推送 `inkloom-api` 与 `inkloom-web` 的完整 SHA 镜像
+
+GitHub Actions migration run 44488275293
+结果：备份 SQLite 后迁移到 platform-edge + inkloom-web + inkloom-api，公网验证通过
+
+pnpm verify:production
+结果：Web 200、API 200、CORS 204、securityHeaders true
 ```
 
 验证日期：2026-11-19。T4 桌面 WIP 已提交，但本机文件夹完整验收仍未完成，T4 保持 in-progress；该提交不进入 Web 发版镜像。最新截图共 27 张，报告位于 `artifacts/ui-review/REPORT.md`。
@@ -51,10 +63,10 @@ pnpm audit --prod
 ## 生产部署
 
 - DNS：`inkloom.imhgl.com` 与 `api.inkloom.imhgl.com` 均已指向生产服务器。
-- 生产目录：`/srv/inkloom`，由专用 `inkloom-deploy` 用户拥有。
-- 运行容器：`inkloom-edge` 与 `inkloom-api`，共享 `inkloom-edge` 网络。
+- 生产目录：共享入口 `/srv/platform/edge`，Inkloom 应用 `/srv/apps/inkloom`；旧栈保留在 `/srv/inkloom` 供回滚。
+- 运行容器：`platform-edge`、`inkloom-web` 与 `inkloom-api`，共享 `platform-edge` 网络。
 - 数据卷：`inkloom-data`、`inkloom-caddy-data`、`inkloom-caddy-config`。
-- 发布方式：公开仓库手动运行 `Build and publish images`，随后在私有 `guol9180/imhgl-ops` 控制面按完整 SHA 部署；服务器只执行镜像 `pull + up`，不运行应用构建。
+- 发布方式：公开仓库手动运行 `Build and publish images`，随后在私有 `guol9180/imhgl-ops` 控制面按完整 SHA 部署 `inkloom` 或独立的 `platform`；服务器只执行镜像 `pull + up`，不运行应用构建。
 - 安全：公开仓库只保留 GHCR 写入所需的 `GITHUB_TOKEN`，不再保存 SSH host、部署密钥、服务器路径或部署身份。部署凭据集中在私有控制面的 `production` Environment Secrets，Actions 固定到提交 SHA，SSH host key 固定。
 
 ## 已知边界

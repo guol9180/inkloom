@@ -398,9 +398,15 @@
   - `https://inkloom.imhgl.com`、`https://api.inkloom.imhgl.com/api/health`、安全响应头和容器健康检查全部通过。
   - 新代码使用公开仓库完整 commit SHA，不在服务器构建。
 - 边界：不恢复 Workbench，不改业务数据模型，不删除 `workbench_workbench-docs`，不在服务器运行包管理或容器构建。
-- 状态：in-progress
+- 状态：done
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 拆分共享边缘、静态 Web 和 API，备份后以短维护窗口迁移并发布最新 main
+  - 2026-11-19 执行 公开镜像改为 `inkloom-api` 与无公网端口的 `inkloom-web`；全局 Caddy 改由私有控制面独立发布，网络切换为 `platform-edge`
+  - 2026-11-19 执行 修复格式化快捷键 E2E 的键盘选区竞态；修复 `inkloom-web` 只读根文件系统下 Caddy 无法写临时状态的问题
+  - 2026-11-19 验证 最新提交自动 CI run `44487148562` 成功；外部镜像构建 run `44487180919` 成功；迁移 run `44488275293` 成功，临时 Caddy 配置语法校验通过
+  - 2026-11-19 验证 迁移前 SQLite 归档已通过 gzip 与 tar 校验，包含 `inkloom.sqlite`、WAL 和 SHM；三个容器均 healthy、无 OOM，公网 Web 200、API 200
+  - 2026-11-19 验证 `pnpm verify:production` 返回 Web 200、API 200、CORS 204、securityHeaders true；非桌面 typecheck、32 项测试、Web/API 构建和 10 项 Playwright 通过
+  - 2026-11-19 交付 生产运行 SHA 为 `68578214d526c132c0b8ee9af4d744b2004ea45d`；三容器架构、迁移备份、回滚旧栈材料和部署文档已就绪，剩余差距：无
 
 ## 状态枚举
 
@@ -423,7 +429,7 @@
 | 里程碑 | 内容 | 状态 |
 | --- | --- | --- |
 | M0 | 原型与开源交接 | done |
-| M1 | Web 云工作区可上线 MVP（T15、T16、T18–T22） | in-progress |
+| M1 | Web 云工作区可上线 MVP（T15、T16、T18–T22） | done |
 | M1D | 桌面本地 MVP（T4–T6，等待 Web 上线后确认） | planned |
 | M2 | 离线队列与双向同步 | planned |
 | M3 | 实时协作 | planned |
