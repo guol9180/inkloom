@@ -893,8 +893,18 @@ function WorkspaceSurface({
       {canvasOpen && (
         <CanvasEditor
           scene={activeNote.canvas}
+          title={activeNote.canvas?.title ?? "自由画布"}
           onCancel={() => setCanvasOpen(false)}
-          onSave={saveCanvas}
+          onSave={async (result) => {
+            const parsed = JSON.parse(result.sceneJson) as {
+              elements?: readonly Record<string, unknown>[];
+            };
+            saveCanvas({
+              title: activeNote.canvas?.title ?? "自由画布",
+              elements: parsed.elements ?? []
+            });
+            setCanvasOpen(false);
+          }}
         />
       )}
 

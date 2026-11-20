@@ -1,91 +1,27 @@
 import {
   Suspense,
   lazy,
+  useEffect,
   useMemo,
-  useRef
+  useRef,
+  useState
 } from "react";
-import "@excalidraw/excalidraw/index.css";
-import type { CanvasScene } from "./markdown";
+import {
+  canvasEditorData,
+  exportCanvasAssets,
+  loadExcalidrawModule,
+  serializeCanvasEditorData,
+  type CanvasAssetExport,
+  type CanvasEditorData
+} from "./canvas-assets";
 
 const LazyExcalidraw = lazy(async () => {
-  const module = await import("@excalidraw/excalidraw");
+  const [module] = await Promise.all([
+    loadExcalidrawModule(),
+    import("@excalidraw/excalidraw/index.css")
+  ]);
   return { default: module.Excalidraw };
 });
-
-function normalizeExcalidrawElements(
-  elements: readonly Record<string, unknown>[]
-): readonly Record<string, unknown>[] {
-  const now = Date.now();
-  return elements.map((element, index) => {
-    const type = String(element.type ?? "rectangle");
-    const width = Math.max(1, Number(element.width ?? 120));
-    const height = Math.max(1, Number(element.height ?? 80));
-    const common = {
-      id: String(element.id ?? `element-${index}`),
-      type,
-      x: Number(element.x ?? 0),
-      y: Number(element.y ?? 0),
-      strokeColor: String(element.strokeColor ?? "#172f38"),
-      backgroundColor: String(element.backgroundColor ?? "transparent"),
-      fillStyle: "solid",
-      strokeWidth: Number(element.strokeWidth ?? 2),
-      strokeStyle: "solid",
-      roundness: type === "rectangle" ? { type: 3 } : null,
-      roughness: Number(element.roughness ?? 1),
-      opacity: 100,
-      width,
-      height,
-      angle: 0,
-      seed: 1000 + index,
-      version: 1,
-      versionNonce: 2000 + index,
-      index: null,
-      isDeleted: false,
-      groupIds: [],
-      frameId: null,
-      boundElements: null,
-      updated: now,
-      link: null,
-      locked: false
-    };
-
-    if (type === "arrow" || type === "line") {
-      return {
-        ...common,
-        type,
-        points: [
-          [0, 0],
-          [width, height]
-        ],
-        lastCommittedPoint: null,
-        startBinding: null,
-        endBinding: null,
-        startArrowhead: null,
-        endArrowhead: type === "arrow" ? "arrow" : null,
-        elbowed: false
-      };
-    }
-
-    if (type === "text") {
-      const text = String(element.text ?? "文字");
-      return {
-        ...common,
-        type: "text",
-        text,
-        originalText: text,
-        fontSize: 20,
-        fontFamily: 1,
-        textAlign: "left",
-        verticalAlign: "top",
-        containerId: null,
-        autoResize: true,
-        lineHeight: 1.25
-      };
-    }
-
-    return common;
-  });
-}
 
 function CheckIcon() {
   return (
@@ -107,42 +43,84 @@ function CheckIcon() {
 
 export function CanvasEditor({
   scene,
+  title,
+  notice,
   onCancel,
-  onSave
+  onSave,
+  onSnapshot
 }: {
-  scene?: CanvasScene;
+  scene?: CanvasEditorData;
+  title: string;
+  notice?: string;
   onCancel: () => void;
-  onSave: (elements: readonly Record<string, unknown>[]) => void;
+  onSave: (result: CanvasAssetExport) => Promise<void>;
+  onSnapshot?: (sceneJson: string) => void;
 }) {
-  const sceneRef = useRef<readonly Record<string, unknown>[]>(
-    normalizeExcalidrawElements(scene?.elements ?? [])
-  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const dataRef = useRef<CanvasEditorData>(scene ?? { elements: [] });
+  const onSnapshotRef = useRef(onSnapshot);
+  onSnapshotRef.current = onSnapshot;
   const initialData = useMemo(
-    () => ({
-      elements: sceneRef.current as never,
-      appState: {
-        viewBackgroundColor: "#f8faf9",
-        currentItemStrokeColor: "#172f38",
-        currentItemBackgroundColor: "#e9f0ee"
-      }
-    }),
-    []
+    () => canvasEditorData(scene) as never,
+    [scene]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void serializeCanvasEditorData(dataRef.current)
+        .then((sceneJson) => {
+          if (!cancelled) onSnapshotRef.current?.(sceneJson);
+        })
+        .catch(() => undefined);
+    }, 2_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSave(await exportCanvasAssets(dataRef.current));
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "画布保存失败，请重试。"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="canvas-modal" role="dialog" aria-modal="true" aria-label="Excalidraw 画布">
       <div className="canvas-modal-head">
         <div>
           <span className="section-label">EXCALIDRAW 场景</span>
-          <strong>{scene?.title ?? "自由画布"}</strong>
+          <strong>{title}</strong>
         </div>
         <div className="canvas-modal-actions">
-          <span className="canvas-save-note">场景文件与 Markdown 分开保存</span>
-          <button className="top-action secondary-action" type="button" onClick={onCancel}>
-            取消
+          <span className="canvas-save-note">
+            {saveError || notice || "每 2 秒保存临时快照"}
+          </span>
+          <button
+            className="top-action secondary-action"
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+          >
+            稍后继续
           </button>
-          <button className="top-action" type="button" onClick={() => onSave(sceneRef.current)}>
-            <CheckIcon /> 保存画布
+          <button
+            className="top-action"
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+          >
+            <CheckIcon /> {saving ? "正在保存…" : "保存并关闭"}
           </button>
         </div>
       </div>
@@ -150,8 +128,15 @@ export function CanvasEditor({
         <Suspense fallback={<div className="canvas-loading">正在加载画布引擎…</div>}>
           <LazyExcalidraw
             initialData={initialData}
-            onChange={(elements: readonly Record<string, unknown>[]) => {
-              sceneRef.current = [...elements];
+            onChange={(elements, appState, files) => {
+              dataRef.current = {
+                elements: elements as unknown as readonly Record<
+                  string,
+                  unknown
+                >[],
+                appState: appState as unknown as Record<string, unknown>,
+                files: files as unknown as Record<string, unknown>
+              };
             }}
           />
         </Suspense>

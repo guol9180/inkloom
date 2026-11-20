@@ -5,7 +5,7 @@
 - 当前生产：M1 Web 云工作区已上线，运行 release `6857821`。
 - 当前开发目标：M1.1 Web 产品级编辑器与知识流。
 - 当前实现模式：只开发 Web；保留桌面、移动、HarmonyOS 和同步的领域/adapter 接入口，不实现对应 host。
-- 当前任务：T35 Excalidraw 画布资产块；T25–T34 已完成。
+- 当前任务：T36 随记工作流；T25–T35 已完成。
 - 桌面端 T4 保持 `in-progress` 但暂停；M1D、M2、M3、M4 未获确认不得开始。
 
 ## 任务清单
@@ -617,9 +617,15 @@
   - 2 秒临时快照、关闭保存、刷新恢复和 revision 冲突流程通过。
   - 资产缺失不清空引用，允许重新上传或删除。
 - 边界：不实现多人同时绘制。
-- 状态：planned
+- 状态：completed
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 建立画布任务卡，依赖 T32/T33。
+  - 2026-11-20 执行 开始 T35：盘点 `extensions.canvas`、资产 API、文档 revision 与现有 Excalidraw 占位实现，确定 SVG 预览、scene 资产和可移植注释块的迁移路径。
+  - 2026-11-20 执行 新增独立 `inkloom_canvas` 原子节点和 `inkloom:canvas` 便携 Markdown 块；正文保存标准 SVG 图片引用、scene/preview 内容寻址路径，不把 Excalidraw elements JSON 写入正文。
+  - 2026-11-20 执行 接入 `.excalidraw` 场景与 SVG 预览双资产上传，首屏仅渲染 SVG；Excalidraw 引擎和样式仅在编辑/迁移时动态加载。实现每 2 秒本地临时快照、取消后恢复、“保存并关闭”、缺失资产提示与重新编辑入口。
+  - 2026-11-20 执行 现有 `extensions.canvas` 自动导出 scene/SVG、上传资产并插入便携块；迁移失败不删除原扩展数据。资产响应支持 Web/API 子域分离的 CORS/CORP，并按图片用途区分 SVG inline 预览与直接下载；下载读取使用独立缓存键，避免复用无 CORS 的图片缓存。
+  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 62 项通过；`pnpm build` 通过；Playwright 25 项全部通过，覆盖真实绘制、双资产上传、标准 Markdown 往返、2 秒快照、保存/刷新、旧扩展迁移保留、普通图片附件导出、自动保存冲突和六档视口。构建仍有既有大 chunk 告警，Excalidraw 保持按需 chunk。
+  - 2026-11-20 交付 产出 Canvas 便携块协议、scene/SVG 导出助手、Excalidraw 编辑器动态加载、画布网络与卡片、旧画布迁移、快照恢复和端到端测试；剩余差距：无。
 
 ### T36: 随记工作流（P0）
 

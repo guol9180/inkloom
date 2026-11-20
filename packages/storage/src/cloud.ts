@@ -387,7 +387,7 @@ export class CloudClient {
     const response = await this.fetch(
       `${this.baseUrl}${this.workspaceAssetPath(
         workspaceId
-      )}/${encodeURIComponent(hash)}`,
+      )}/${encodeURIComponent(hash)}?download=1`,
       { credentials: "include" }
     );
     if (!response.ok || !response.arrayBuffer) {

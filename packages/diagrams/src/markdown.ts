@@ -1,10 +1,8 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import type { CanvasScene } from "./canvas-assets";
 
-export type CanvasScene = {
-  title: string;
-  elements: readonly Record<string, unknown>[];
-};
+export type { CanvasScene } from "./canvas-assets";
 
 function escapeHtml(value: string): string {
   return value

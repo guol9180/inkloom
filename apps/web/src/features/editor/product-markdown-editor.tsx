@@ -39,6 +39,7 @@ import {
   Redo2,
   RotateCcw,
   Rows3,
+  Shapes,
   Sigma,
   Strikethrough,
   Table2,
@@ -79,6 +80,15 @@ import {
 import { cloudClient } from "../../cloud-workspace";
 import type { CloudAsset } from "@inkloom/storage";
 import type { WorkspaceId } from "@inkloom/core";
+import type { CanvasBlockAttrs } from "@inkloom/editor";
+import {
+  CanvasEditor,
+  exportCanvasAssets,
+  parseCanvasSceneFile,
+  type CanvasAssetExport,
+  type CanvasEditorData,
+  type CanvasScene
+} from "@inkloom/diagrams";
 
 const RichMarkdownEditor = lazy(() =>
   import("../workspace/rich-markdown-editor").then((module) => ({
@@ -105,6 +115,13 @@ type ProductUploadTask = AssetUploadTask & {
   replaceBlockIndex?: number;
 };
 
+type CanvasEditorState = {
+  canvas: CanvasBlockAttrs;
+  scene?: CanvasEditorData;
+  loading: boolean;
+  notice?: string;
+};
+
 export type ProductMarkdownEditorHandle = {
   getMarkdown: () => string;
   focus: () => void;
@@ -113,14 +130,24 @@ export type ProductMarkdownEditorHandle = {
 export const ProductMarkdownEditor = forwardRef<
   ProductMarkdownEditorHandle,
   {
-  value: string;
-  title: string;
+    value: string;
+    title: string;
+    documentId: string;
     workspaceId: string;
-  onChange: (value: string) => void;
-  onFocusSearch: () => void;
+    legacyCanvas?: CanvasScene;
+    onChange: (value: string) => void;
+    onFocusSearch: () => void;
   }
 >(function ProductMarkdownEditor(
-  { value, title, workspaceId, onChange, onFocusSearch },
+  {
+    value,
+    title,
+    documentId,
+    workspaceId,
+    legacyCanvas,
+    onChange,
+    onFocusSearch
+  },
   ref
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -155,9 +182,12 @@ export const ProductMarkdownEditor = forwardRef<
   const [uploads, setUploads] = useState<ProductUploadTask[]>([]);
   const [imagePreview, setImagePreview] = useState<string>();
   const [replaceImageIndex, setReplaceImageIndex] = useState<number>();
+  const [canvasEditor, setCanvasEditor] = useState<CanvasEditorState>();
+  const [legacyCanvasError, setLegacyCanvasError] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const uploadControllersRef = useRef(new Map<string, AbortController>());
+  const legacyCanvasMigrationRef = useRef("");
 
   useImperativeHandle(
     ref,
@@ -183,7 +213,7 @@ export const ProductMarkdownEditor = forwardRef<
       const rect = blockElement.getBoundingClientRect();
       const firstLine =
         blockElement.querySelector<HTMLElement>(
-          "h1, h2, h3, h4, h5, h6, p, li, summary, th, td, pre, .cm-content, .inkloom-mermaid-title"
+          "h1, h2, h3, h4, h5, h6, p, li, summary, th, td, pre, .cm-content, .inkloom-mermaid-title, .inkloom-canvas-title"
         ) ?? blockElement;
       const lineRect = firstLine.getBoundingClientRect();
       const computed = window.getComputedStyle(firstLine);
@@ -242,6 +272,56 @@ export const ProductMarkdownEditor = forwardRef<
       window.removeEventListener("resize", sync);
     };
   }, [syncHandles]);
+
+  useEffect(() => {
+    if (!legacyCanvas || value.includes("<!-- inkloom:canvas")) return;
+    const migrationKey = `${workspaceId}:${documentId}:${legacyCanvas.title}`;
+    if (legacyCanvasMigrationRef.current === migrationKey) return;
+    legacyCanvasMigrationRef.current = migrationKey;
+    let cancelled = false;
+    setLegacyCanvasError("");
+
+    void (async () => {
+      const canvas: CanvasBlockAttrs = {
+        id: `legacy-${documentId}`,
+        title: legacyCanvas.title.trim() || "自由画布",
+        sceneHash: "",
+        previewHash: ""
+      };
+      const result = await exportCanvasAssets(legacyCanvas);
+      const saved = await uploadCanvasAssets(canvas, result);
+      if (cancelled) return;
+
+      const startedAt = Date.now();
+      const insertWhenReady = () => {
+        if (cancelled) return;
+        if (editorRef.current?.insertCanvas(saved)) {
+          window.requestAnimationFrame(syncHandles);
+          return;
+        }
+        if (Date.now() - startedAt > 10_000) {
+          setLegacyCanvasError(
+            "旧画布自动迁移未完成，原扩展数据已保留，可稍后重试。"
+          );
+          return;
+        }
+        window.setTimeout(insertWhenReady, 120);
+      };
+      insertWhenReady();
+    })().catch((error: unknown) => {
+      if (!cancelled) {
+        setLegacyCanvasError(
+          error instanceof Error
+            ? `旧画布迁移失败：${error.message}`
+            : "旧画布迁移失败，原扩展数据已保留。"
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, legacyCanvas, syncHandles, value, workspaceId]);
 
   useEffect(() => {
     function syncSelection() {
@@ -311,6 +391,90 @@ export const ProductMarkdownEditor = forwardRef<
     return nearest.index;
   }
 
+  async function openCanvasEditor(canvas: CanvasBlockAttrs) {
+    const snapshotKey = canvasDraftKey(workspaceId, documentId, canvas.id);
+    setCanvasEditor({
+      canvas,
+      loading: true,
+      notice: "正在加载画布场景…"
+    });
+    let scene: CanvasEditorData | undefined;
+    let notice = "每 2 秒保存临时快照";
+    const snapshot = localStorage.getItem(snapshotKey);
+    if (snapshot) {
+      try {
+        scene = parseCanvasSceneFile(snapshot);
+        notice = "已恢复本机临时快照，保存后同步到文档";
+      } catch {
+        localStorage.removeItem(snapshotKey);
+      }
+    }
+    if (!scene && canvas.sceneHash) {
+      try {
+        const bytes = await cloudClient.downloadAsset(
+          workspaceId as WorkspaceId,
+          canvas.sceneHash
+        );
+        scene = parseCanvasSceneFile(new TextDecoder().decode(bytes));
+      } catch {
+        notice = "场景资产缺失；可重新绘制并保存，文档引用不会自动清空";
+      }
+    }
+    setCanvasEditor({
+      canvas,
+      scene,
+      loading: false,
+      notice
+    });
+  }
+
+  async function uploadCanvasAssets(
+    canvas: CanvasBlockAttrs,
+    result: CanvasAssetExport
+  ): Promise<CanvasBlockAttrs> {
+    const safeName =
+      canvas.title.replace(/[\\/:*?"<>|\r\n]/g, "-").trim() || "画布";
+    const upload = (file: File, kind: "excalidraw" | "svg") =>
+      uploadAssetWithProgress({
+        workspaceId,
+        file,
+        kind,
+        signal: new AbortController().signal,
+        onProgress: () => undefined
+      });
+    const [sceneUpload, previewUpload] = await Promise.all([
+      upload(
+        new File([result.sceneJson], `${safeName}-${canvas.id}.excalidraw`, {
+          type: "application/vnd.excalidraw+json"
+        }),
+        "excalidraw"
+      ),
+      upload(
+        new File([result.svg], `${safeName}-${canvas.id}.svg`, {
+          type: "image/svg+xml"
+        }),
+        "svg"
+      )
+    ]);
+    return {
+      ...canvas,
+      sceneHash: sceneUpload.asset.hash,
+      previewHash: previewUpload.asset.hash
+    };
+  }
+
+  async function saveCanvasAssets(
+    canvas: CanvasBlockAttrs,
+    result: CanvasAssetExport
+  ) {
+    const saved = await uploadCanvasAssets(canvas, result);
+    const updated = editorRef.current?.updateCanvas(saved);
+    if (!updated) editorRef.current?.insertCanvas(saved);
+    localStorage.removeItem(canvasDraftKey(workspaceId, documentId, canvas.id));
+    setCanvasEditor(undefined);
+    window.requestAnimationFrame(syncHandles);
+  }
+
   function executeCommand(command: EditorCommandId) {
     if (command === "image") {
       setReplaceImageIndex(undefined);
@@ -324,6 +488,15 @@ export const ProductMarkdownEditor = forwardRef<
     if (command === "mermaid") {
       editorRef.current?.insertBlock("mermaid");
       window.requestAnimationFrame(syncHandles);
+      return;
+    }
+    if (command === "canvas") {
+      void openCanvasEditor({
+        id: newCanvasId(),
+        title: "自由画布",
+        sceneHash: "",
+        previewHash: ""
+      });
       return;
     }
     if (command === "link") {
@@ -353,7 +526,9 @@ export const ProductMarkdownEditor = forwardRef<
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (
-      (event.target as Element | null)?.closest(".inkloom-mermaid-view")
+      (event.target as Element | null)?.closest(
+        ".inkloom-mermaid-view, .inkloom-canvas-view"
+      )
     ) {
       return;
     }
@@ -618,6 +793,14 @@ export const ProductMarkdownEditor = forwardRef<
         }
       }}
     >
+      {legacyCanvasError && (
+        <div
+          className="mx-[clamp(1.25rem,5vw,4.5rem)] mt-4 rounded-xl border border-sun-200 bg-sun-50 px-3 py-2 text-xs text-sun-700"
+          role="status"
+        >
+          {legacyCanvasError}
+        </div>
+      )}
       <div
         className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
         role="toolbar"
@@ -952,6 +1135,7 @@ export const ProductMarkdownEditor = forwardRef<
             ref={editorRef}
             value={value}
             title={title}
+            workspaceId={workspaceId}
             mermaidSnippet={"flowchart LR\n  A[开始] --> B[完成]"}
             canvasSnippet={""}
             onChange={(next) => {
@@ -964,10 +1148,44 @@ export const ProductMarkdownEditor = forwardRef<
             }}
             onTableHeaderChange={setTableHeader}
             onRequestCanvas={() => undefined}
+            onOpenCanvas={(canvas) => void openCanvasEditor(canvas)}
             className="min-h-[calc(100dvh-7rem)]"
           />
         </Suspense>
       </div>
+
+      {canvasEditor && !canvasEditor.loading && (
+        <CanvasEditor
+          key={canvasEditor.canvas.id}
+          scene={canvasEditor.scene}
+          title={canvasEditor.canvas.title}
+          notice={canvasEditor.notice}
+          onCancel={() => setCanvasEditor(undefined)}
+          onSave={(result) => saveCanvasAssets(canvasEditor.canvas, result)}
+          onSnapshot={(sceneJson) => {
+            try {
+              localStorage.setItem(
+                canvasDraftKey(
+                  workspaceId,
+                  documentId,
+                  canvasEditor.canvas.id
+                ),
+                sceneJson
+              );
+            } catch {
+              // The explicit save path remains available when storage is full.
+            }
+          }}
+        />
+      )}
+      {canvasEditor?.loading && (
+        <div
+          className="canvas-loading fixed inset-0 z-[120] grid place-items-center bg-canvas text-sm text-ink-500"
+          role="status"
+        >
+          正在加载画布场景…
+        </div>
+      )}
 
       <input
         ref={imageInputRef}
@@ -1309,6 +1527,8 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
       return <Paperclip size={15} />;
     case "mermaid":
       return <Network size={15} />;
+    case "canvas":
+      return <Shapes size={15} />;
     case "quote":
       return <Quote size={15} />;
     case "divider":
@@ -1431,6 +1651,7 @@ function blockKindFromElement(element: HTMLElement): MarkdownBlockType {
   if (element.matches(".milkdown-image-block")) return "image";
   if (element.matches(".inkloom-file-block")) return "attachment";
   if (element.matches(".inkloom-mermaid-view")) return "mermaid";
+  if (element.matches(".inkloom-canvas-view")) return "canvas";
   if (element.matches(".milkdown-table-block, table")) return "table";
   if (element.matches(".milkdown-code-block, pre")) {
     return element.closest<HTMLElement>("[data-language='latex']")
@@ -1444,4 +1665,18 @@ function blockKindFromElement(element: HTMLElement): MarkdownBlockType {
   const list = element.querySelector<HTMLElement>("ul, ol");
   if (list) return list.matches("ol") ? "ordered-list" : "bullet-list";
   return "paragraph";
+}
+
+function newCanvasId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? `canvas-${crypto.randomUUID()}`
+    : `canvas-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function canvasDraftKey(
+  workspaceId: string,
+  documentId: string,
+  canvasId: string
+) {
+  return `inkloom.canvas-draft:${workspaceId}:${documentId}:${canvasId}`;
 }

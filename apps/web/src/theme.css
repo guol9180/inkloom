@@ -1439,6 +1439,146 @@
   }
 }
 
+.inkloom-canvas-view {
+  margin: 1.35rem 0;
+}
+
+.inkloom-canvas-card {
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.95rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(32 48 40 / 0.025);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.inkloom-canvas-view[data-selected="true"] .inkloom-canvas-card {
+  border-color: color-mix(in oklab, var(--color-brand-500) 48%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-100) 68%, transparent);
+}
+
+.inkloom-canvas-toolbar {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--color-line-soft);
+  background: color-mix(in oklab, var(--color-paper-warm) 45%, white);
+  padding: 0.4rem 0.55rem 0.4rem 0.7rem;
+}
+
+.inkloom-canvas-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.48rem;
+  color: var(--color-ink-600);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.inkloom-canvas-title > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inkloom-canvas-icon {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.45rem;
+  background: #edf2ee;
+  color: #536a5e;
+}
+
+.inkloom-canvas-edit {
+  display: inline-flex;
+  min-height: 1.8rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.34rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.55rem;
+  background: white;
+  padding: 0.3rem 0.58rem;
+  color: var(--color-ink-600);
+  font-size: 0.64rem;
+  font-weight: 600;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.inkloom-canvas-edit:hover,
+.inkloom-canvas-edit:focus-visible {
+  border-color: var(--color-line-strong);
+  background: var(--color-brand-50);
+  color: var(--color-brand-800);
+  outline: none;
+}
+
+.inkloom-canvas-preview {
+  display: grid;
+  min-height: 15rem;
+  place-items: center;
+  background:
+    radial-gradient(circle at 1px 1px, #e8ece7 0.7px, transparent 0) 0 0 / 14px 14px,
+    #fff;
+  padding: clamp(0.8rem, 2vw, 1.35rem);
+}
+
+.inkloom-canvas-preview img {
+  max-width: 100%;
+  max-height: 34rem;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.inkloom-canvas-preview[data-state="missing"] img {
+  display: none;
+}
+
+.inkloom-canvas-preview[data-state="loading"] img {
+  opacity: 0;
+}
+
+.inkloom-canvas-status {
+  display: grid;
+  min-height: 10rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-400);
+  font-size: 0.68rem;
+}
+
+.inkloom-canvas-preview[data-state="ready"] .inkloom-canvas-status {
+  display: none;
+}
+
+.inkloom-canvas-missing {
+  width: 100%;
+  border-radius: 0.75rem;
+  color: var(--color-ink-500);
+  transition: background 140ms ease;
+}
+
+.inkloom-canvas-missing:hover,
+.inkloom-canvas-missing:focus-visible {
+  background: var(--color-paper-warm);
+  color: var(--color-brand-800);
+  outline: none;
+}
+
 .canvas-modal {
   position: fixed;
   inset: 0;

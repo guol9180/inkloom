@@ -19,6 +19,7 @@ export type EditorCommandId =
   | "image"
   | "attachment"
   | "mermaid"
+  | "canvas"
   | "quote"
   | "divider"
   | "code-block"
@@ -57,6 +58,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   { id: "image", label: "图片", keywords: ["image", "photo", "图片"], group: "insert", slash: true },
   { id: "attachment", label: "附件", keywords: ["file", "attachment", "附件"], group: "insert", slash: true },
   { id: "mermaid", label: "Mermaid 图表", keywords: ["mermaid", "diagram", "图表", "流程图"], group: "insert", slash: true },
+  { id: "canvas", label: "Excalidraw 画布", keywords: ["excalidraw", "canvas", "画布", "绘图"], group: "insert", slash: true },
   { id: "quote", label: "引用", keywords: ["quote", "blockquote"], group: "block", slash: true },
   { id: "divider", label: "分隔线", keywords: ["divider", "hr"], group: "insert", slash: true },
   { id: "code-block", label: "代码块", keywords: ["code", "fence"], group: "insert", slash: true },
@@ -87,6 +89,7 @@ const TOOLBAR_ORDER: readonly EditorCommandId[] = [
   "image",
   "attachment",
   "mermaid",
+  "canvas",
   "quote",
   "divider",
   "code-block",

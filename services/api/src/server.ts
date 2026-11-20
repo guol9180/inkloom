@@ -344,15 +344,21 @@ async function route({
           "Cache-Control",
           "private, max-age=31536000, immutable"
         );
+        response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        const embeddedImage =
+          request.headers["sec-fetch-dest"] === "image";
         response.setHeader(
           "Content-Disposition",
           asset.mime.startsWith("image/") &&
-            asset.mime !== "image/svg+xml"
+            (asset.mime !== "image/svg+xml" || embeddedImage)
             ? "inline"
             : "attachment"
         );
-        if (asset.mime === "image/svg+xml") {
-          response.setHeader("Content-Security-Policy", "sandbox");
+        if (asset.mime === "image/svg+xml" && !embeddedImage) {
+          response.setHeader(
+            "Content-Security-Policy",
+            "script-src 'none'; object-src 'none'; base-uri 'none'"
+          );
         }
         if (method === "HEAD") {
           response.end();

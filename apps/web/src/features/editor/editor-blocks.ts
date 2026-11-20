@@ -25,6 +25,11 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $nodeSchema, $prose, $remark } from "@milkdown/kit/utils";
 import {
+  parseCanvasBlock,
+  serializeCanvasBlock,
+  type CanvasBlockAttrs
+} from "@inkloom/editor";
+import {
   CALLOUT_LABELS,
   type CalloutKind
 } from "./editor-block-meta";
@@ -40,7 +45,9 @@ type MarkdownTreeNode = {
   summary?: string;
   open?: boolean;
   url?: string;
+  alt?: string;
   fileAttrs?: FileBlockAttrs;
+  canvasAttrs?: CanvasBlockAttrs;
 };
 
 type MarkdownRoot = {
@@ -58,6 +65,7 @@ export type FileBlockAttrs = {
 
 const inkloomBlocksRemark = $remark("inkloomBlocksRemark", () => () => (tree) => {
   transformMermaid(tree as MarkdownRoot);
+  transformCanvas(tree as MarkdownRoot);
   transformToggles(tree as MarkdownRoot);
   transformFiles(tree as MarkdownRoot);
 });
@@ -92,6 +100,59 @@ const mermaidSchema = $nodeSchema("inkloom_mermaid", () => ({
     match: (node) => node.type.name === "inkloom_mermaid",
     runner: (state, node) => {
       state.addNode("code", undefined, node.textContent, { lang: "mermaid" });
+    }
+  }
+}));
+
+const canvasSchema = $nodeSchema("inkloom_canvas", () => ({
+  atom: true,
+  group: "block",
+  selectable: true,
+  draggable: true,
+  attrs: {
+    id: { default: "" },
+    title: { default: "自由画布" },
+    sceneHash: { default: "" },
+    previewHash: { default: "" }
+  },
+  parseDOM: [
+    {
+      tag: "div[data-inkloom-canvas]",
+      getAttrs: (dom) => {
+        if (!(dom instanceof HTMLElement)) return false;
+        return {
+          id: dom.dataset.id ?? "",
+          title: dom.dataset.title ?? "自由画布",
+          sceneHash: dom.dataset.sceneHash ?? "",
+          previewHash: dom.dataset.previewHash ?? ""
+        };
+      }
+    }
+  ],
+  toDOM: (node) => [
+    "div",
+    {
+      "data-inkloom-canvas": "true",
+      "data-id": node.attrs.id,
+      "data-title": node.attrs.title,
+      "data-scene-hash": node.attrs.sceneHash,
+      "data-preview-hash": node.attrs.previewHash
+    }
+  ],
+  parseMarkdown: {
+    match: (node) => node.type === "inkloom_canvas",
+    runner: (state, node, type) => {
+      state.addNode(type, node.canvasAttrs as Attrs);
+    }
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "inkloom_canvas",
+    runner: (state, node) => {
+      state.addNode(
+        "html",
+        undefined,
+        serializeCanvasBlock(node.attrs as CanvasBlockAttrs)
+      );
     }
   }
 }));
@@ -342,6 +403,7 @@ const tablePaste = $prose(
 export const PRODUCT_BLOCK_PLUGINS = [
   ...inkloomBlocksRemark,
   ...mermaidSchema,
+  ...canvasSchema,
   ...toggleSchema,
   ...fileSchema,
   toggleBehavior,
@@ -397,6 +459,16 @@ export function insertFile(ctx: Ctx, attrs: FileBlockAttrs) {
   replaceOrInsertTopLevelBlock(
     ctx,
     fileSchema.type(ctx).create({ ...attrs } as Attrs)
+  );
+}
+
+export function insertCanvasBlock(
+  ctx: Ctx,
+  attrs: CanvasBlockAttrs
+) {
+  replaceOrInsertTopLevelBlock(
+    ctx,
+    ctx.get(schemaCtx).nodes.inkloom_canvas.create(attrs)
   );
 }
 
@@ -737,6 +809,75 @@ function transformMermaid(root: MarkdownRoot) {
     delete child.value;
     delete child.lang;
   }
+}
+
+function transformCanvas(root: MarkdownRoot) {
+  const children = root.children;
+  if (!children?.length) return;
+  const next: MarkdownTreeNode[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    const node = children[index];
+    const direct = parseCanvasBlock(markdownNodeText(node));
+    if (direct) {
+      next.push({ type: "inkloom_canvas", canvasAttrs: direct });
+      continue;
+    }
+    if (
+      !/^<!--\s*inkloom:canvas\s*\n[\s\S]*-->\s*$/i.test(
+        markdownNodeText(node)
+      )
+    ) {
+      next.push(node);
+      continue;
+    }
+    const closing = findCanvasClosing(children, index + 1);
+    if (closing === -1) {
+      next.push(node);
+      continue;
+    }
+    const portable = [
+      markdownNodeText(node).trim(),
+      ...children
+        .slice(index + 1, closing)
+        .map((child) => canvasNodeMarkdown(child).trim())
+        .filter(Boolean),
+      markdownNodeText(children[closing]).trim()
+    ].join("\n\n");
+    const attrs = parseCanvasBlock(portable);
+    if (!attrs) {
+      next.push(node);
+      continue;
+    }
+    next.push({ type: "inkloom_canvas", canvasAttrs: attrs });
+    index = closing;
+  }
+  root.children = next;
+}
+
+function canvasNodeMarkdown(node: MarkdownTreeNode): string {
+  if (
+    (node.type === "image" || node.type === "image-block") &&
+    node.url
+  ) {
+    return `![${node.alt ?? ""}](${node.url})`;
+  }
+  if (node.children?.length) {
+    return node.children.map(canvasNodeMarkdown).join("");
+  }
+  return node.value ?? "";
+}
+
+function findCanvasClosing(children: MarkdownTreeNode[], start: number) {
+  for (let index = start; index < children.length; index += 1) {
+    if (
+      /^\s*<!--\s*\/inkloom:canvas\s*-->\s*$/i.test(
+        markdownNodeText(children[index])
+      )
+    ) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function transformFiles(root: MarkdownRoot) {

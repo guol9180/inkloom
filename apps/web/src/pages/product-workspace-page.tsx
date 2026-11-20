@@ -44,6 +44,7 @@ import type {
   CloudKnowledgeBase,
   CloudWorkspace
 } from "@inkloom/storage";
+import type { CanvasScene } from "@inkloom/diagrams";
 import { BrandLockup, BrandMark } from "../components/brand-mark";
 import { AppDialog } from "../components/ui/app-dialog";
 import { Button, IconButton } from "../components/ui/button";
@@ -1163,7 +1164,13 @@ function DocumentSurface({
           <ProductMarkdownEditor
             value={autosave.markdown}
             title={document.meta.title}
+            documentId={document.meta.id}
             workspaceId={document.meta.workspaceId}
+            legacyCanvas={
+              document.extensions?.canvas as unknown as
+                | CanvasScene
+                | undefined
+            }
             onChange={autosave.changeMarkdown}
             onFocusSearch={onFocusSearch}
           />

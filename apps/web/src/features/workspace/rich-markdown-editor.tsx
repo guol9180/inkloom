@@ -42,8 +42,11 @@ import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
 import { cn } from "../../lib/utils";
 import { mermaidNodeViewPlugin } from "../editor/mermaid-node-view";
+import { createCanvasNodeViewPlugin } from "../editor/canvas-node-view";
+import type { CanvasBlockAttrs } from "@inkloom/editor";
 import {
   insertCallout,
+  insertCanvasBlock,
   insertCodeBlock,
   insertDivider,
   insertFile,
@@ -69,6 +72,8 @@ export type RichMarkdownEditorHandle = {
   run: (action: RichToolbarAction) => void;
   setLink: (href: string) => void;
   insertBlock: (kind: "mermaid" | "canvas") => void;
+  insertCanvas: (canvas: CanvasBlockAttrs) => boolean;
+  updateCanvas: (canvas: CanvasBlockAttrs) => boolean;
   getMarkdown: () => string;
   isCurrentBlockEmpty: () => boolean;
   setCalloutKind: (blockIndex: number, kind: CalloutKind) => void;
@@ -123,24 +128,28 @@ export const RichMarkdownEditor = forwardRef<
   {
     value: string;
     title: string;
+    workspaceId?: string;
     mermaidSnippet: string;
     canvasSnippet: string;
     onChange: (value: string) => void;
     onBlockTypeChange: (type: MarkdownBlockType) => void;
     onTableHeaderChange?: (isHeader: boolean) => void;
     onRequestCanvas: () => void;
+    onOpenCanvas?: (canvas: CanvasBlockAttrs) => void;
     className?: string;
   }
 >(function RichMarkdownEditor(
   {
     value,
     title,
+    workspaceId = "",
     mermaidSnippet,
     canvasSnippet,
     onChange,
     onBlockTypeChange,
     onTableHeaderChange,
     onRequestCanvas,
+    onOpenCanvas,
     className
   },
   ref
@@ -155,6 +164,8 @@ export const RichMarkdownEditor = forwardRef<
   const onBlockTypeChangeRef = useRef(onBlockTypeChange);
   const onTableHeaderChangeRef = useRef(onTableHeaderChange);
   const onRequestCanvasRef = useRef(onRequestCanvas);
+  const onOpenCanvasRef = useRef(onOpenCanvas);
+  const workspaceIdRef = useRef(workspaceId);
   const mermaidSnippetRef = useRef(mermaidSnippet);
   const canvasSnippetRef = useRef(canvasSnippet);
   const [loading, setLoading] = useState(true);
@@ -163,6 +174,8 @@ export const RichMarkdownEditor = forwardRef<
   onBlockTypeChangeRef.current = onBlockTypeChange;
   onTableHeaderChangeRef.current = onTableHeaderChange;
   onRequestCanvasRef.current = onRequestCanvas;
+  onOpenCanvasRef.current = onOpenCanvas;
+  workspaceIdRef.current = workspaceId;
   mermaidSnippetRef.current = mermaidSnippet;
   canvasSnippetRef.current = canvasSnippet;
   titleRef.current = title;
@@ -277,6 +290,34 @@ export const RichMarkdownEditor = forwardRef<
           );
         });
         if (kind === "canvas") onRequestCanvasRef.current();
+      },
+      insertCanvas(canvas) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return false;
+        crepe.editor.action((ctx) => insertCanvasBlock(ctx, canvas));
+        return true;
+      },
+      updateCanvas(canvas) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return false;
+        let updated = false;
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          view.state.doc.descendants((node, position) => {
+            if (
+              node.type.name !== "inkloom_canvas" ||
+              String(node.attrs.id) !== canvas.id
+            ) {
+              return true;
+            }
+            updated = true;
+            view.dispatch(
+              view.state.tr.setNodeMarkup(position, undefined, canvas)
+            );
+            return false;
+          });
+        });
+        return updated;
       },
       getMarkdown() {
         return crepeRef.current
@@ -462,6 +503,12 @@ export const RichMarkdownEditor = forwardRef<
     });
     crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
     crepe.editor.use(mermaidNodeViewPlugin);
+    crepe.editor.use(
+      createCanvasNodeViewPlugin(
+        () => workspaceIdRef.current,
+        (canvas) => onOpenCanvasRef.current?.(canvas)
+      )
+    );
     crepeRef.current = crepe;
     crepe.on((listener) => {
       listener.updated((ctx) => {
@@ -558,6 +605,7 @@ function blockTypeFromSelection(selection: Selection): MarkdownBlockType {
     if (node.type.name === "table") return "table";
     if (node.type.name === "inkloom_toggle") return "toggle";
     if (node.type.name === "inkloom_mermaid") return "mermaid";
+    if (node.type.name === "inkloom_canvas") return "canvas";
     if (node.type.name === "blockquote") {
       return /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.test(
         node.firstChild?.textContent ?? ""

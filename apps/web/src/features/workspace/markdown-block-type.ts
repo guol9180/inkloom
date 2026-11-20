@@ -18,4 +18,5 @@ export type MarkdownBlockType =
   | "image"
   | "attachment"
   | "mermaid"
+  | "canvas"
   | "divider";

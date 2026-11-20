@@ -385,6 +385,201 @@ test("edits Mermaid source beside a live preview and restores it", async ({
   expect(overflow.content).toBeLessThanOrEqual(overflow.viewport);
 });
 
+test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.getByRole("button", { name: "Excalidraw 画布" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".excalidraw")).toBeVisible({
+    timeout: 20_000
+  });
+  await drawExcalidrawRectangle(page);
+
+  const markdownSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const markdown = String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    );
+    return (
+      markdown.includes("<!-- inkloom:canvas") &&
+      markdown.includes(".excalidraw") &&
+      markdown.includes(".svg")
+    );
+  });
+  await page.getByRole("button", { name: "保存并关闭" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Excalidraw 画布" })
+  ).toBeHidden();
+
+  const request = await markdownSave;
+  const markdown = String(
+    (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+  );
+  expect(markdown).toContain("<!-- inkloom:canvas");
+  expect(markdown).toMatch(/scene: assets\/[a-f0-9]{64}\.excalidraw/);
+  expect(markdown).toMatch(/!\[.*\]\(assets\/[a-f0-9]{64}\.svg\)/);
+  expect(markdown).not.toContain('"elements"');
+
+  const canvasCard = page.locator(".inkloom-canvas-view").last();
+  await expect(canvasCard.locator("img")).toBeVisible({ timeout: 15_000 });
+  await expect(canvasCard.locator("img")).toHaveAttribute(
+    "src",
+    /\/assets\/[a-f0-9]{64}$/
+  );
+
+  await canvasCard.getByRole("button", { name: "编辑画布" }).click();
+  await expect(dialog.locator(".excalidraw")).toBeVisible({
+    timeout: 20_000
+  });
+  await drawExcalidrawRectangle(page);
+  await page.waitForTimeout(2_300);
+  await dialog.getByRole("button", { name: "稍后继续" }).click();
+  await expect(dialog).toBeHidden();
+  await canvasCard.getByRole("button", { name: "编辑画布" }).click();
+  await expect(dialog.getByText(/已恢复本机临时快照/)).toBeVisible({
+    timeout: 20_000
+  });
+  const snapshotSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    ).includes("<!-- inkloom:canvas");
+  });
+  await dialog.getByRole("button", { name: "保存并关闭" }).click();
+  await snapshotSave;
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  const restored = page.locator(".inkloom-canvas-view").last();
+  await expect(restored).toBeVisible();
+  await expect(restored.locator("img")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".excalidraw")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.waitForTimeout(250);
+  const overflow = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth
+  }));
+  expect(overflow.content).toBeLessThanOrEqual(overflow.viewport);
+});
+
+test("migrates legacy canvas extensions without deleting the source data", async ({
+  page
+}) => {
+  const currentUrl = await openScratchNote(page);
+  const workspaceId = decodeURIComponent(
+    new URL(currentUrl).pathname.split("/")[2]
+  );
+  const created = await page.evaluate(
+    async ({ workspaceId }) => {
+      const response = await fetch(
+        `http://127.0.0.1:3001/api/workspaces/${encodeURIComponent(
+          workspaceId
+        )}/documents`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            path: "旧画布迁移.md",
+            title: "旧画布迁移",
+            markdown: "# 旧画布迁移\n",
+            extensions: {
+              canvas: {
+                title: "旧系统边界",
+                elements: [
+                  {
+                    id: "legacy-rectangle",
+                    type: "rectangle",
+                    x: 80,
+                    y: 80,
+                    width: 220,
+                    height: 120,
+                    strokeColor: "#26332d",
+                    backgroundColor: "#edf3ef"
+                  }
+                ]
+              }
+            }
+          })
+        }
+      );
+      if (!response.ok) throw new Error(await response.text());
+      return (await response.json()) as {
+        document: { meta: { id: string } };
+      };
+    },
+    { workspaceId }
+  );
+
+  const migratedSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const markdown = String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    );
+    return (
+      markdown.includes("<!-- inkloom:canvas") &&
+      markdown.includes("旧系统边界")
+    );
+  });
+  await page.goto(
+    `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(
+      created.document.meta.id
+    )}`
+  );
+  await expect(page.locator(".inkloom-canvas-view").last()).toBeVisible({
+    timeout: 30_000
+  });
+  await migratedSave;
+
+  const persisted = await page.evaluate(
+    async ({ workspaceId, documentId }) => {
+      const response = await fetch(
+        `http://127.0.0.1:3001/api/workspaces/${encodeURIComponent(
+          workspaceId
+        )}/documents/${encodeURIComponent(documentId)}`,
+        { credentials: "include" }
+      );
+      if (!response.ok) throw new Error(await response.text());
+      return (await response.json()) as {
+        document: {
+          markdown: string;
+          extensions?: { canvas?: { elements?: unknown[] } };
+        };
+      };
+    },
+    { workspaceId, documentId: created.document.meta.id }
+  );
+  expect(persisted.document.markdown).toContain("<!-- inkloom:canvas");
+  expect(persisted.document.extensions?.canvas?.elements).toHaveLength(1);
+});
+
 test("uploads images and attachments and exports a portable zip", async ({
   page
 }) => {
@@ -625,7 +820,7 @@ test("round-trips quote, task and code blocks", async ({ page }) => {
   );
 });
 
-async function openScratchNote(page: Page) {
+async function openScratchNote(page: Page): Promise<string> {
   const email = `editor-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2)}@inkloom.local`;
@@ -642,4 +837,23 @@ async function openScratchNote(page: Page) {
   await page.getByRole("dialog").getByLabel("文档标题").fill("编辑器验收");
   await page.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
+  return page.url();
+}
+
+async function drawExcalidrawRectangle(page: Page) {
+  const canvas = page.locator(".excalidraw__canvas.interactive").last();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(
+    box!.x + box!.width * 0.72,
+    box!.y + box!.height * 0.72
+  );
+  await page.keyboard.press("r");
+  const startX = box!.x + Math.max(120, box!.width * 0.32);
+  const startY = box!.y + Math.max(120, box!.height * 0.32);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 180, startY + 110, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
 }
