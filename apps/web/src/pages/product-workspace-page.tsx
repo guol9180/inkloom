@@ -25,6 +25,7 @@ import {
   Download,
   FileText,
   FolderPlus,
+  History,
   Import,
   LoaderCircle,
   LogOut,
@@ -52,6 +53,7 @@ import {
 } from "@inkloom/core";
 import type {
   CloudDocumentSummary,
+  CloudDocumentRevision,
   CloudKnowledgeBase,
   CloudSearchResult,
   CloudWorkspace
@@ -70,6 +72,7 @@ import {
 import { exportDocumentZip } from "../features/editor/document-export";
 import { useEditorOwnership } from "../features/editor/use-editor-ownership";
 import { DocumentContextPanel } from "../features/workspace/document-context-panel";
+import { RevisionHistoryDrawer } from "../features/workspace/revision-history-drawer";
 import {
   ProductMarkdownEditor
 } from "../features/editor/product-markdown-editor";
@@ -1513,6 +1516,7 @@ function DocumentSurface({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [documentActionPending, setDocumentActionPending] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const ownership = useEditorOwnership(
     userId
       ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
@@ -1552,6 +1556,32 @@ function DocumentSurface({
     } finally {
       setExporting(false);
     }
+  }
+
+  async function restoreHistoricalVersion(revision: CloudDocumentRevision) {
+    if (!(await autosave.flush(true))) {
+      throw new Error("当前修改尚未保存，已保留在本地草稿中。");
+    }
+    const adapter = cloudClient.workspace(
+      document.meta.workspaceId as WorkspaceId
+    );
+    const latest = await adapter.readDocument(document.meta.id);
+    const restored = await cloudClient.restoreRevision(
+      document.meta.workspaceId as WorkspaceId,
+      document.meta.id,
+      revision.revisionId,
+      latest.meta.revision
+    );
+    autosave.replaceDocument(restored);
+    await onSaved(restored);
+    queryClient.setQueryData(
+      ["document", document.meta.workspaceId, document.meta.id],
+      restored
+    );
+    await queryClient.invalidateQueries({
+      queryKey: ["revisions", document.meta.workspaceId, document.meta.id]
+    });
+    showToast("历史版本已恢复为新的当前版本");
   }
 
   async function saveTags(event: FormEvent<HTMLFormElement>) {
@@ -1739,6 +1769,13 @@ function DocumentSurface({
               >
                 <DropdownMenu.Item
                   className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  onSelect={() => setHistoryOpen(true)}
+                >
+                  <History size={14} />
+                  版本历史
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
                   onSelect={() => {
                     setTagDraft(autosave.tags.join(", "));
                     setTagDialogOpen(true);
@@ -1887,6 +1924,7 @@ function DocumentSurface({
         workspaceId={document.meta.workspaceId}
         markdown={autosave.markdown}
         onClose={() => setInfoOpen(false)}
+        onOpenHistory={() => setHistoryOpen(true)}
         onNavigate={(link) => {
           navigate(
             link.lifecycle === "knowledge" && link.knowledgeBaseId
@@ -1900,6 +1938,14 @@ function DocumentSurface({
                 )}/notes/${encodeURIComponent(link.documentId)}`
           );
         }}
+      />
+      <RevisionHistoryDrawer
+        open={historyOpen}
+        document={document}
+        workspaceId={document.meta.workspaceId}
+        currentMarkdown={autosave.markdown}
+        onClose={() => setHistoryOpen(false)}
+        onRestore={restoreHistoricalVersion}
       />
       <AppDialog
         open={tagDialogOpen}

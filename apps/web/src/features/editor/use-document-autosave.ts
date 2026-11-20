@@ -466,6 +466,28 @@ export function useDocumentAutosave({
     scheduleAutosave();
   }
 
+  const replaceDocument = useCallback(
+    (next: DocumentSnapshot) => {
+      clearTimers();
+      pendingRef.current = undefined;
+      revisionRef.current = next.meta.revision;
+      lastPersistedHashRef.current = String(next.meta.contentHash);
+      persistedTagsRef.current = next.meta.tags;
+      tagsRef.current = next.meta.tags;
+      markdownRef.current = next.markdown;
+      currentHashRef.current = String(next.meta.contentHash);
+      setMarkdownState(next.markdown);
+      setTagsState(next.meta.tags);
+      setStatus("saved");
+      setError("");
+      setLastSavedAt(next.meta.updatedAt);
+      setDraftRecovered(false);
+      setConflictCopy(undefined);
+      void draftStore.remove(scope).catch(() => undefined);
+    },
+    [clearTimers, scope]
+  );
+
   return {
     markdown,
     changeMarkdown,
@@ -477,6 +499,7 @@ export function useDocumentAutosave({
     draftRecovered,
     conflictCopy,
     flush,
+    replaceDocument,
     retry: () => flush(true)
   };
 }

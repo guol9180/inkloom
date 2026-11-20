@@ -29,7 +29,8 @@ export function DocumentContextPanel({
   workspaceId,
   markdown,
   onClose,
-  onNavigate
+  onNavigate,
+  onOpenHistory
 }: {
   open: boolean;
   document: DocumentSnapshot;
@@ -37,6 +38,7 @@ export function DocumentContextPanel({
   markdown: string;
   onClose: () => void;
   onNavigate: (link: CloudDocumentLink) => void;
+  onOpenHistory: () => void;
 }) {
   const context = useQuery({
     queryKey: [
@@ -99,7 +101,11 @@ export function DocumentContextPanel({
             文档上下文暂时无法加载，正文仍可正常阅读和编辑。
           </div>
         ) : (
-          <ContextContent context={context.data} onNavigate={onNavigate} />
+          <ContextContent
+            context={context.data}
+            onNavigate={onNavigate}
+            onOpenHistory={onOpenHistory}
+          />
         )}
       </div>
     </aside>
@@ -108,10 +114,12 @@ export function DocumentContextPanel({
 
 function ContextContent({
   context,
-  onNavigate
+  onNavigate,
+  onOpenHistory
 }: {
   context: CloudDocumentContext;
   onNavigate: (link: CloudDocumentLink) => void;
+  onOpenHistory: () => void;
 }) {
   return (
     <>
@@ -182,16 +190,18 @@ function ContextContent({
       >
         <div className="grid gap-1">
           {context.revisions.slice(0, 5).map((revision) => (
-            <div
+            <button
+              type="button"
               key={revision.revisionId}
-              className="flex items-center gap-2 rounded-lg px-2 py-2 text-xs text-ink-600"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-left text-xs text-ink-600 transition hover:bg-canvas hover:text-ink-900"
+              onClick={onOpenHistory}
             >
               <span className="size-1.5 rounded-full bg-brand-500" />
               <span className="flex-1">revision {revision.meta.revision}</span>
               <time className="text-[0.6rem] text-ink-400">
                 {formatDateTime(revision.recordedAt)}
               </time>
-            </div>
+            </button>
           ))}
           {context.revisions.length === 0 && (
             <EmptyLine>首次修改后会生成历史版本。</EmptyLine>

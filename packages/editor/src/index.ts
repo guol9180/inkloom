@@ -8,6 +8,7 @@ import { math } from "micromark-extension-math";
 
 export * from "./markdown-source";
 export * from "./canvas-block";
+export * from "./markdown-diff";
 
 export type EditorMode = "rich" | "source" | "split" | "read";
 export type MarkdownViewMode = Exclude<EditorMode, "rich">;

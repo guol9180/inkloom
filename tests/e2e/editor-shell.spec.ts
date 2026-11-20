@@ -528,6 +528,113 @@ test("keeps document content usable when context loading fails", async ({
   );
 });
 
+test("previews revision NodeViews, diffs blocks and restores safely", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("版本一内容");
+  const firstCheckpoint = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const body = request.postDataJSON() as {
+      checkpoint?: boolean;
+      markdown?: string;
+    };
+    return (
+      body.checkpoint === true &&
+      String(body.markdown ?? "").includes("版本一内容") &&
+      String(body.markdown ?? "").includes("```mermaid")
+    );
+  });
+  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+  await expect(
+    page.locator(".inkloom-mermaid-svg svg").last()
+  ).toBeVisible({ timeout: 15_000 });
+  await firstCheckpoint;
+
+  await editor.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  const secondCheckpoint = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const body = request.postDataJSON() as {
+      checkpoint?: boolean;
+      markdown?: string;
+    };
+    return (
+      body.checkpoint === true &&
+      String(body.markdown ?? "").includes("版本二内容")
+    );
+  });
+  await page.keyboard.type("版本二内容");
+  await secondCheckpoint;
+
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "版本历史" }).click();
+  const drawer = page.getByRole("complementary", { name: "版本历史" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText(/revision/).first()).toBeVisible();
+  await drawer
+    .getByRole("button", { name: /revision/ })
+    .last()
+    .click();
+  await expect(
+    drawer.locator(".inkloom-mermaid-view")
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(drawer.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "true"
+  );
+  await expect(drawer.getByLabel("Markdown 正文")).toContainText("版本一内容");
+  await expect(drawer.getByLabel("Markdown 正文")).not.toContainText(
+    "版本二内容"
+  );
+
+  await drawer.getByRole("button", { name: "块差异" }).click();
+  await expect(drawer.getByText("新增").first()).toBeVisible();
+  await expect(drawer.getByText("版本二内容")).toBeVisible();
+  await drawer.getByRole("button", { name: "内容预览" }).click();
+
+  await drawer.getByRole("button", { name: "恢复此版本" }).click();
+  const restoreDialog = page.getByRole("dialog", { name: "恢复历史版本" });
+  const restoreRequest = page.waitForResponse((response) => {
+    return (
+      response.request().method() === "POST" &&
+      /\/revisions\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.ok()
+    );
+  });
+  await restoreDialog.getByRole("button", { name: "确认恢复" }).click();
+  await restoreRequest;
+  await expect(restoreDialog).toBeHidden();
+  await expect(drawer).toBeHidden();
+  await expect(page.getByLabel("Markdown 正文")).toContainText("版本一内容");
+  await expect(page.getByLabel("Markdown 正文")).not.toContainText(
+    "版本二内容"
+  );
+
+  await page.reload();
+  await expect(page.getByLabel("Markdown 正文")).toContainText("版本一内容");
+  await expect(
+    page.locator(".inkloom-mermaid-view").last()
+  ).toBeVisible();
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {

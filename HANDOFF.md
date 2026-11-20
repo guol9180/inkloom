@@ -53,13 +53,12 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T41 now that T25–T40 are completed:
+Start with T42 now that T25–T41 are completed:
 
-- Add a read-only revision history drawer with block-level diffs.
-- Render historical Markdown through the same NodeViews, including diagrams,
-  canvas and attachment states.
-- Make restore save the current state first and append a new revision; preserve
-  missing asset references with explicit warnings.
+- Apply the near-white visual system, Geist typography, rounded controls,
+  skeleton loading and restrained motion consistently across all surfaces.
+- Verify 320, 375, 768, 1024, 1440 and 2560 widths plus 200% zoom, keyboard,
+  touch and reduced-motion behavior.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.
