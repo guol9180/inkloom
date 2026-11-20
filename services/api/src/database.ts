@@ -7,6 +7,7 @@ import {
   workspacePath,
   type ContentHash,
   type DocumentExtensions,
+  type DocumentLifecycle,
   type DocumentMeta,
   type DocumentSnapshot,
   type IsoTimestamp,
@@ -15,6 +16,7 @@ import {
   type WorkspaceNode
 } from "@inkloom/core";
 import { hashSessionToken } from "./auth";
+import { runMigrations } from "./migrations";
 
 export type ApiUser = {
   id: string;
@@ -55,6 +57,8 @@ type WorkspaceRow = {
 type DocumentRow = {
   id: string;
   workspace_id: string;
+  lifecycle: DocumentLifecycle;
+  knowledge_base_id: string | null;
   path: string;
   title: string;
   tags_json: string;
@@ -64,6 +68,8 @@ type DocumentRow = {
   content_hash: string;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  last_opened_at: string | null;
 };
 
 type RevisionRow = {
@@ -95,7 +101,7 @@ type MutableFolderNode = Extract<WorkspaceNode, { kind: "folder" }> & {
 };
 
 const DEFAULT_DOCUMENT_TITLE = "未命名文档";
-const DEFAULT_DOCUMENT_PATH = "个人/未命名文档.md";
+const DEFAULT_DOCUMENT_PATH = "未命名文档.md";
 const DEFAULT_DOCUMENT_MARKDOWN = "";
 
 export class DocumentDatabase {
@@ -113,67 +119,8 @@ export class DocumentDatabase {
     this.db.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA journal_mode = WAL;
-
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        display_name TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        password_salt TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS sessions (
-        token_hash TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        expires_at TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS workspaces (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS documents (
-        id TEXT PRIMARY KEY,
-        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-        path TEXT NOT NULL,
-        title TEXT NOT NULL,
-        tags_json TEXT NOT NULL,
-        markdown TEXT NOT NULL,
-        extensions_json TEXT,
-        revision INTEGER NOT NULL,
-        content_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT
-      );
-
-      CREATE UNIQUE INDEX IF NOT EXISTS documents_active_path
-        ON documents(workspace_id, path)
-        WHERE deleted_at IS NULL;
-
-      CREATE INDEX IF NOT EXISTS documents_workspace
-        ON documents(workspace_id, deleted_at);
-
-      CREATE TABLE IF NOT EXISTS document_revisions (
-        id TEXT PRIMARY KEY,
-        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-        revision INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        tags_json TEXT NOT NULL,
-        markdown TEXT NOT NULL,
-        extensions_json TEXT,
-        content_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        UNIQUE(document_id, revision)
-      );
     `);
+    runMigrations(this.db, this.now());
   }
 
   close(): void {
@@ -409,6 +356,7 @@ export class DocumentDatabase {
       meta: {
         id: this.createId(),
         workspaceId,
+        lifecycle: "scratch",
         path,
         title,
         tags: validateTags(input.tags ?? []),
@@ -423,9 +371,10 @@ export class DocumentDatabase {
     this.db
       .prepare(
         `INSERT INTO documents
-          (id, workspace_id, path, title, tags_json, markdown, extensions_json,
-           revision, content_hash, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+          (id, workspace_id, lifecycle, knowledge_base_id, path, title,
+           tags_json, markdown, extensions_json, revision, content_hash,
+           created_at, updated_at, archived_at, last_opened_at, deleted_at)
+         VALUES (?, ?, 'scratch', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
       )
       .run(
         snapshot.meta.id,
@@ -745,13 +694,17 @@ function documentFromRow(row: DocumentRow): DocumentSnapshot {
   const meta: DocumentMeta = {
     id: row.id,
     workspaceId: row.workspace_id as WorkspaceId,
+    lifecycle: row.lifecycle,
+    knowledgeBaseId: row.knowledge_base_id ?? undefined,
     path: workspacePath(row.path),
     title: row.title,
     tags: parseTags(row.tags_json),
     revision: row.revision,
     contentHash: row.content_hash as ContentHash,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    archivedAt: row.archived_at ?? undefined,
+    lastOpenedAt: row.last_opened_at ?? undefined
   };
   return {
     meta,
@@ -765,6 +718,8 @@ function revisionFromRow(row: RevisionRow): WorkspaceDocumentRevision {
     ...documentFromRow({
       id: row.document_id,
       workspace_id: row.workspace_id,
+      lifecycle: "scratch",
+      knowledge_base_id: null,
       path: "历史版本.md",
       title: row.title,
       tags_json: row.tags_json,
@@ -773,7 +728,9 @@ function revisionFromRow(row: RevisionRow): WorkspaceDocumentRevision {
       revision: row.revision,
       content_hash: row.content_hash,
       created_at: row.created_at,
-      updated_at: row.created_at
+      updated_at: row.created_at,
+      archived_at: null,
+      last_opened_at: null
     }),
     revisionId: row.id,
     recordedAt: row.created_at

@@ -2,7 +2,9 @@ import { InkLoomError } from "./errors";
 
 export type DocumentId = string;
 export type WorkspaceId = string;
+export type KnowledgeBaseId = string;
 export type Revision = number;
+export type DocumentLifecycle = "scratch" | "knowledge";
 
 export type ContentHash = string & {
   readonly __brand: "ContentHash";
@@ -17,6 +19,8 @@ export type IsoTimestamp = string;
 export type DocumentMeta = {
   id: DocumentId;
   workspaceId: WorkspaceId;
+  lifecycle: DocumentLifecycle;
+  knowledgeBaseId?: KnowledgeBaseId;
   path: WorkspacePath;
   title: string;
   tags: readonly string[];
@@ -24,6 +28,8 @@ export type DocumentMeta = {
   contentHash: ContentHash;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
+  archivedAt?: IsoTimestamp;
+  lastOpenedAt?: IsoTimestamp;
 };
 
 export type DocumentSnapshot = {

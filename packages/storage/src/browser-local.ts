@@ -125,6 +125,7 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
       meta: {
         id: this.createId(),
         workspaceId: input.workspaceId,
+        lifecycle: "scratch",
         path: input.path,
         title: input.title,
         tags: input.tags ?? [],
@@ -239,7 +240,13 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
       }
       return {
         version: 1,
-        documents: parsed.documents,
+        documents: parsed.documents.map((document) => ({
+          ...document,
+          meta: {
+            ...document.meta,
+            lifecycle: document.meta.lifecycle ?? "scratch"
+          }
+        })),
         activeDocumentId: parsed.activeDocumentId
       };
     } catch {

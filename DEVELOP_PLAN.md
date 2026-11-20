@@ -439,9 +439,13 @@
   - 平铺路径冲突时生成唯一文件名，绝不覆盖正文。
   - 迁移在事务中执行，重复运行幂等，并支持生产备份恢复演练。
 - 边界：不改 Web UI；不删除现有列和用户数据；不启动 M2。
-- 状态：planned
+- 状态：completed
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 建立增量迁移任务卡，依赖 T24。
+  - 2026-11-19 执行 开始 T25：建立版本化事务迁移、旧路径映射与迁移/恢复演练测试。
+  - 2026-11-20 执行 新增 `schema_migrations`、`knowledge_bases`、`assets`、`document_asset_refs`、`document_links` 与旧路径映射表；`documents` 增量加入 lifecycle、knowledgeBaseId、archivedAt 和 lastOpenedAt，活动文档优先压平并稳定避让同名路径，全部旧内容仅更新归属元数据。
+  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 34 项通过；`pnpm build` 通过，保留既有大 chunk 警告；迁移测试覆盖旧库迁移、幂等重开、备份恢复、失败事务回滚、正文/标签/revision/历史/扩展保留；Playwright 首轮 9/10 通过，唯一删除确认动效竞态单测重跑通过，其余 6 个分辨率与编辑器工作流均通过。
+  - 2026-11-20 交付 产出 `services/api/src/migrations.ts` 与迁移测试，更新核心文档生命周期契约、服务端行映射和浏览器旧草稿兼容；剩余差距：无。
 
 ### T26: 随记与知识库工作区 API（P0）
 

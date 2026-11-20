@@ -36,6 +36,7 @@ function documentFixture(
     meta: {
       id,
       workspaceId: "prototype",
+      lifecycle: "scratch",
       path: workspacePath(path),
       title: "愿景",
       tags: ["产品"],

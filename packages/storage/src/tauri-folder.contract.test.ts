@@ -56,6 +56,7 @@ class FakeTauriBackend {
       meta: {
         id,
         workspaceId: String(request.workspaceId ?? "workspace"),
+        lifecycle: "scratch",
         path,
         title: String(request.title ?? "Untitled"),
         tags: [],
