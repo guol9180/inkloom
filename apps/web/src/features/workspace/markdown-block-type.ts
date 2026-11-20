@@ -5,4 +5,14 @@ export type MarkdownBlockType =
   | "heading-3"
   | "heading-4"
   | "heading-5"
-  | "heading-6";
+  | "heading-6"
+  | "bullet-list"
+  | "ordered-list"
+  | "task-list"
+  | "quote"
+  | "code-block"
+  | "formula"
+  | "table"
+  | "callout"
+  | "toggle"
+  | "divider";

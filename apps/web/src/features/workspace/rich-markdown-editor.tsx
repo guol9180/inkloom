@@ -13,12 +13,10 @@ import {
   schemaCtx
 } from "@milkdown/kit/core";
 import {
-  addBlockTypeCommand,
   blockquoteSchema,
   bulletListSchema,
   codeBlockSchema,
   headingSchema,
-  hrSchema,
   listItemSchema,
   orderedListSchema,
   paragraphSchema,
@@ -29,27 +27,48 @@ import {
   toggleStrongCommand,
   wrapInBlockTypeCommand
 } from "@milkdown/kit/preset/commonmark";
-import {
-  createTable,
-  toggleStrikethroughCommand
-} from "@milkdown/kit/preset/gfm";
+import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import { Fragment, type Node as ProseNode } from "@milkdown/kit/prose/model";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { TextSelection, type Selection } from "@milkdown/kit/prose/state";
+import {
+  addColumnAfter,
+  addRowAfter,
+  deleteColumn,
+  deleteRow,
+  setCellAttr
+} from "@milkdown/kit/prose/tables";
 import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
 import { cn } from "../../lib/utils";
+import {
+  insertCallout,
+  insertCodeBlock,
+  insertDivider,
+  insertFormula,
+  insertTable,
+  insertToggle,
+  PRODUCT_BLOCK_PLUGINS,
+  setCalloutKind,
+  setToggleSummary,
+  toggleToggleOpen
+} from "../editor/editor-blocks";
+import type { CalloutKind } from "../editor/editor-block-meta";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
 export type RichMarkdownEditorHandle = {
   focus: () => void;
-  setHeading: (level: 1 | 2 | 3 | null) => void;
+  setHeading: (level: 1 | 2 | 3 | 4 | 5 | 6 | null) => void;
   run: (action: RichToolbarAction) => void;
   setLink: (href: string) => void;
   insertBlock: (kind: "mermaid" | "canvas") => void;
   getMarkdown: () => string;
   isCurrentBlockEmpty: () => boolean;
+  setCalloutKind: (blockIndex: number, kind: CalloutKind) => void;
+  setToggleSummary: (blockIndex: number, summary: string) => void;
+  toggleToggleOpen: (blockIndex: number) => void;
+  tableAction: (action: TableAction) => void;
   moveTopLevelBlock: (fromIndex: number, toIndex: number) => void;
   duplicateTopLevelBlock: (index: number) => void;
   deleteTopLevelBlock: (index: number) => void;
@@ -69,7 +88,19 @@ export type RichToolbarAction =
   | "quote"
   | "divider"
   | "code-block"
-  | "table";
+  | "table"
+  | "formula"
+  | "callout"
+  | "toggle";
+
+export type TableAction =
+  | "add-row"
+  | "delete-row"
+  | "add-column"
+  | "delete-column"
+  | "align-left"
+  | "align-center"
+  | "align-right";
 
 export const RichMarkdownEditor = forwardRef<
   RichMarkdownEditorHandle,
@@ -80,6 +111,7 @@ export const RichMarkdownEditor = forwardRef<
     canvasSnippet: string;
     onChange: (value: string) => void;
     onBlockTypeChange: (type: MarkdownBlockType) => void;
+    onTableHeaderChange?: (isHeader: boolean) => void;
     onRequestCanvas: () => void;
     className?: string;
   }
@@ -91,6 +123,7 @@ export const RichMarkdownEditor = forwardRef<
     canvasSnippet,
     onChange,
     onBlockTypeChange,
+    onTableHeaderChange,
     onRequestCanvas,
     className
   },
@@ -104,6 +137,7 @@ export const RichMarkdownEditor = forwardRef<
   const titleRef = useRef(title);
   const onChangeRef = useRef(onChange);
   const onBlockTypeChangeRef = useRef(onBlockTypeChange);
+  const onTableHeaderChangeRef = useRef(onTableHeaderChange);
   const onRequestCanvasRef = useRef(onRequestCanvas);
   const mermaidSnippetRef = useRef(mermaidSnippet);
   const canvasSnippetRef = useRef(canvasSnippet);
@@ -111,6 +145,7 @@ export const RichMarkdownEditor = forwardRef<
 
   onChangeRef.current = onChange;
   onBlockTypeChangeRef.current = onBlockTypeChange;
+  onTableHeaderChangeRef.current = onTableHeaderChange;
   onRequestCanvasRef.current = onRequestCanvas;
   mermaidSnippetRef.current = mermaidSnippet;
   canvasSnippetRef.current = canvasSnippet;
@@ -165,9 +200,23 @@ export const RichMarkdownEditor = forwardRef<
             });
           } else if (action === "task-list") {
             commands.call(wrapInBlockTypeCommand.key, {
-              nodeType: listItemSchema.type(ctx),
-              attrs: { checked: false }
+              nodeType: bulletListSchema.type(ctx)
             });
+            const { $from } = view.state.selection;
+            const listItemType = listItemSchema.type(ctx);
+            for (let depth = $from.depth; depth > 0; depth -= 1) {
+              const node = $from.node(depth);
+              if (node.type !== listItemType || node.attrs.checked != null) {
+                continue;
+              }
+              view.dispatch(
+                view.state.tr.setNodeMarkup($from.before(depth), undefined, {
+                  ...node.attrs,
+                  checked: false
+                })
+              );
+              break;
+            }
           } else if (action === "link") {
             commands.call(toggleLinkCommand.key, {});
           } else if (action === "quote") {
@@ -175,17 +224,17 @@ export const RichMarkdownEditor = forwardRef<
               nodeType: blockquoteSchema.type(ctx)
             });
           } else if (action === "divider") {
-            commands.call(addBlockTypeCommand.key, {
-              nodeType: hrSchema.type(ctx)
-            });
+            insertDivider(ctx);
           } else if (action === "code-block") {
-            commands.call(addBlockTypeCommand.key, {
-              nodeType: codeBlockSchema.type(ctx)
-            });
+            insertCodeBlock(ctx);
           } else if (action === "table") {
-            commands.call(addBlockTypeCommand.key, {
-              nodeType: createTable(ctx, 3, 3)
-            });
+            insertTable(ctx);
+          } else if (action === "formula") {
+            insertFormula(ctx);
+          } else if (action === "callout") {
+            insertCallout(ctx, "note");
+          } else if (action === "toggle") {
+            insertToggle(ctx);
           }
           view.focus();
         });
@@ -214,7 +263,9 @@ export const RichMarkdownEditor = forwardRef<
         if (kind === "canvas") onRequestCanvasRef.current();
       },
       getMarkdown() {
-        return crepeRef.current?.getMarkdown() ?? lastValueRef.current;
+        return crepeRef.current
+          ? normalizeProductMarkdown(crepeRef.current.getMarkdown())
+          : lastValueRef.current;
       },
       isCurrentBlockEmpty() {
         const crepe = crepeRef.current;
@@ -228,6 +279,49 @@ export const RichMarkdownEditor = forwardRef<
             selection.$from.parent.content.size === 0;
         });
         return empty;
+      },
+      setCalloutKind(blockIndex, kind) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => setCalloutKind(ctx, blockIndex, kind));
+      },
+      setToggleSummary(blockIndex, summary) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) =>
+          setToggleSummary(ctx, blockIndex, summary)
+        );
+      },
+      toggleToggleOpen(blockIndex) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => toggleToggleOpen(ctx, blockIndex));
+      },
+      tableAction(action) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          if (action === "add-row") {
+            addRowAfter(view.state, view.dispatch);
+          } else if (action === "delete-row") {
+            deleteRow(view.state, view.dispatch);
+          } else if (action === "add-column") {
+            addColumnAfter(view.state, view.dispatch);
+          } else if (action === "delete-column") {
+            deleteColumn(view.state, view.dispatch);
+          } else {
+            setCellAttr(
+              "alignment",
+              action === "align-center"
+                ? "center"
+                : action === "align-right"
+                  ? "right"
+                  : "left"
+            )(view.state, view.dispatch);
+          }
+          view.focus();
+        });
       },
       moveTopLevelBlock(fromIndex, toIndex) {
         const crepe = crepeRef.current;
@@ -306,16 +400,16 @@ export const RichMarkdownEditor = forwardRef<
       root: host,
       defaultValue: value,
       features: {
-        [CrepeFeature.CodeMirror]: false,
+        [CrepeFeature.CodeMirror]: true,
         [CrepeFeature.ListItem]: true,
         [CrepeFeature.LinkTooltip]: false,
-        [CrepeFeature.Cursor]: true,
+        [CrepeFeature.Cursor]: false,
         [CrepeFeature.ImageBlock]: true,
         [CrepeFeature.BlockEdit]: false,
         [CrepeFeature.Toolbar]: false,
         [CrepeFeature.Placeholder]: true,
         [CrepeFeature.Table]: true,
-        [CrepeFeature.Latex]: false,
+        [CrepeFeature.Latex]: true,
         [CrepeFeature.TopBar]: false,
         [CrepeFeature.AI]: false
       },
@@ -326,21 +420,22 @@ export const RichMarkdownEditor = forwardRef<
         }
       }
     });
+    crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
     crepeRef.current = crepe;
     crepe.on((listener) => {
       listener.updated((ctx) => {
         if (!readyRef.current || suppressChangeRef.current) return;
-        const markdown = crepe.getMarkdown();
+        const markdown = normalizeProductMarkdown(crepe.getMarkdown());
         lastValueRef.current = markdown;
         onChangeRef.current(markdown);
         syncTitleHeading(host, titleRef.current);
         const selection = ctx.get(editorViewCtx).state.selection;
-        onBlockTypeChangeRef.current(blockTypeFromNode(selection.$from.parent));
+        onBlockTypeChangeRef.current(blockTypeFromSelection(selection));
+        onTableHeaderChangeRef.current?.(isTableHeaderSelection(selection));
       });
       listener.selectionUpdated((_ctx, selection) => {
-        onBlockTypeChangeRef.current(
-          blockTypeFromNode(selection.$from.parent)
-        );
+        onBlockTypeChangeRef.current(blockTypeFromSelection(selection));
+        onTableHeaderChangeRef.current?.(isTableHeaderSelection(selection));
       });
     });
 
@@ -366,7 +461,7 @@ export const RichMarkdownEditor = forwardRef<
     return () => {
       disposed = true;
       if (readyRef.current) {
-        const markdown = crepe.getMarkdown();
+        const markdown = normalizeProductMarkdown(crepe.getMarkdown());
         if (markdown !== lastValueRef.current) {
           lastValueRef.current = markdown;
           onChangeRef.current(markdown);
@@ -415,13 +510,49 @@ function syncTitleHeading(host: HTMLElement, title: string) {
   firstHeading.toggleAttribute("data-document-title", isDocumentTitle);
 }
 
-function blockTypeFromNode(node: {
-  type: { name: string };
-  attrs: Record<string, unknown>;
-}): MarkdownBlockType {
-  return node.type.name === "heading"
-    ? (`heading-${String(node.attrs.level)}` as MarkdownBlockType)
-    : "paragraph";
+function blockTypeFromSelection(selection: Selection): MarkdownBlockType {
+  const { $from } = selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type.name === "table") return "table";
+    if (node.type.name === "inkloom_toggle") return "toggle";
+    if (node.type.name === "blockquote") {
+      return /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.test(
+        node.firstChild?.textContent ?? ""
+      )
+        ? "callout"
+        : "quote";
+    }
+    if (node.type.name === "bullet_list") {
+      const listItem = $from.node(Math.max(1, depth - 1));
+      return listItem.attrs.checked == null ? "bullet-list" : "task-list";
+    }
+    if (node.type.name === "ordered_list") return "ordered-list";
+    if (node.type.name === "code_block") {
+      return String(node.attrs.language).toLowerCase() === "latex"
+        ? "formula"
+        : "code-block";
+    }
+    if (node.type.name === "heading") {
+      return `heading-${String(node.attrs.level)}` as MarkdownBlockType;
+    }
+  }
+  return "paragraph";
+}
+
+function normalizeProductMarkdown(markdown: string) {
+  return markdown.replace(
+    /^(>\s*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?=\s|$)/gm,
+    "$1[!$2]"
+  );
+}
+
+function isTableHeaderSelection(selection: Selection) {
+  const { $from } = selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === "table_header") return true;
+  }
+  return false;
 }
 
 function topLevelBoundary(

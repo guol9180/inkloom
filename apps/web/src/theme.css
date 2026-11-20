@@ -363,8 +363,42 @@
   font-size: 1.3rem;
 }
 
+.rich-markdown-shell .milkdown .ProseMirror h4 {
+  margin: 1.55rem 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror h5,
+.rich-markdown-shell .milkdown .ProseMirror h6 {
+  margin: 1.35rem 0 0.4rem;
+  color: var(--color-ink-700);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror h6 {
+  color: var(--color-ink-500);
+}
+
 .rich-markdown-shell .milkdown .ProseMirror p {
   margin: 0.72rem 0;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror ul,
+.rich-markdown-shell .milkdown .ProseMirror ol {
+  margin: 0.72rem 0;
+  padding-left: 1.45rem;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror li {
+  margin: 0.32rem 0;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror li::marker {
+  color: var(--color-brand-500);
 }
 
 .rich-markdown-shell .milkdown .ProseMirror blockquote {
@@ -373,6 +407,188 @@
   color: var(--color-ink-500);
   font-family: var(--font-display);
   font-size: 1.04em;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout] {
+  position: relative;
+  overflow: hidden;
+  margin: 1.2rem 0;
+  border: 1px solid
+    color-mix(in oklab, var(--callout-accent) 22%, var(--color-line-soft));
+  border-left: 3px solid var(--callout-accent);
+  border-radius: 0.95rem;
+  background: color-mix(
+    in oklab,
+    var(--callout-accent) 5%,
+    var(--color-paper)
+  );
+  padding: 2rem 1rem 0.72rem;
+  color: var(--color-ink-600);
+  font-family: var(--font-sans);
+  font-size: 0.96em;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout]::before {
+  position: absolute;
+  top: 0.72rem;
+  left: 0.95rem;
+  content: attr(data-callout-label);
+  color: var(--callout-accent);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout]::after {
+  position: absolute;
+  top: 0.84rem;
+  left: 0.45rem;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--callout-accent);
+  content: "";
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout="note"] {
+  --callout-accent: #508a70;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout="tip"] {
+  --callout-accent: #2c8a78;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout="important"] {
+  --callout-accent: #6d69a8;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout="warning"] {
+  --callout-accent: #aa742e;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout="caution"] {
+  --callout-accent: #b05d59;
+}
+
+.callout-dot-note {
+  background: #508a70;
+}
+
+.callout-dot-tip {
+  background: #2c8a78;
+}
+
+.callout-dot-important {
+  background: #6d69a8;
+}
+
+.callout-dot-warning {
+  background: #aa742e;
+}
+
+.callout-dot-caution {
+  background: #b05d59;
+}
+
+.rich-markdown-shell .inkloom-callout-marker {
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  font-size: 0;
+  opacity: 0;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror details.inkloom-toggle {
+  margin: 1.15rem 0;
+  border: 1px solid var(--color-line);
+  border-radius: 0.95rem;
+  background: color-mix(
+    in oklab,
+    var(--color-brand-50) 50%,
+    var(--color-paper)
+  );
+  padding: 0.15rem 0.95rem 0.55rem;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  details.inkloom-toggle[open] {
+  padding-bottom: 0.7rem;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-toggle-summary {
+  display: flex;
+  min-height: 2.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  color: var(--color-ink-800);
+  font-family: var(--font-sans);
+  font-weight: 650;
+  list-style: none;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .inkloom-toggle-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .inkloom-toggle-summary::before {
+  content: "›";
+  display: grid;
+  width: 1.15rem;
+  height: 1.15rem;
+  place-items: center;
+  border-radius: 0.35rem;
+  background: var(--color-brand-100);
+  color: var(--color-brand-800);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  details[open]
+  > .inkloom-toggle-summary::before {
+  transform: rotate(90deg);
+}
+
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-toggle-body {
+  border-top: 1px solid var(--color-line-soft);
+  padding-top: 0.35rem;
 }
 
 .rich-markdown-shell .milkdown .ProseMirror code {
@@ -387,15 +603,122 @@
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: 1rem;
-  background: #1d3229;
+  background: #f8faf8;
   padding: 1rem 1.1rem;
-  color: #e6f1eb;
+  color: var(--color-ink-700);
 }
 
 .rich-markdown-shell .milkdown .ProseMirror pre code {
   background: transparent;
   padding: 0;
   color: inherit;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror hr {
+  width: min(8rem, 42%);
+  height: 1px;
+  margin: 2rem auto;
+  border: 0;
+  background: var(--color-line-strong);
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block {
+  max-width: 100%;
+  max-height: min(64dvh, 40rem);
+  overflow: auto;
+  margin: 1.2rem 0;
+  border: 1px solid var(--color-line);
+  border-radius: 0.95rem;
+  background: var(--color-paper);
+  padding: 0.3rem;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block .table-wrapper {
+  min-width: max-content;
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block table.children {
+  width: auto;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block th,
+.rich-markdown-shell .milkdown .milkdown-table-block td {
+  width: clamp(5.5rem, 11vw, 9rem);
+  max-width: 18rem;
+  border: 0;
+  border-right: 1px solid var(--color-line-soft);
+  border-bottom: 1px solid var(--color-line-soft);
+  padding: 0.68rem 0.8rem;
+  vertical-align: top;
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block th:last-child,
+.rich-markdown-shell .milkdown .milkdown-table-block td:last-child {
+  border-right: 0;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .milkdown-table-block
+  tr:last-child
+  > th,
+.rich-markdown-shell
+  .milkdown
+  .milkdown-table-block
+  tr:last-child
+  > td {
+  border-bottom: 0;
+}
+
+.rich-markdown-shell .milkdown .milkdown-table-block th {
+  background: var(--color-brand-50);
+  color: var(--color-ink-800);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .milkdown-table-block
+  .cell-handle
+  .button-group,
+.rich-markdown-shell
+  .milkdown
+  .milkdown-table-block
+  .line-handle
+  .add-button {
+  border: 1px solid var(--color-line-soft);
+  box-shadow: 0 8px 24px rgb(20 36 28 / 0.12);
+}
+
+.rich-markdown-shell .milkdown .milkdown-code-block {
+  margin: 1rem 0;
+  border: 1px solid var(--color-line);
+  border-radius: 0.95rem;
+  background: #f8faf8;
+  padding: 0.55rem 0.85rem 0.85rem;
+}
+
+.rich-markdown-shell .milkdown .milkdown-code-block .cm-editor,
+.rich-markdown-shell .milkdown .milkdown-code-block .cm-gutters {
+  background: transparent;
+}
+
+.rich-markdown-shell .milkdown .milkdown-code-block .cm-scroller {
+  max-height: min(48dvh, 30rem);
+  overflow: auto;
+}
+
+.rich-markdown-shell .milkdown .milkdown-code-block .tools button,
+.rich-markdown-shell .milkdown .milkdown-code-block .language-button {
+  border-radius: 0.55rem;
 }
 
 .rich-markdown-shell .milkdown .milkdown-toolbar,

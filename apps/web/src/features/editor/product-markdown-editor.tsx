@@ -15,21 +15,32 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Bold,
   Code2,
+  Columns3,
   Copy,
+  ChevronsDownUp,
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
   Italic,
   Link2,
   List,
   ListChecks,
   ListOrdered,
+  MessageSquareText,
   Minus,
   Pilcrow,
   Quote,
   Redo2,
+  Rows3,
+  Sigma,
   Strikethrough,
   Table2,
+  TextAlignCenter,
+  TextAlignEnd,
+  TextAlignStart,
   Trash2,
   Undo2
 } from "lucide-react";
@@ -38,7 +49,8 @@ import { Button } from "../../components/ui/button";
 import { FieldLabel, TextInput } from "../../components/ui/field";
 import type {
   RichMarkdownEditorHandle,
-  RichToolbarAction
+  RichToolbarAction,
+  TableAction
 } from "../workspace/rich-markdown-editor";
 import type { MarkdownBlockType } from "../workspace/markdown-block-type";
 import {
@@ -49,6 +61,11 @@ import {
   type EditorCommandDefinition,
   type EditorCommandId
 } from "./command-registry";
+import {
+  CALLOUT_KINDS,
+  CALLOUT_LABELS,
+  type CalloutKind
+} from "./editor-block-meta";
 
 const RichMarkdownEditor = lazy(() =>
   import("../workspace/rich-markdown-editor").then((module) => ({
@@ -61,6 +78,9 @@ type BlockHandle = {
   top: number;
   height: number;
   lineHeight: number;
+  kind: MarkdownBlockType;
+  calloutKind?: CalloutKind;
+  toggleOpen?: boolean;
 };
 
 type FloatingPosition = {
@@ -89,6 +109,7 @@ export const ProductMarkdownEditor = forwardRef<
   const handleLayerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<RichMarkdownEditorHandle>(null);
   const [blockType, setBlockType] = useState<MarkdownBlockType>("paragraph");
+  const [tableHeader, setTableHeader] = useState(false);
   const [handles, setHandles] = useState<BlockHandle[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number>();
   const [dropIndex, setDropIndex] = useState<number>();
@@ -108,6 +129,11 @@ export const ProductMarkdownEditor = forwardRef<
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkError, setLinkError] = useState("");
+  const [toggleEdit, setToggleEdit] = useState<{
+    index: number;
+    summary: string;
+  }>();
+  const [toggleSummaryError, setToggleSummaryError] = useState("");
 
   useImperativeHandle(
     ref,
@@ -126,22 +152,45 @@ export const ProductMarkdownEditor = forwardRef<
     if (!root || !handleLayer || !editor) return;
     const layerRect = handleLayer.getBoundingClientRect();
     const blocks = [...editor.children].filter(
-      (element) =>
-        !element.classList.contains("prosemirror-virtual-cursor") &&
-        element.getAttribute("contenteditable") !== "false"
+      (element) => !element.classList.contains("prosemirror-virtual-cursor")
     );
     const next = blocks.map((element, index) => {
-      const rect = (element as HTMLElement).getBoundingClientRect();
-      const computed = window.getComputedStyle(element);
+      const blockElement = element as HTMLElement;
+      const rect = blockElement.getBoundingClientRect();
+      const firstLine =
+        blockElement.querySelector<HTMLElement>(
+          "h1, h2, h3, h4, h5, h6, p, li, summary, th, td, pre, .cm-content"
+        ) ?? blockElement;
+      const lineRect = firstLine.getBoundingClientRect();
+      const computed = window.getComputedStyle(firstLine);
       const parsedLineHeight = Number.parseFloat(computed.lineHeight);
+      const calloutElement = blockElement.matches(
+        "blockquote[data-callout]"
+      )
+        ? blockElement
+        : blockElement.querySelector<HTMLElement>(
+            "blockquote[data-callout]"
+          );
+      const toggleElement =
+        blockElement instanceof HTMLDetailsElement &&
+        blockElement.matches("details[data-inkloom-toggle]")
+          ? blockElement
+          : blockElement.querySelector<HTMLDetailsElement>(
+              "details[data-inkloom-toggle]"
+            );
       return {
         index,
-        top: rect.top - layerRect.top,
+        top: lineRect.top - layerRect.top,
         height: rect.height,
         lineHeight:
           Number.isFinite(parsedLineHeight) && parsedLineHeight > 0
             ? parsedLineHeight
-            : Math.min(rect.height, 28)
+            : Math.min(lineRect.height, 32),
+        kind: blockKindFromElement(blockElement),
+        calloutKind: calloutElement?.dataset.callout as
+          | CalloutKind
+          | undefined,
+        toggleOpen: toggleElement?.open
       };
     });
     setHandles(next);
@@ -175,13 +224,18 @@ export const ProductMarkdownEditor = forwardRef<
       const root = rootRef.current;
       const editor = root?.querySelector<HTMLElement>(".ProseMirror");
       const activeSelection = window.getSelection();
+      const anchorElement =
+        activeSelection?.anchorNode instanceof Element
+          ? activeSelection.anchorNode
+          : activeSelection?.anchorNode?.parentElement;
       if (
         !root ||
         !editor ||
         !activeSelection ||
         activeSelection.isCollapsed ||
         !activeSelection.rangeCount ||
-        !editor.contains(activeSelection.anchorNode)
+        !editor.contains(activeSelection.anchorNode) ||
+        anchorElement?.closest(".milkdown-table-block")
       ) {
         setSelection(undefined);
         return;
@@ -245,10 +299,13 @@ export const ProductMarkdownEditor = forwardRef<
     } else if (
       command === "heading-1" ||
       command === "heading-2" ||
-      command === "heading-3"
+      command === "heading-3" ||
+      command === "heading-4" ||
+      command === "heading-5" ||
+      command === "heading-6"
     ) {
       editorRef.current?.setHeading(
-        Number(command.at(-1)) as 1 | 2 | 3
+        Number(command.at(-1)) as 1 | 2 | 3 | 4 | 5 | 6
       );
     } else {
       editorRef.current?.run(command as RichToolbarAction);
@@ -346,6 +403,20 @@ export const ProductMarkdownEditor = forwardRef<
     setLinkOpen(false);
   }
 
+  function submitToggleSummary(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!toggleEdit) return;
+    const summary = toggleEdit.summary.trim();
+    if (!summary) {
+      setToggleSummaryError("折叠标题不能为空。");
+      return;
+    }
+    editorRef.current?.setToggleSummary(toggleEdit.index, summary);
+    setToggleEdit(undefined);
+    setToggleSummaryError("");
+    window.requestAnimationFrame(syncHandles);
+  }
+
   return (
     <div
       ref={rootRef}
@@ -357,38 +428,96 @@ export const ProductMarkdownEditor = forwardRef<
         role="toolbar"
         aria-label="文档格式"
       >
-        {TOOLBAR_COMMANDS.map((command, index) => {
-          const previous = TOOLBAR_COMMANDS[index - 1];
-          const separator = previous && previous.group !== command.group;
-          return (
-            <span className="contents" key={command.id}>
-              {separator && <span className="mx-1 h-5 w-px shrink-0 bg-line" />}
-              <button
-                type="button"
-                className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-[#f2f5f2] hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
-                  commandIdMatchesBlockType(command.id, blockType)
-                    ? "bg-[#eef3ef] text-brand-800"
-                    : "text-ink-500"
-                }`}
-                title={
-                  command.hint ? `${command.label} · ${command.hint}` : command.label
-                }
-                aria-label={command.label}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => executeCommand(command.id)}
-              >
-                <CommandIcon command={command} />
-              </button>
+        {blockType === "table" ? (
+          <>
+            <span className="mx-1 shrink-0 text-[0.62rem] font-bold tracking-[0.08em] text-ink-400 uppercase">
+              表格
             </span>
-          );
-        })}
+            <TableToolbarButton
+              label="增加行"
+              icon={<Rows3 size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="add-row"
+            />
+            <TableToolbarButton
+              label="删除行"
+              icon={<Rows3 size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="delete-row"
+              disabled={tableHeader}
+            />
+            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+            <TableToolbarButton
+              label="增加列"
+              icon={<Columns3 size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="add-column"
+            />
+            <TableToolbarButton
+              label="删除列"
+              icon={<Columns3 size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="delete-column"
+              disabled={tableHeader}
+            />
+            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+            <TableToolbarButton
+              label="左对齐"
+              icon={<TextAlignStart size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="align-left"
+            />
+            <TableToolbarButton
+              label="居中对齐"
+              icon={<TextAlignCenter size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="align-center"
+            />
+            <TableToolbarButton
+              label="右对齐"
+              icon={<TextAlignEnd size={15} />}
+              onAction={(action) => editorRef.current?.tableAction(action)}
+              action="align-right"
+            />
+          </>
+        ) : (
+          TOOLBAR_COMMANDS.map((command, index) => {
+            const previous = TOOLBAR_COMMANDS[index - 1];
+            const separator = previous && previous.group !== command.group;
+            return (
+              <span className="contents" key={command.id}>
+                {separator && (
+                  <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+                )}
+                <button
+                  type="button"
+                  className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-[#f2f5f2] hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
+                    commandIdMatchesBlockType(command.id, blockType)
+                      ? "bg-[#eef3ef] text-brand-800"
+                      : "text-ink-500"
+                  }`}
+                  title={
+                    command.hint
+                      ? `${command.label} · ${command.hint}`
+                      : command.label
+                  }
+                  aria-label={command.label}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => executeCommand(command.id)}
+                >
+                  <CommandIcon command={command} />
+                </button>
+              </span>
+            );
+          })
+        )}
       </div>
 
       <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-7rem)]">
         <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
           {handles.map((handle) => (
             <DropdownMenu.Root
-              key={`${handle.index}-${handle.top}`}
+              key={handle.index}
               open={openMenuIndex === handle.index}
               onOpenChange={(open) =>
                 setOpenMenuIndex(open ? handle.index : undefined)
@@ -477,7 +606,88 @@ export const ProductMarkdownEditor = forwardRef<
                     label="转为二级标题"
                     onSelect={() => editorRef.current?.setHeading(2)}
                   />
+                  <BlockMenuItem
+                    icon={<Heading3 size={14} />}
+                    label="转为三级标题"
+                    onSelect={() => editorRef.current?.setHeading(3)}
+                  />
+                  <BlockMenuItem
+                    icon={<Heading4 size={14} />}
+                    label="转为四级标题"
+                    onSelect={() => editorRef.current?.setHeading(4)}
+                  />
+                  <BlockMenuItem
+                    icon={<Heading5 size={14} />}
+                    label="转为五级标题"
+                    onSelect={() => editorRef.current?.setHeading(5)}
+                  />
+                  <BlockMenuItem
+                    icon={<Heading6 size={14} />}
+                    label="转为六级标题"
+                    onSelect={() => editorRef.current?.setHeading(6)}
+                  />
+                  <DropdownMenu.Sub>
+                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]">
+                      <MessageSquareText size={14} />
+                      <span className="flex-1">提示块类型</span>
+                      <span className="text-ink-300">›</span>
+                    </DropdownMenu.SubTrigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.SubContent
+                        sideOffset={6}
+                        className="z-[80] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                      >
+                        {CALLOUT_KINDS.map((kind) => (
+                          <BlockMenuItem
+                            key={kind}
+                            icon={
+                              <span
+                                className={`size-1.5 rounded-full callout-dot-${kind}`}
+                              />
+                            }
+                            label={CALLOUT_LABELS[kind]}
+                            onSelect={() =>
+                              editorRef.current?.setCalloutKind(
+                                handle.index,
+                                kind
+                              )
+                            }
+                          />
+                        ))}
+                      </DropdownMenu.SubContent>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Sub>
                   <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  {handle.kind === "toggle" && (
+                    <>
+                      <BlockMenuItem
+                        icon={<ChevronsDownUp size={14} />}
+                        label="重命名折叠标题"
+                        onSelect={() => {
+                          const details = rootRef.current
+                            ?.querySelectorAll<HTMLDetailsElement>(
+                              "details[data-inkloom-toggle]"
+                            )
+                            .item(handle.index);
+                          setToggleSummaryError("");
+                          setToggleEdit({
+                            index: handle.index,
+                            summary:
+                              details?.querySelector("summary")?.textContent ??
+                              "折叠内容"
+                          });
+                        }}
+                      />
+                      <BlockMenuItem
+                        icon={<ChevronsDownUp size={14} />}
+                        label={handle.toggleOpen ? "收起折叠块" : "展开折叠块"}
+                        onSelect={() =>
+                          editorRef.current?.toggleToggleOpen(handle.index)
+                        }
+                      />
+                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                    </>
+                  )}
                   <BlockMenuItem
                     icon={<Copy size={14} />}
                     label="复制此块"
@@ -514,6 +724,7 @@ export const ProductMarkdownEditor = forwardRef<
               setBlockType(next);
               window.requestAnimationFrame(syncHandles);
             }}
+            onTableHeaderChange={setTableHeader}
             onRequestCanvas={() => undefined}
             className="min-h-[calc(100dvh-7rem)]"
           />
@@ -635,6 +846,65 @@ export const ProductMarkdownEditor = forwardRef<
           )}
         </form>
       </AppDialog>
+
+      <AppDialog
+        open={toggleEdit !== undefined}
+        title="折叠标题"
+        description="使用一行简短文字概括折叠块中的内容。"
+        onClose={() => {
+          setToggleEdit(undefined);
+          setToggleSummaryError("");
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setToggleEdit(undefined);
+                setToggleSummaryError("");
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="product-toggle-summary-form"
+            >
+              保存标题
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="product-toggle-summary-form"
+          className="grid gap-4"
+          onSubmit={submitToggleSummary}
+        >
+          <FieldLabel>
+            标题
+            <TextInput
+              autoFocus
+              maxLength={120}
+              value={toggleEdit?.summary ?? ""}
+              onChange={(event) => {
+                setToggleEdit((current) =>
+                  current
+                    ? { ...current, summary: event.target.value }
+                    : current
+                );
+                setToggleSummaryError("");
+              }}
+              placeholder="折叠内容"
+            />
+          </FieldLabel>
+          {toggleSummaryError && (
+            <p className="rounded-lg bg-danger-50 px-3 py-2 text-xs text-danger-700">
+              {toggleSummaryError}
+            </p>
+          )}
+        </form>
+      </AppDialog>
     </div>
   );
 });
@@ -653,6 +923,12 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
       return <Heading2 size={16} />;
     case "heading-3":
       return <Heading3 size={16} />;
+    case "heading-4":
+      return <Heading4 size={16} />;
+    case "heading-5":
+      return <Heading5 size={16} />;
+    case "heading-6":
+      return <Heading6 size={16} />;
     case "bold":
       return <Bold size={15} />;
     case "italic":
@@ -662,6 +938,12 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
     case "inline-code":
     case "code-block":
       return <Code2 size={15} />;
+    case "formula":
+      return <Sigma size={15} />;
+    case "callout":
+      return <MessageSquareText size={15} />;
+    case "toggle":
+      return <ChevronsDownUp size={15} />;
     case "bullet-list":
       return <List size={15} />;
     case "ordered-list":
@@ -717,6 +999,34 @@ function BlockMenuItem({
   );
 }
 
+function TableToolbarButton({
+  action,
+  disabled = false,
+  icon,
+  label,
+  onAction
+}: {
+  action: TableAction;
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onAction: (action: TableAction) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-ink-500 transition hover:bg-[#f2f5f2] hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-35"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onAction(action)}
+    >
+      {icon}
+    </button>
+  );
+}
+
 function EditorSkeleton() {
   return (
     <div className="px-[clamp(1.25rem,5vw,4.5rem)] py-10">
@@ -755,4 +1065,23 @@ function commandIdMatchesBlockType(
 
 function editorCommandLabel(command: EditorCommandId) {
   return EDITOR_COMMANDS.find((item) => item.id === command)?.label ?? command;
+}
+
+function blockKindFromElement(element: HTMLElement): MarkdownBlockType {
+  if (element.matches("blockquote[data-callout]")) return "callout";
+  if (element.matches("blockquote")) return "quote";
+  if (element.matches("details[data-inkloom-toggle]")) return "toggle";
+  if (element.matches(".milkdown-table-block, table")) return "table";
+  if (element.matches(".milkdown-code-block, pre")) {
+    return element.closest<HTMLElement>("[data-language='latex']")
+      ? "formula"
+      : "code-block";
+  }
+  if (element.matches("hr")) return "divider";
+  if (element.matches("h1, h2, h3, h4, h5, h6")) {
+    return `heading-${element.tagName.slice(1)}` as MarkdownBlockType;
+  }
+  const list = element.querySelector<HTMLElement>("ul, ol");
+  if (list) return list.matches("ol") ? "ordered-list" : "bullet-list";
+  return "paragraph";
 }

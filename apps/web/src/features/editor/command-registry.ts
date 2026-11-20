@@ -5,6 +5,9 @@ export type EditorCommandId =
   | "heading-1"
   | "heading-2"
   | "heading-3"
+  | "heading-4"
+  | "heading-5"
+  | "heading-6"
   | "bold"
   | "italic"
   | "strike"
@@ -16,6 +19,9 @@ export type EditorCommandId =
   | "quote"
   | "divider"
   | "code-block"
+  | "formula"
+  | "callout"
+  | "toggle"
   | "table";
 
 export type EditorCommandDefinition = {
@@ -34,6 +40,9 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   { id: "heading-1", label: "一级标题", hint: "#", keywords: ["heading", "h1", "标题"], group: "block", slash: true },
   { id: "heading-2", label: "二级标题", hint: "##", keywords: ["heading", "h2", "标题"], group: "block", slash: true },
   { id: "heading-3", label: "三级标题", hint: "###", keywords: ["heading", "h3", "标题"], group: "block", slash: true },
+  { id: "heading-4", label: "四级标题", hint: "####", keywords: ["heading", "h4", "标题"], group: "block", slash: true },
+  { id: "heading-5", label: "五级标题", hint: "#####", keywords: ["heading", "h5", "标题"], group: "block", slash: true },
+  { id: "heading-6", label: "六级标题", hint: "######", keywords: ["heading", "h6", "标题"], group: "block", slash: true },
   { id: "bold", label: "加粗", hint: "Ctrl B", keywords: ["bold", "strong"], group: "inline", slash: false },
   { id: "italic", label: "斜体", hint: "Ctrl I", keywords: ["italic", "emphasis"], group: "inline", slash: false },
   { id: "strike", label: "删除线", keywords: ["strike", "delete"], group: "inline", slash: false },
@@ -45,6 +54,9 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   { id: "quote", label: "引用", keywords: ["quote", "blockquote"], group: "block", slash: true },
   { id: "divider", label: "分隔线", keywords: ["divider", "hr"], group: "insert", slash: true },
   { id: "code-block", label: "代码块", keywords: ["code", "fence"], group: "insert", slash: true },
+  { id: "formula", label: "公式", keywords: ["formula", "math", "latex", "公式"], group: "insert", slash: true },
+  { id: "callout", label: "提示块", keywords: ["callout", "note", "alert", "高亮", "提示"], group: "insert", slash: true },
+  { id: "toggle", label: "折叠块", keywords: ["toggle", "details", "折叠"], group: "insert", slash: true },
   { id: "table", label: "表格", hint: "3 × 3", keywords: ["table", "表格"], group: "insert", slash: true }
 ];
 
@@ -55,6 +67,9 @@ const TOOLBAR_ORDER: readonly EditorCommandId[] = [
   "heading-1",
   "heading-2",
   "heading-3",
+  "heading-4",
+  "heading-5",
+  "heading-6",
   "bold",
   "italic",
   "strike",
@@ -66,6 +81,9 @@ const TOOLBAR_ORDER: readonly EditorCommandId[] = [
   "quote",
   "divider",
   "code-block",
+  "formula",
+  "callout",
+  "toggle",
   "table"
 ];
 
@@ -86,14 +104,44 @@ export function filterSlashCommands(query: string): EditorCommandDefinition[] {
 
 export function commandShortcutMatches(
   command: EditorCommandId,
-  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">
+  event: Pick<
+    KeyboardEvent,
+    "key" | "code" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey"
+  >
 ): boolean {
   const mod = event.ctrlKey || event.metaKey;
-  if (!mod || event.altKey) return false;
   const key = event.key.toLowerCase();
+  if (!mod) return false;
+  if (
+    command === "paragraph" ||
+    command === "heading-1" ||
+    command === "heading-2" ||
+    command === "heading-3" ||
+    command === "heading-4" ||
+    command === "heading-5" ||
+    command === "heading-6"
+  ) {
+    return (
+      event.altKey &&
+      !event.shiftKey &&
+      key === (command === "paragraph" ? "0" : command.at(-1))
+    );
+  }
+  if (event.altKey) return false;
   if (command === "bold") return key === "b" && !event.shiftKey;
   if (command === "italic") return key === "i" && !event.shiftKey;
   if (command === "link") return key === "k" && !event.shiftKey;
+  if (command === "strike") return key === "x" && event.shiftKey;
+  if (command === "inline-code") return key === "e" && !event.shiftKey;
+  if (command === "bullet-list") {
+    return event.code === "Digit8" && event.shiftKey;
+  }
+  if (command === "ordered-list") {
+    return event.code === "Digit7" && event.shiftKey;
+  }
+  if (command === "task-list") {
+    return event.code === "Digit9" && event.shiftKey;
+  }
   if (command === "undo") return key === "z" && !event.shiftKey;
   if (command === "redo") return key === "z" && event.shiftKey;
   return false;

@@ -46,17 +46,25 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 - UI typography follows a Codex-like precise and restrained hierarchy using
   Geist Sans, system Chinese fonts and Geist Mono.
 - All content loading uses layout-stable skeleton screens.
+- Content editing is autosave-only; the temporary manual save action must be
+  removed when the T31 autosave chain is completed.
 - Markdown source is canonical; unknown syntax and untouched source slices must
   be preserved.
 
 ## Next Work
 
-Start with T25 after the documentation reset is committed:
+Start with T31 now that T25–T30 are completed:
 
-- Add schema migrations for knowledge bases, document lifecycle and assets.
-- Preserve existing production documents by migrating them to scratch notes.
-- Do not invent knowledge bases or folders during migration.
-- Back up the production SQLite database before any production migration.
+- Move complete drafts and pending snapshots from localStorage to IndexedDB.
+- Serialize saves, skip unchanged content, merge stale snapshots and add
+  revision-conflict recovery.
+- Add idle and maximum-interval history checkpoints and one editor owner across
+  tabs.
+- Remove the temporary manual Save button only after autosave and draft recovery
+  pass end-to-end verification.
+
+T44 production migration and deployment still require explicit user
+authorization. Back up and verify the production SQLite database before release.
 
 Do not resume desktop, M2 synchronization, real-time collaboration or mobile
 work without explicit user confirmation.
