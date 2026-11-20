@@ -29,6 +29,7 @@ Resource and operational defaults:
 - `platform-edge` is limited to `128m` and `0.50 CPU`; it alone owns ports `80/443`.
 - Container logs rotate at `10m` per file with three files.
 - Caddy certificates persist in `inkloom-caddy-data`; SQLite data persists in `inkloom-data`.
+- Uploaded assets persist under `/data/assets` inside the same `inkloom-data` volume and remain immutable by content hash.
 - Deploy immutable commits or release artifacts. Do not deploy a dirty worktree.
 - Images are built outside the production host. This public repository's GitHub Actions publishes commit-tagged `linux/amd64` images to GHCR; the server only pulls and starts them.
 - Production deployment credentials and release orchestration live only in the private `guol9180/imhgl-ops` repository. This public repository stores no SSH host, deployment key, server path or GHCR read token.
@@ -49,6 +50,8 @@ NODE_ENV=production
 HOST=0.0.0.0
 PORT=3001
 INKLOOM_DATABASE_PATH=/data/inkloom.sqlite
+INKLOOM_ASSET_DIR=/data/assets
+INKLOOM_MAX_ASSET_BYTES=52428800
 INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com
 ```
 
@@ -150,7 +153,7 @@ docker compose -f /srv/apps/inkloom/compose.yaml restart api
 docker compose -f /srv/platform/edge/compose.yaml logs -f edge
 ```
 
-The API writes only `INKLOOM_DATABASE_PATH` and its SQLite WAL/SHM companions. Logs must not contain document bodies or passwords.
+The API writes only `INKLOOM_DATABASE_PATH`, its SQLite WAL/SHM companions and `INKLOOM_ASSET_DIR`. Logs must not contain document bodies or passwords.
 
 ## CPU Troubleshooting
 

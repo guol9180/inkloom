@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   InkLoomError,
@@ -12,9 +13,16 @@ import {
   ApiDatabaseError,
   DocumentDatabase,
   normalizeEmail,
+  type AssetKind,
+  type StoredAssetRecord,
   type ApiUser,
   type DocumentDatabaseOptions
 } from "./database";
+import { LocalDiskAssetStore } from "./local-disk-assets";
+import {
+  AssetUploadError,
+  type AssetBlobStore
+} from "./asset-blob-store";
 import {
   createSessionToken,
   hashPassword,
@@ -23,12 +31,16 @@ import {
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_ASSET_BYTES = 50 * 1024 * 1024;
 const COOKIE_NAME = "inkloom_session";
 const HOST_COOKIE_NAME = "__Host-inkloom_session";
 
 export type ApiServerOptions = {
   database?: DocumentDatabase;
   databaseOptions?: DocumentDatabaseOptions;
+  assetStore?: AssetBlobStore;
+  assetDirectory?: string;
+  maxAssetBytes?: number;
   allowedOrigins?: readonly string[];
   secureCookies?: boolean;
   now?: () => number;
@@ -39,6 +51,7 @@ type RequestContext = {
   response: ServerResponse;
   url: URL;
   body: unknown;
+  assetUpload: boolean;
 };
 
 export function createApiServer(options: ApiServerOptions = {}) {
@@ -64,6 +77,17 @@ export function createApiServer(options: ApiServerOptions = {}) {
     (process.env.NODE_ENV === "production" ||
       process.env.INKLOOM_SECURE_COOKIES === "true");
   const now = options.now ?? (() => Date.now());
+  const assetStore =
+    options.assetStore ??
+    new LocalDiskAssetStore(
+      options.assetDirectory ??
+        process.env.INKLOOM_ASSET_DIR ??
+        resolve(process.cwd(), "data/assets")
+    );
+  const maxAssetBytes =
+    options.maxAssetBytes ??
+    parsePositiveInteger(process.env.INKLOOM_MAX_ASSET_BYTES) ??
+    DEFAULT_MAX_ASSET_BYTES;
 
   const server = createServer(async (request, response) => {
     try {
@@ -97,12 +121,15 @@ export function createApiServer(options: ApiServerOptions = {}) {
         request.url ?? "/",
         `http://${request.headers.host ?? "127.0.0.1"}`
       );
-      const body = await readJsonBody(request);
+      const assetUpload = isAssetUploadRequest(request, url);
+      const body = assetUpload ? {} : await readJsonBody(request);
       await route({
         database,
+        assetStore,
+        maxAssetBytes,
         secureCookies,
         now,
-        context: { request, response, url, body }
+        context: { request, response, url, body, assetUpload }
       });
     } catch (error) {
       sendError(response, error);
@@ -123,16 +150,20 @@ export function createApiServer(options: ApiServerOptions = {}) {
 
 async function route({
   database,
+  assetStore,
+  maxAssetBytes,
   secureCookies,
   now,
   context
 }: {
   database: DocumentDatabase;
+  assetStore: AssetBlobStore;
+  maxAssetBytes: number;
   secureCookies: boolean;
   now: () => number;
   context: RequestContext;
 }): Promise<void> {
-  const { request, response, url, body } = context;
+  const { request, response, url, body, assetUpload } = context;
   const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   const method = request.method ?? "GET";
 
@@ -231,6 +262,116 @@ async function route({
 
   if (segments[0] === "api" && segments[1] === "workspaces" && segments[2]) {
     const workspaceId = segments[2];
+
+    if (segments[3] === "assets") {
+      if (!database.getWorkspace(user.id, workspaceId)) {
+        throw new ApiHttpError(404, "WORKSPACE_NOT_FOUND", "找不到工作区。");
+      }
+
+      if (method === "POST" && segments.length === 4 && assetUpload) {
+        const mime = normalizeAssetMime(request.headers["content-type"]);
+        const kind = parseAssetKind(request.headers["x-inkloom-kind"]);
+        assertMimeKind(mime, kind);
+        const declaredLength = Number(request.headers["content-length"]);
+        if (Number.isFinite(declaredLength) && declaredLength > maxAssetBytes) {
+          throw new AssetUploadError(
+            413,
+            "ASSET_TOO_LARGE",
+            `资产不能超过 ${Math.floor(maxAssetBytes / 1024 / 1024)} MiB。`
+          );
+        }
+        const blob = await assetStore.put(
+          workspaceId,
+          validateAssetStream(request, mime),
+          maxAssetBytes
+        );
+        const stored = database.upsertAsset(user.id, workspaceId, {
+          ...blob,
+          mime,
+          kind
+        });
+        sendJson(response, stored.deduplicated ? 200 : 201, {
+          asset: publicAsset(stored.asset),
+          deduplicated: stored.deduplicated
+        });
+        return;
+      }
+
+      if (
+        method === "POST" &&
+        segments.length === 5 &&
+        segments[4] === "cleanup"
+      ) {
+        const input = parseRecord(body);
+        const unusedForHours =
+          input.unusedForHours === undefined
+            ? 24
+            : requiredNonNegativeNumber(input.unusedForHours, "未引用时长");
+        const createdBefore = new Date(
+          now() - unusedForHours * 60 * 60 * 1000
+        ).toISOString();
+        const candidates = database.listUnreferencedAssets(
+          user.id,
+          workspaceId,
+          createdBefore
+        );
+        const deleted: StoredAssetRecord[] = [];
+        for (const asset of candidates) {
+          if (database.isAssetReferenced(user.id, workspaceId, asset.id)) {
+            continue;
+          }
+          database.deleteAssetRecord(user.id, workspaceId, asset.id);
+          await assetStore.remove(asset.storageKey);
+          deleted.push(asset);
+        }
+        sendJson(response, 200, {
+          count: deleted.length,
+          deleted: deleted.map(publicAsset)
+        });
+        return;
+      }
+
+      if (
+        (method === "GET" || method === "HEAD") &&
+        segments.length === 5 &&
+        segments[4] !== "cleanup"
+      ) {
+        const asset = database.getAsset(user.id, workspaceId, segments[4]);
+        response.statusCode = 200;
+        response.setHeader("Content-Type", asset.mime);
+        response.setHeader("Content-Length", String(asset.size));
+        response.setHeader(
+          "Cache-Control",
+          "private, max-age=31536000, immutable"
+        );
+        response.setHeader(
+          "Content-Disposition",
+          asset.mime.startsWith("image/") &&
+            asset.mime !== "image/svg+xml"
+            ? "inline"
+            : "attachment"
+        );
+        if (asset.mime === "image/svg+xml") {
+          response.setHeader("Content-Security-Policy", "sandbox");
+        }
+        if (method === "HEAD") {
+          response.end();
+          return;
+        }
+        await pipeline(assetStore.open(asset.storageKey), response);
+        return;
+      }
+
+      if (
+        method === "GET" &&
+        segments.length === 6 &&
+        segments[5] === "info"
+      ) {
+        const asset = database.getAsset(user.id, workspaceId, segments[4]);
+        sendJson(response, 200, { asset: publicAsset(asset) });
+        return;
+      }
+    }
 
     if (method === "GET" && segments.length === 4 && segments[3] === "notes") {
       sendJson(response, 200, {
@@ -645,6 +786,12 @@ function sendError(response: ServerResponse, error: unknown): void {
     });
     return;
   }
+  if (error instanceof AssetUploadError) {
+    sendJson(response, error.status, {
+      error: { code: error.code, message: error.message }
+    });
+    return;
+  }
   if (error instanceof InkLoomError) {
     const status =
       error.code === "INVALID_WORKSPACE_PATH" ? 400 : 409;
@@ -759,6 +906,145 @@ function requiredSortOrder(value: unknown): number {
     throw new ApiHttpError(400, "INVALID_SORT_ORDER", "排序值必须是非负整数。");
   }
   return value as number;
+}
+
+function requiredNonNegativeNumber(value: unknown, name: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new ApiHttpError(400, "INVALID_INPUT", `${name}必须是非负数。`);
+  }
+  return value;
+}
+
+function parsePositiveInteger(value: string | undefined) {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function isAssetUploadRequest(request: IncomingMessage, url: URL) {
+  return (
+    request.method === "POST" &&
+    /^\/api\/workspaces\/[^/]+\/assets\/?$/.test(url.pathname)
+  );
+}
+
+function normalizeAssetMime(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const mime = raw?.split(";", 1)[0]?.trim().toLowerCase();
+  if (!mime || mime.length > 120 || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mime)) {
+    throw new AssetUploadError(
+      415,
+      "ASSET_MIME_REQUIRED",
+      "资产请求必须提供有效的 Content-Type。"
+    );
+  }
+  return mime;
+}
+
+function parseAssetKind(value: string | string[] | undefined): AssetKind {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (
+    raw === "image" ||
+    raw === "attachment" ||
+    raw === "excalidraw" ||
+    raw === "svg"
+  ) {
+    return raw;
+  }
+  throw new AssetUploadError(
+    400,
+    "INVALID_ASSET_KIND",
+    "X-InkLoom-Kind 必须是 image、attachment、excalidraw 或 svg。"
+  );
+}
+
+function assertMimeKind(mime: string, kind: AssetKind) {
+  const valid =
+    (kind === "image" && mime.startsWith("image/") && mime !== "image/svg+xml") ||
+    (kind === "svg" && mime === "image/svg+xml") ||
+    (kind === "excalidraw" &&
+      (mime === "application/json" ||
+        mime === "application/vnd.excalidraw+json")) ||
+    kind === "attachment";
+  if (!valid) {
+    throw new AssetUploadError(
+      415,
+      "ASSET_MIME_MISMATCH",
+      "资产类型与 MIME 不匹配。"
+    );
+  }
+}
+
+async function* validateAssetStream(
+  request: IncomingMessage,
+  mime: string
+): AsyncGenerator<Uint8Array> {
+  let signature = Buffer.alloc(0);
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (signature.length < 1024) {
+      signature = Buffer.concat([
+        signature,
+        buffer.subarray(0, 1024 - signature.length)
+      ]);
+    }
+    yield buffer;
+  }
+  assertAssetSignature(mime, signature);
+}
+
+function assertAssetSignature(mime: string, bytes: Buffer) {
+  const matches =
+    (mime === "image/png" &&
+      bytes.subarray(0, 8).equals(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      )) ||
+    (mime === "image/jpeg" &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff) ||
+    ((mime === "image/gif" || mime === "image/webp" || mime === "image/avif") &&
+      ((mime === "image/gif" &&
+        ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii"))) ||
+        (mime === "image/webp" &&
+          bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
+          bytes.subarray(8, 12).toString("ascii") === "WEBP") ||
+        (mime === "image/avif" &&
+          bytes.subarray(4, 12).toString("ascii").includes("ftyp")))) ||
+    (mime === "application/pdf" && bytes.subarray(0, 5).toString() === "%PDF-") ||
+    (mime === "image/svg+xml" && /<svg[\s>]/i.test(bytes.toString("utf8"))) ||
+    ((mime === "application/json" ||
+      mime === "application/vnd.excalidraw+json" ||
+      mime === "text/plain") &&
+      /^[\s[{]/.test(bytes.toString("utf8")));
+  const constrained =
+    mime.startsWith("image/") ||
+    mime === "application/pdf" ||
+    mime === "application/json" ||
+    mime === "application/vnd.excalidraw+json" ||
+    mime === "text/plain";
+  if (constrained && !matches) {
+    throw new AssetUploadError(
+      415,
+      "ASSET_CONTENT_MISMATCH",
+      "文件内容与声明的 MIME 不匹配。"
+    );
+  }
+}
+
+function publicAsset(asset: StoredAssetRecord) {
+  return {
+    id: asset.id,
+    workspaceId: asset.workspaceId,
+    hash: asset.hash,
+    mime: asset.mime,
+    size: asset.size,
+    kind: asset.kind,
+    createdAt: asset.createdAt,
+    url: `/api/workspaces/${encodeURIComponent(
+      asset.workspaceId
+    )}/assets/${asset.hash}`
+  };
 }
 
 function parseDocumentSort(value: string | null): "updated" | "created" | "title" {

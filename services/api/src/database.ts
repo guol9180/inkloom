@@ -55,6 +55,19 @@ export type ApiDocumentSummary = DocumentMeta & {
   excerpt: string;
 };
 
+export type AssetKind = "image" | "attachment" | "excalidraw" | "svg";
+
+export type StoredAssetRecord = {
+  id: string;
+  workspaceId: WorkspaceId;
+  hash: string;
+  mime: string;
+  size: number;
+  kind: AssetKind;
+  storageKey: string;
+  createdAt: IsoTimestamp;
+};
+
 type UserRow = {
   id: string;
   email: string;
@@ -110,6 +123,17 @@ type RevisionRow = {
   markdown: string;
   extensions_json: string | null;
   content_hash: string;
+  created_at: string;
+};
+
+type AssetRow = {
+  id: string;
+  workspace_id: string;
+  hash: string;
+  mime: string;
+  size: number;
+  kind: AssetKind;
+  storage_key: string;
   created_at: string;
 };
 
@@ -715,6 +739,12 @@ export class DocumentDatabase {
         timestamp,
         timestamp
       );
+    this.syncDocumentAssetRefs(
+      workspaceId,
+      snapshot.meta.id,
+      markdown,
+      timestamp
+    );
     this.touchWorkspace(workspace.id, timestamp);
     return snapshot;
   }
@@ -767,6 +797,12 @@ export class DocumentDatabase {
           documentId,
           workspaceId
         );
+      this.syncDocumentAssetRefs(
+        workspaceId,
+        documentId,
+        input.markdown,
+        timestamp
+      );
       this.touchWorkspace(workspaceId, timestamp);
     });
 
@@ -874,12 +910,128 @@ export class DocumentDatabase {
     });
   }
 
+  upsertAsset(
+    userId: string,
+    workspaceId: string,
+    input: {
+      hash: string;
+      mime: string;
+      size: number;
+      kind: AssetKind;
+      storageKey: string;
+    }
+  ): { asset: StoredAssetRecord; deduplicated: boolean } {
+    this.requireWorkspace(userId, workspaceId);
+    const existing = this.findAssetByHash(workspaceId, input.hash);
+    if (existing) return { asset: existing, deduplicated: true };
+    const asset: StoredAssetRecord = {
+      id: this.createId(),
+      workspaceId: workspaceId as WorkspaceId,
+      hash: input.hash,
+      mime: input.mime,
+      size: input.size,
+      kind: input.kind,
+      storageKey: input.storageKey,
+      createdAt: this.now()
+    };
+    this.db
+      .prepare(
+        `INSERT INTO assets
+          (id, workspace_id, hash, mime, size, kind, storage_key, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        asset.id,
+        asset.workspaceId,
+        asset.hash,
+        asset.mime,
+        asset.size,
+        asset.kind,
+        asset.storageKey,
+        asset.createdAt
+      );
+    return { asset, deduplicated: false };
+  }
+
+  getAsset(
+    userId: string,
+    workspaceId: string,
+    hash: string
+  ): StoredAssetRecord {
+    this.requireWorkspace(userId, workspaceId);
+    const asset = this.findAssetByHash(workspaceId, hash);
+    if (!asset) {
+      throw new ApiDatabaseError(404, "ASSET_NOT_FOUND", "找不到资产。");
+    }
+    return asset;
+  }
+
+  listUnreferencedAssets(
+    userId: string,
+    workspaceId: string,
+    createdBefore: string
+  ): StoredAssetRecord[] {
+    this.requireWorkspace(userId, workspaceId);
+    return (
+      this.db
+        .prepare(
+          `SELECT assets.* FROM assets
+           WHERE assets.workspace_id = ? AND assets.created_at <= ?
+             AND NOT EXISTS (
+               SELECT 1 FROM document_asset_refs
+               WHERE document_asset_refs.asset_id = assets.id
+             )
+           ORDER BY assets.created_at ASC`
+        )
+        .all(workspaceId, createdBefore) as AssetRow[]
+    ).map(assetFromRow);
+  }
+
+  deleteAssetRecord(
+    userId: string,
+    workspaceId: string,
+    assetId: string
+  ): void {
+    this.requireWorkspace(userId, workspaceId);
+    this.db
+      .prepare("DELETE FROM assets WHERE id = ? AND workspace_id = ?")
+      .run(assetId, workspaceId);
+  }
+
+  isAssetReferenced(
+    userId: string,
+    workspaceId: string,
+    assetId: string
+  ): boolean {
+    this.requireWorkspace(userId, workspaceId);
+    const row = this.db
+      .prepare(
+        `SELECT 1 AS referenced FROM document_asset_refs
+         WHERE asset_id = ? LIMIT 1`
+      )
+      .get(assetId) as { referenced: number } | undefined;
+    return Boolean(row);
+  }
+
   private requireWorkspace(userId: string, workspaceId: string): ApiWorkspace {
     const workspace = this.getWorkspace(userId, workspaceId);
     if (!workspace) {
       throw new ApiDatabaseError(404, "WORKSPACE_NOT_FOUND", "找不到工作区。");
     }
     return workspace;
+  }
+
+  private findAssetByHash(
+    workspaceId: string,
+    hash: string
+  ): StoredAssetRecord | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM assets
+         WHERE workspace_id = ? AND hash = ?`
+      )
+      .get(workspaceId, hash) as AssetRow | undefined;
+    return row ? assetFromRow(row) : undefined;
   }
 
   private requireKnowledgeBase(
@@ -1044,6 +1196,33 @@ export class DocumentDatabase {
       );
   }
 
+  private syncDocumentAssetRefs(
+    workspaceId: string,
+    documentId: string,
+    markdown: string,
+    timestamp: string
+  ): void {
+    this.db
+      .prepare("DELETE FROM document_asset_refs WHERE document_id = ?")
+      .run(documentId);
+    const hashes = [
+      ...new Set(
+        [...markdown.matchAll(/assets\/([a-f0-9]{64})(?:\.[A-Za-z0-9]+)?/gi)]
+          .map((match) => match[1]?.toLowerCase())
+          .filter((hash): hash is string => Boolean(hash))
+      )
+    ];
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO document_asset_refs
+        (document_id, asset_id, created_at)
+       SELECT ?, id, ? FROM assets
+       WHERE workspace_id = ? AND hash = ?`
+    );
+    for (const hash of hashes) {
+      insert.run(documentId, timestamp, workspaceId, hash);
+    }
+  }
+
   private touchWorkspace(workspaceId: string, timestamp: string): void {
     this.db
       .prepare("UPDATE workspaces SET updated_at = ? WHERE id = ?")
@@ -1177,6 +1356,19 @@ function knowledgeBaseFromRow(row: KnowledgeBaseRow): ApiKnowledgeBase {
     revision: row.revision,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function assetFromRow(row: AssetRow): StoredAssetRecord {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id as WorkspaceId,
+    hash: row.hash,
+    mime: row.mime,
+    size: row.size,
+    kind: row.kind,
+    storageKey: row.storage_key,
+    createdAt: row.created_at
   };
 }
 

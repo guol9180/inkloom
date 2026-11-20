@@ -53,13 +53,14 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T32 now that T25–T31 are completed:
+Start with T33 now that T25–T32 are completed:
 
-- Add the workspace-scoped, content-addressed asset service.
-- Stream binary uploads with SHA-256, MIME validation, immutable reads and
-  reference-aware orphan cleanup.
-- Keep the production volume implementation behind an S3-compatible adapter
-  contract.
+- Connect image paste, drag/drop, upload progress, cancel and retry to the asset
+  service.
+- Add image alignment, width, alt/caption, lightbox, replace and attachment
+  download blocks.
+- Include Markdown, images, attachments, canvas scenes and SVG previews in ZIP
+  export.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

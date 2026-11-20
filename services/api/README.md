@@ -9,6 +9,7 @@ InkLoom Web 云端 API。当前提供邮箱账号、HttpOnly 会话、用户工�
 ```powershell
 pnpm --filter @inkloom/api build
 $env:INKLOOM_DATABASE_PATH=".inkloom/inkloom.sqlite"
+$env:INKLOOM_ASSET_DIR=".inkloom/assets"
 pnpm --filter @inkloom/api start
 ```
 
@@ -21,6 +22,8 @@ pnpm --filter @inkloom/api start
 | `HOST` | 监听地址，本地默认 `127.0.0.1`，容器内设为 `0.0.0.0` |
 | `PORT` / `INKLOOM_API_PORT` | API 端口，默认 `3001` |
 | `INKLOOM_DATABASE_PATH` | SQLite 文件路径 |
+| `INKLOOM_ASSET_DIR` | 内容寻址资产文件目录，默认 `data/assets` |
+| `INKLOOM_MAX_ASSET_BYTES` | 单个资产最大字节数，默认 50 MiB |
 | `INKLOOM_WEB_ORIGINS` | 逗号分隔的允许 Web Origin |
 | `INKLOOM_SECURE_COOKIES` | 非生产环境显式启用 Secure Cookie |
 

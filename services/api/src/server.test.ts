@@ -1,4 +1,8 @@
 import type { AddressInfo } from "node:net";
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApiServer } from "./server";
 
@@ -156,6 +160,146 @@ describe("InkLoom API", () => {
       { cookie: session.cookie }
     );
     expect(history.revisions.map((entry) => entry.meta.revision)).toEqual([2]);
+  });
+
+  it("streams content-addressed assets and keeps referenced blobs", async () => {
+    const fixture = await startServer();
+    const session = await register(
+      fixture,
+      "assets@example.com",
+      "secret-123"
+    );
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: session.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(3 * 1024 * 1024, 0x2a)
+    ]);
+    const hash = createHash("sha256").update(png).digest("hex");
+    const uploaded = await json<{
+      deduplicated: boolean;
+      asset: { id: string; hash: string; size: number; url: string };
+    }>(fixture, `/api/workspaces/${workspaceId}/assets`, {
+      method: "POST",
+      cookie: session.cookie,
+      contentType: "image/png",
+      headers: { "X-InkLoom-Kind": "image" },
+      body: png
+    });
+    expect(uploaded).toMatchObject({
+      deduplicated: false,
+      asset: { hash, size: png.length }
+    });
+
+    const duplicate = await json<{
+      deduplicated: boolean;
+      asset: { id: string };
+    }>(fixture, `/api/workspaces/${workspaceId}/assets`, {
+      method: "POST",
+      cookie: session.cookie,
+      contentType: "image/png",
+      headers: { "X-InkLoom-Kind": "image" },
+      body: png
+    });
+    expect(duplicate.deduplicated).toBe(true);
+    expect(duplicate.asset.id).toBe(uploaded.asset.id);
+
+    const content = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/${hash}`,
+      { cookie: session.cookie }
+    );
+    expect(content.status).toBe(200);
+    expect(content.headers.get("content-type")).toBe("image/png");
+    expect(content.headers.get("cache-control")).toContain("immutable");
+    expect(Buffer.from(await content.arrayBuffer()).equals(png)).toBe(true);
+    const info = await json<{ asset: { hash: string; size: number } }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/${hash}/info`,
+      { cookie: session.cookie }
+    );
+    expect(info.asset).toMatchObject({ hash, size: png.length });
+    const head = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/${hash}`,
+      { method: "HEAD", cookie: session.cookie }
+    );
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-length")).toBe(String(png.length));
+    const bob = await register(fixture, "asset-bob@example.com", "secret-456");
+    const forbidden = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/${hash}`,
+      { cookie: bob.cookie }
+    );
+    expect(forbidden.status).toBe(404);
+
+    const created = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: session.cookie,
+      body: {
+        path: "资产引用.md",
+        title: "资产引用",
+        markdown: `![测试](assets/${hash}.png)\n`
+      }
+    });
+    const documentId = created.document.meta.id;
+    const retained = await json<{ count: number }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/cleanup`,
+      {
+        method: "POST",
+        cookie: session.cookie,
+        body: { unusedForHours: 0 }
+      }
+    );
+    expect(retained.count).toBe(0);
+
+    await json(fixture, `/api/workspaces/${workspaceId}/documents/${documentId}`, {
+      method: "PUT",
+      cookie: session.cookie,
+      body: {
+        baseRevision: 1,
+        checkpoint: true,
+        markdown: "已移除资产引用。\n"
+      }
+    });
+    const removed = await json<{ count: number }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/cleanup`,
+      {
+        method: "POST",
+        cookie: session.cookie,
+        body: { unusedForHours: 0 }
+      }
+    );
+    expect(removed.count).toBe(1);
+    const missing = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets/${hash}`,
+      { cookie: session.cookie }
+    );
+    expect(missing.status).toBe(404);
+
+    const mismatch = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets`,
+      {
+        method: "POST",
+        cookie: session.cookie,
+        contentType: "image/png",
+        headers: { "X-InkLoom-Kind": "image" },
+        body: Buffer.from("not a png")
+      }
+    );
+    expect(mismatch.status).toBe(415);
+
   });
 
   it("rejects stale revisions and isolates workspaces between users", async () => {
@@ -706,8 +850,10 @@ describe("InkLoom API", () => {
 });
 
 async function startServer(): Promise<TestServer> {
+  const assetDirectory = mkdtempSync(join(tmpdir(), "inkloom-assets-"));
   const application = createApiServer({
     databaseOptions: { filename: ":memory:" },
+    assetDirectory,
     allowedOrigins: ["http://127.0.0.1:4173"],
     secureCookies: false
   });
@@ -717,7 +863,10 @@ async function startServer(): Promise<TestServer> {
   const address = application.server.address() as AddressInfo;
   const fixture: TestServer = {
     baseUrl: `http://127.0.0.1:${address.port}`,
-    close: application.close
+    close: async () => {
+      await application.close();
+      rmSync(assetDirectory, { recursive: true, force: true });
+    }
   };
   activeServers.push(fixture);
   return fixture;
@@ -758,6 +907,8 @@ type RequestOptions = {
   cookie?: string;
   origin?: string;
   body?: unknown;
+  contentType?: string;
+  headers?: Record<string, string>;
 };
 
 async function raw(
@@ -768,11 +919,22 @@ async function raw(
   const headers: Record<string, string> = {};
   if (options.cookie) headers.Cookie = options.cookie;
   if (options.origin) headers.Origin = options.origin;
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  Object.assign(headers, options.headers);
+  if (options.body !== undefined) {
+    headers["Content-Type"] =
+      options.contentType ?? "application/json";
+  }
+  const body =
+    options.body === undefined
+      ? undefined
+      : Buffer.isBuffer(options.body) || options.body instanceof Uint8Array
+        ? options.body
+        : typeof options.body === "string"
+          ? options.body
+          : JSON.stringify(options.body);
   return fetch(`${fixture.baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers,
-    body:
-      options.body === undefined ? undefined : JSON.stringify(options.body)
+    body
   });
 }
