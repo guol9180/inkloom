@@ -166,6 +166,18 @@ const MIGRATIONS: readonly Migration[] = [
 
       flattenLegacyDocumentPaths(database, appliedAt);
     }
+  },
+  {
+    version: 3,
+    name: "knowledge-base-revisions",
+    up(database) {
+      database.exec(`
+        ALTER TABLE knowledge_bases
+          ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+        CREATE INDEX knowledge_bases_workspace_order
+          ON knowledge_bases(workspace_id, sort_order, created_at);
+      `);
+    }
   }
 ];
 

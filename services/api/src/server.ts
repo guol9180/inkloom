@@ -232,6 +232,110 @@ async function route({
   if (segments[0] === "api" && segments[1] === "workspaces" && segments[2]) {
     const workspaceId = segments[2];
 
+    if (method === "GET" && segments.length === 4 && segments[3] === "notes") {
+      sendJson(response, 200, {
+        documents: database.listNotes(
+          user.id,
+          workspaceId,
+          parseDocumentSort(url.searchParams.get("sort"))
+        )
+      });
+      return;
+    }
+
+    if (
+      method === "GET" &&
+      segments.length === 5 &&
+      segments[3] === "notes" &&
+      segments[4] === "recent"
+    ) {
+      sendJson(response, 200, {
+        documents: database.listRecentDocuments(user.id, workspaceId)
+      });
+      return;
+    }
+
+    if (
+      method === "GET" &&
+      segments.length === 4 &&
+      segments[3] === "knowledge-bases"
+    ) {
+      sendJson(response, 200, {
+        knowledgeBases: database.listKnowledgeBases(user.id, workspaceId)
+      });
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      segments.length === 4 &&
+      segments[3] === "knowledge-bases"
+    ) {
+      const input = parseRecord(body);
+      const knowledgeBase = database.createKnowledgeBase(user.id, workspaceId, {
+        name: requiredString(input.name, "知识库名称", 80)
+      });
+      sendJson(response, 201, { knowledgeBase });
+      return;
+    }
+
+    if (
+      segments.length === 5 &&
+      segments[3] === "knowledge-bases" &&
+      segments[4]
+    ) {
+      if (method === "PATCH") {
+        const input = parseRecord(body);
+        const knowledgeBase = database.renameKnowledgeBase(
+          user.id,
+          workspaceId,
+          segments[4],
+          {
+            name: requiredString(input.name, "知识库名称", 80),
+            baseRevision: requiredRevision(input.baseRevision),
+            sortOrder:
+              input.sortOrder === undefined
+                ? undefined
+                : requiredSortOrder(input.sortOrder)
+          }
+        );
+        sendJson(response, 200, { knowledgeBase });
+        return;
+      }
+      if (method === "DELETE") {
+        const input = parseRecord(body);
+        const documents = database.deleteKnowledgeBase(
+          user.id,
+          workspaceId,
+          segments[4],
+          requiredRevision(input.baseRevision)
+        );
+        sendJson(response, 200, {
+          knowledgeBaseId: segments[4],
+          documents
+        });
+        return;
+      }
+    }
+
+    if (
+      method === "GET" &&
+      segments.length === 6 &&
+      segments[3] === "knowledge-bases" &&
+      segments[4] &&
+      segments[5] === "documents"
+    ) {
+      sendJson(response, 200, {
+        documents: database.listKnowledgeBaseDocuments(
+          user.id,
+          workspaceId,
+          segments[4],
+          parseDocumentSort(url.searchParams.get("sort"))
+        )
+      });
+      return;
+    }
+
     if (method === "GET" && segments.length === 4 && segments[3] === "tree") {
       sendJson(response, 200, {
         tree: database.listTree(user.id, workspaceId)
@@ -261,6 +365,52 @@ async function route({
       );
       sendJson(response, 200, { workspace });
       return;
+    }
+
+    if (
+      segments.length === 6 &&
+      segments[3] === "documents" &&
+      segments[4] &&
+      method === "POST"
+    ) {
+      const input = parseRecord(body);
+      if (segments[5] === "archive") {
+        const document = database.archiveDocument(
+          user.id,
+          workspaceId,
+          segments[4],
+          {
+            knowledgeBaseId: requiredString(
+              input.knowledgeBaseId,
+              "知识库",
+              200
+            ),
+            baseRevision: requiredRevision(input.baseRevision)
+          }
+        );
+        sendJson(response, 200, { document });
+        return;
+      }
+      if (segments[5] === "restore-to-notes") {
+        const document = database.restoreDocumentToNotes(
+          user.id,
+          workspaceId,
+          segments[4],
+          requiredRevision(input.baseRevision)
+        );
+        sendJson(response, 200, { document });
+        return;
+      }
+      if (segments[5] === "open") {
+        const document = database.markDocumentOpened(
+          user.id,
+          workspaceId,
+          segments[4],
+          requiredRevision(input.baseRevision)
+        );
+        sendJson(response, 200, { document });
+        return;
+      }
     }
 
     if (
@@ -591,6 +741,23 @@ function requiredRevision(value: unknown): number {
     throw new ApiHttpError(400, "INVALID_REVISION", "revision 必须是正整数。");
   }
   return value as number;
+}
+
+function requiredSortOrder(value: unknown): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new ApiHttpError(400, "INVALID_SORT_ORDER", "排序值必须是非负整数。");
+  }
+  return value as number;
+}
+
+function parseDocumentSort(value: string | null): "updated" | "created" | "title" {
+  if (value === null || value === "updated") return "updated";
+  if (value === "created" || value === "title") return value;
+  throw new ApiHttpError(
+    400,
+    "INVALID_SORT",
+    "排序仅支持 updated、created 或 title。"
+  );
 }
 
 function isJsonObject(value: unknown): value is Record<string, JsonValue> {

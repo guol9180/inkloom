@@ -120,7 +120,8 @@ describe("data model migrations", () => {
           .all()
       ).toEqual([
         { version: 1, name: "legacy-document-baseline" },
-        { version: 2, name: "scratch-knowledge-assets" }
+        { version: 2, name: "scratch-knowledge-assets" },
+        { version: 3, name: "knowledge-base-revisions" }
       ]);
 
       for (const table of [
@@ -164,7 +165,7 @@ describe("data model migrations", () => {
       ).toEqual({ count: 4 });
       expect(
         reopened.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
-      ).toEqual({ count: 2 });
+      ).toEqual({ count: 3 });
       expect(
         reopened.db
           .prepare("SELECT COUNT(*) AS count FROM document_path_migrations")
@@ -201,7 +202,7 @@ describe("data model migrations", () => {
       });
       expect(
         restored.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
-      ).toEqual({ count: 2 });
+      ).toEqual({ count: 3 });
     } finally {
       restored.close();
     }

@@ -261,6 +261,276 @@ describe("InkLoom API", () => {
     );
     expect(forbidden.status).toBe(404);
   });
+
+  it("manages scratch notes, flat knowledge bases, archive and restore workflows", async () => {
+    const fixture = await startServer();
+    const alice = await register(fixture, "workflow@example.com", "secret-123");
+    const bob = await register(
+      fixture,
+      "workflow-other@example.com",
+      "secret-456"
+    );
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: alice.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+
+    const initialNotes = await json<{
+      documents: Array<{ id: string; title: string; revision: number }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/notes`, {
+      cookie: alice.cookie
+    });
+    expect(initialNotes.documents).toHaveLength(1);
+
+    const note = await json<{
+      document: {
+        meta: {
+          id: string;
+          revision: number;
+          lifecycle: string;
+          path: string;
+        };
+      };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: alice.cookie,
+      body: {
+        path: "同名.md",
+        title: "Alpha 随记",
+        markdown: "# Alpha 随记\n\n需要归档的内容。\n",
+        tags: ["随记"]
+      }
+    });
+    expect(note.document.meta).toMatchObject({
+      lifecycle: "scratch",
+      revision: 1
+    });
+    const sortedNotes = await json<{
+      documents: Array<{ title: string }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/notes?sort=title`, {
+      cookie: alice.cookie
+    });
+    expect(sortedNotes.documents[0].title).toBe("Alpha 随记");
+
+    const knowledgeBase = await json<{
+      knowledgeBase: { id: string; revision: number; name: string };
+    }>(fixture, `/api/workspaces/${workspaceId}/knowledge-bases`, {
+      method: "POST",
+      cookie: alice.cookie,
+      body: { name: "产品知识" }
+    });
+    expect(knowledgeBase.knowledgeBase).toMatchObject({
+      name: "产品知识",
+      revision: 1
+    });
+
+    const archived = await json<{
+      document: {
+        meta: {
+          id: string;
+          revision: number;
+          lifecycle: string;
+          knowledgeBaseId: string;
+          archivedAt: string;
+        };
+      };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${note.document.meta.id}/archive`,
+      {
+        method: "POST",
+        cookie: alice.cookie,
+        body: {
+          knowledgeBaseId: knowledgeBase.knowledgeBase.id,
+          baseRevision: 1
+        }
+      }
+    );
+    expect(archived.document.meta).toMatchObject({
+      lifecycle: "knowledge",
+      knowledgeBaseId: knowledgeBase.knowledgeBase.id,
+      revision: 2
+    });
+
+    const notesAfterArchive = await json<{
+      documents: Array<{ id: string }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/notes`, {
+      cookie: alice.cookie
+    });
+    expect(notesAfterArchive.documents.map((document) => document.id)).not.toContain(
+      note.document.meta.id
+    );
+
+    const knowledgeDocuments = await json<{
+      documents: Array<{
+        id: string;
+        lifecycle: string;
+        excerpt: string;
+      }>;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/${knowledgeBase.knowledgeBase.id}/documents`,
+      { cookie: alice.cookie }
+    );
+    expect(knowledgeDocuments.documents).toEqual([
+      expect.objectContaining({
+        id: note.document.meta.id,
+        lifecycle: "knowledge",
+        excerpt: "Alpha 随记 需要归档的内容。"
+      })
+    ]);
+
+    const opened = await json<{
+      document: { meta: { revision: number; lastOpenedAt: string } };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${note.document.meta.id}/open`,
+      {
+        method: "POST",
+        cookie: alice.cookie,
+        body: { baseRevision: 2 }
+      }
+    );
+    expect(opened.document.meta).toMatchObject({ revision: 3 });
+    expect(opened.document.meta.lastOpenedAt).toBeTruthy();
+
+    const recent = await json<{ documents: Array<{ id: string }> }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/notes/recent`,
+      { cookie: alice.cookie }
+    );
+    expect(recent.documents[0].id).toBe(note.document.meta.id);
+
+    const renamed = await json<{
+      knowledgeBase: { name: string; revision: number };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/${knowledgeBase.knowledgeBase.id}`,
+      {
+        method: "PATCH",
+        cookie: alice.cookie,
+        body: {
+          name: "产品资料",
+          sortOrder: 3,
+          baseRevision: 1
+        }
+      }
+    );
+    expect(renamed.knowledgeBase).toMatchObject({
+      name: "产品资料",
+      revision: 2
+    });
+
+    const staleKnowledgeBase = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/${knowledgeBase.knowledgeBase.id}`,
+      {
+        method: "PATCH",
+        cookie: alice.cookie,
+        body: { name: "过期修改", baseRevision: 1 }
+      }
+    );
+    expect(staleKnowledgeBase.status).toBe(409);
+    expect(await staleKnowledgeBase.json()).toMatchObject({
+      error: { code: "KNOWLEDGE_BASE_REVISION_CONFLICT" }
+    });
+
+    await json(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: alice.cookie,
+      body: {
+        path: "同名.md",
+        title: "随记乙",
+        markdown: "# 随记乙\n"
+      }
+    });
+    const restored = await json<{
+      document: {
+        meta: {
+          lifecycle: string;
+          path: string;
+          knowledgeBaseId?: string;
+          revision: number;
+        };
+      };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${note.document.meta.id}/restore-to-notes`,
+      {
+        method: "POST",
+        cookie: alice.cookie,
+        body: { baseRevision: 3 }
+      }
+    );
+    expect(restored.document.meta).toMatchObject({
+      lifecycle: "scratch",
+      path: "同名 (2).md",
+      revision: 4
+    });
+    expect(restored.document.meta.knowledgeBaseId).toBeUndefined();
+
+    const archivedDefault = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${initialNotes.documents[0].id}/archive`,
+      {
+        method: "POST",
+        cookie: alice.cookie,
+        body: {
+          knowledgeBaseId: knowledgeBase.knowledgeBase.id,
+          baseRevision: initialNotes.documents[0].revision
+        }
+      }
+    );
+
+    const staleDelete = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/${knowledgeBase.knowledgeBase.id}`,
+      {
+        method: "DELETE",
+        cookie: alice.cookie,
+        body: { baseRevision: 1 }
+      }
+    );
+    expect(staleDelete.status).toBe(409);
+
+    const deleted = await json<{
+      documents: Array<{ meta: { lifecycle: string; revision: number } }>;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/${knowledgeBase.knowledgeBase.id}`,
+      {
+        method: "DELETE",
+        cookie: alice.cookie,
+        body: { baseRevision: 2 }
+      }
+    );
+    expect(deleted.documents).toEqual([
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          lifecycle: "scratch",
+          revision: archivedDefault.document.meta.revision + 1
+        })
+      })
+    ]);
+
+    const knowledgeBases = await json<{ knowledgeBases: unknown[] }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases`,
+      { cookie: alice.cookie }
+    );
+    expect(knowledgeBases.knowledgeBases).toEqual([]);
+
+    const forbidden = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/notes`,
+      { cookie: bob.cookie }
+    );
+    expect(forbidden.status).toBe(404);
+  });
 });
 
 async function startServer(): Promise<TestServer> {
