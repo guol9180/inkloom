@@ -110,7 +110,7 @@ export function createApiServer(options: ApiServerOptions = {}) {
         );
         response.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Accept"
+          "Content-Type, Accept, X-InkLoom-Kind, X-InkLoom-Filename"
         );
         response.setHeader("Access-Control-Max-Age", "600");
         response.end();
@@ -1014,20 +1014,25 @@ function assertAssetSignature(mime: string, bytes: Buffer) {
     (mime === "application/pdf" && bytes.subarray(0, 5).toString() === "%PDF-") ||
     (mime === "image/svg+xml" && /<svg[\s>]/i.test(bytes.toString("utf8"))) ||
     ((mime === "application/json" ||
-      mime === "application/vnd.excalidraw+json" ||
-      mime === "text/plain") &&
+      mime === "application/vnd.excalidraw+json") &&
       /^[\s[{]/.test(bytes.toString("utf8")));
   const constrained =
     mime.startsWith("image/") ||
     mime === "application/pdf" ||
     mime === "application/json" ||
-    mime === "application/vnd.excalidraw+json" ||
-    mime === "text/plain";
+    mime === "application/vnd.excalidraw+json";
   if (constrained && !matches) {
     throw new AssetUploadError(
       415,
       "ASSET_CONTENT_MISMATCH",
       "文件内容与声明的 MIME 不匹配。"
+    );
+  }
+  if (mime === "text/plain" && bytes.includes(0)) {
+    throw new AssetUploadError(
+      415,
+      "ASSET_CONTENT_MISMATCH",
+      "文本附件包含二进制内容。"
     );
   }
 }

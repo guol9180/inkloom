@@ -721,6 +721,89 @@
   border-radius: 0.55rem;
 }
 
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .milkdown-image-block:has(img[src$="#align=left"])
+  > .image-wrapper {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .milkdown-image-block:has(img[src$="#align=right"])
+  > .image-wrapper {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .milkdown-image-block
+  > .caption-input {
+  color: var(--color-ink-400);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-file-block {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  border: 1px solid var(--color-line);
+  border-radius: 0.95rem;
+  background: color-mix(
+    in oklab,
+    var(--color-brand-50) 45%,
+    var(--color-paper)
+  );
+  padding: 0.8rem 1rem;
+  font-family: var(--font-sans);
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .inkloom-file-block::before {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: var(--color-brand-100);
+  color: var(--color-brand-700);
+  content: "↧";
+  font-size: 1rem;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-file-block a {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--color-ink-800);
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  .inkloom-file-block
+  .inkloom-file-meta {
+  color: var(--color-ink-400);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
 .rich-markdown-shell .milkdown .milkdown-toolbar,
 .rich-markdown-shell .milkdown .milkdown-slash-menu,
 .rich-markdown-shell .milkdown .milkdown-link-preview,

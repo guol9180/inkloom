@@ -1,4 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZbS8AAAAASUVORK5CYII=",
+  "base64"
+);
 
 test("uses one command registry for toolbar, slash menu and shortcuts", async ({
   page
@@ -283,6 +289,182 @@ test("pastes spreadsheet data into the current table", async ({ page }) => {
   await expect(tableContent.locator("th").first()).toContainText("模块");
   await expect(tableContent.locator("th").nth(1)).toContainText("负责人");
   await expect(tableContent.locator("tr").nth(1)).toContainText("编辑器");
+});
+
+test("uploads images and attachments and exports a portable zip", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await expect(editor).toBeVisible();
+  let failedUploads = 0;
+  const assetRoute = /\/api\/workspaces\/[^/]+\/assets$/;
+  await page.route(assetRoute, async (route) => {
+    if (failedUploads === 0) {
+      failedUploads += 1;
+      await route.abort("failed");
+      return;
+    }
+    await route.continue();
+  });
+
+  const imageInput = page
+    .locator('.product-markdown-editor input[type="file"]')
+    .first();
+  await imageInput.setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: ONE_PIXEL_PNG
+  });
+  await expect(page.getByText("网络连接中断，资产上传失败。")).toBeVisible();
+  await page.unroute(assetRoute);
+  await page.getByRole("button", { name: "重试上传" }).click();
+  const imageBlock = page.locator(".milkdown-image-block").last();
+  await expect(imageBlock).toBeVisible();
+  await expect(imageBlock.locator("img")).toHaveAttribute(
+    "src",
+    /#align=center/
+  );
+  await expect(page.getByText("已插入文档")).toBeHidden({ timeout: 4_000 });
+
+  await page.locator('[aria-label^="块 "]').first().click();
+  await page.getByRole("menuitem", { name: "图片左对齐" }).click();
+  await expect(imageBlock.locator("img")).toHaveAttribute(
+    "src",
+    /#align=left/
+  );
+  const originalImageSource = await imageBlock.locator("img").getAttribute("src");
+  await page.locator('[aria-label^="块 "]').first().click();
+  await page.getByRole("menuitem", { name: "替换图片" }).click();
+  await imageInput.setInputFiles({
+    name: "diagram-2.png",
+    mimeType: "image/png",
+    buffer: Buffer.concat([ONE_PIXEL_PNG, Buffer.from([0])])
+  });
+  await expect
+    .poll(async () => imageBlock.locator("img").getAttribute("src"))
+    .not.toBe(originalImageSource);
+  await expect(imageBlock.locator("img")).toHaveAttribute("alt", "diagram-2");
+  await page.locator('[aria-label^="块 "]').first().click();
+  await page.getByRole("menuitem", { name: "图片左对齐" }).click();
+
+  const attachmentInput = page
+    .locator('.product-markdown-editor input[type="file"]')
+    .nth(1);
+  await attachmentInput.setInputFiles({
+    name: "说明.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("attachment content")
+  });
+  const attachment = page.locator(".inkloom-file-block").last();
+  await expect(attachment).toContainText("说明.txt");
+  await expect(attachment.locator("a")).toHaveAttribute("download", "说明.txt");
+
+  const autosave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const markdown = String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    );
+    return (
+      markdown.includes("inkloom:file") && markdown.includes("#align=left")
+    );
+  });
+  await autosave;
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("编辑器验收.zip");
+  const archive = readFileSync(await download.path());
+  expect(archive.includes(Buffer.from("编辑器验收.md"))).toBe(true);
+  expect(archive.includes(Buffer.from("assets/"))).toBe(true);
+  expect(archive.includes(Buffer.from("inkloom:file"))).toBe(true);
+
+  await page.reload();
+  await expect(page.locator(".milkdown-image-block img")).toHaveAttribute(
+    "src",
+    /#align=left/
+  );
+  await expect(page.locator(".inkloom-file-block")).toContainText("说明.txt");
+  await page
+    .locator(".milkdown-image-block img")
+    .dblclick();
+  await expect(
+    page.getByRole("dialog", { name: "图片预览" })
+  ).toBeVisible();
+});
+
+test("pastes and drops image and attachment files", async ({ page }) => {
+  await openScratchNote(page);
+  await expect(page.getByLabel("Markdown 正文")).toBeVisible();
+  await page.locator(".product-markdown-editor").evaluate(
+    (root, base64) => {
+      const bytes = Uint8Array.from(atob(base64), (char) =>
+        char.charCodeAt(0)
+      );
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([bytes], "pasted.png", { type: "image/png" })
+      );
+      root.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: transfer
+        })
+      );
+    },
+    ONE_PIXEL_PNG.toString("base64")
+  );
+  await expect(page.locator(".milkdown-image-block").last()).toBeVisible();
+
+  await page.locator(".product-markdown-editor").evaluate((root) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(["dropped attachment"], "dropped.txt", {
+        type: "text/plain"
+      })
+    );
+    root.dispatchEvent(
+      new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer
+      })
+    );
+  });
+  await expect(page.locator(".inkloom-file-block").last()).toContainText(
+    "dropped.txt"
+  );
+});
+
+test("shows upload progress and supports cancellation", async ({ page }) => {
+  await openScratchNote(page);
+  const assetRoute = /\/api\/workspaces\/[^/]+\/assets$/;
+  await page.route(assetRoute, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    await route.continue().catch(() => undefined);
+  });
+  const imageInput = page
+    .locator('.product-markdown-editor input[type="file"]')
+    .first();
+  await imageInput.setInputFiles({
+    name: "cancel-me.png",
+    mimeType: "image/png",
+    buffer: ONE_PIXEL_PNG
+  });
+  await expect(page.getByText(/正在上传 · \d+%/)).toBeVisible();
+  await page.getByRole("button", { name: "取消上传" }).click();
+  await expect(page.getByText("已取消")).toBeVisible();
+  await expect(page.locator(".milkdown-image-block")).toHaveCount(0);
+  await page.unroute(assetRoute);
 });
 
 test("round-trips quote, task and code blocks", async ({ page }) => {

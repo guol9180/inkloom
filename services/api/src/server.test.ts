@@ -175,6 +175,18 @@ describe("InkLoom API", () => {
       { cookie: session.cookie }
     );
     const workspaceId = workspaces.workspaces[0].id;
+    const preflight = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/assets`,
+      {
+        method: "OPTIONS",
+        origin: "http://127.0.0.1:4173"
+      }
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-headers")).toContain(
+      "X-InkLoom-Kind"
+    );
     const png = Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       Buffer.alloc(3 * 1024 * 1024, 0x2a)

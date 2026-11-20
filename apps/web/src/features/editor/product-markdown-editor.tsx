@@ -24,6 +24,7 @@ import {
   Heading4,
   Heading5,
   Heading6,
+  Image,
   Italic,
   Link2,
   List,
@@ -31,9 +32,11 @@ import {
   ListOrdered,
   MessageSquareText,
   Minus,
+  Paperclip,
   Pilcrow,
   Quote,
   Redo2,
+  RotateCcw,
   Rows3,
   Sigma,
   Strikethrough,
@@ -42,10 +45,11 @@ import {
   TextAlignEnd,
   TextAlignStart,
   Trash2,
-  Undo2
+  Undo2,
+  X
 } from "lucide-react";
 import { AppDialog } from "../../components/ui/app-dialog";
-import { Button } from "../../components/ui/button";
+import { Button, IconButton } from "../../components/ui/button";
 import { FieldLabel, TextInput } from "../../components/ui/field";
 import type {
   RichMarkdownEditorHandle,
@@ -66,6 +70,14 @@ import {
   CALLOUT_LABELS,
   type CalloutKind
 } from "./editor-block-meta";
+import {
+  classifyAssetFile,
+  uploadAssetWithProgress,
+  type AssetUploadTask
+} from "./asset-upload";
+import { cloudClient } from "../../cloud-workspace";
+import type { CloudAsset } from "@inkloom/storage";
+import type { WorkspaceId } from "@inkloom/core";
 
 const RichMarkdownEditor = lazy(() =>
   import("../workspace/rich-markdown-editor").then((module) => ({
@@ -88,6 +100,10 @@ type FloatingPosition = {
   left: number;
 };
 
+type ProductUploadTask = AssetUploadTask & {
+  replaceBlockIndex?: number;
+};
+
 export type ProductMarkdownEditorHandle = {
   getMarkdown: () => string;
   focus: () => void;
@@ -98,11 +114,12 @@ export const ProductMarkdownEditor = forwardRef<
   {
   value: string;
   title: string;
+    workspaceId: string;
   onChange: (value: string) => void;
   onFocusSearch: () => void;
   }
 >(function ProductMarkdownEditor(
-  { value, title, onChange, onFocusSearch },
+  { value, title, workspaceId, onChange, onFocusSearch },
   ref
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -134,6 +151,12 @@ export const ProductMarkdownEditor = forwardRef<
     summary: string;
   }>();
   const [toggleSummaryError, setToggleSummaryError] = useState("");
+  const [uploads, setUploads] = useState<ProductUploadTask[]>([]);
+  const [imagePreview, setImagePreview] = useState<string>();
+  const [replaceImageIndex, setReplaceImageIndex] = useState<number>();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const uploadControllersRef = useRef(new Map<string, AbortController>());
 
   useImperativeHandle(
     ref,
@@ -288,6 +311,15 @@ export const ProductMarkdownEditor = forwardRef<
   }
 
   function executeCommand(command: EditorCommandId) {
+    if (command === "image") {
+      setReplaceImageIndex(undefined);
+      imageInputRef.current?.click();
+      return;
+    }
+    if (command === "attachment") {
+      attachmentInputRef.current?.click();
+      return;
+    }
     if (command === "link") {
       setLinkUrl("https://");
       setLinkError("");
@@ -417,11 +449,163 @@ export const ProductMarkdownEditor = forwardRef<
     window.requestAnimationFrame(syncHandles);
   }
 
+  function enqueueFiles(
+    files: readonly File[],
+    requestedKind?: "image" | "attachment",
+    replacementIndex?: number
+  ) {
+    for (const file of files) {
+      const classification = classifyAssetFile(file);
+      const kind =
+        requestedKind === "image"
+          ? classification.kind === "image" ||
+            classification.kind === "svg"
+            ? classification.kind
+            : undefined
+          : requestedKind === "attachment"
+            ? "attachment"
+            : classification.kind;
+      if (!kind) continue;
+      const task: ProductUploadTask = {
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        kind,
+        progress: 0,
+        state: "uploading",
+        replaceBlockIndex: replacementIndex
+      };
+      setUploads((current) => [...current, task]);
+      void runUpload(task);
+    }
+  }
+
+  async function runUpload(task: ProductUploadTask) {
+    const controller = new AbortController();
+    uploadControllersRef.current.set(task.id, controller);
+    setUploads((current) =>
+      current.map((item) =>
+        item.id === task.id
+          ? { ...item, state: "uploading", progress: 0, error: undefined }
+          : item
+      )
+    );
+    try {
+      const { asset } = await uploadAssetWithProgress({
+        workspaceId,
+        file: task.file,
+        kind: task.kind,
+        signal: controller.signal,
+        onProgress: (progress) =>
+          setUploads((current) =>
+            current.map((item) =>
+              item.id === task.id ? { ...item, progress } : item
+            )
+          )
+      });
+      insertUploadedAsset(task, asset);
+      setUploads((current) =>
+        current.map((item) =>
+          item.id === task.id
+            ? { ...item, state: "complete", progress: 100, asset }
+            : item
+        )
+      );
+      window.setTimeout(() => {
+        setUploads((current) =>
+          current.filter((item) => item.id !== task.id)
+        );
+      }, 1_500);
+    } catch (uploadError) {
+      const cancelled =
+        uploadError instanceof DOMException &&
+        uploadError.name === "AbortError";
+      setUploads((current) =>
+        current.map((item) =>
+          item.id === task.id
+            ? {
+                ...item,
+                state: cancelled ? "cancelled" : "failed",
+                error: cancelled
+                  ? undefined
+                  : uploadError instanceof Error
+                    ? uploadError.message
+                    : "上传失败，请重试。"
+              }
+            : item
+        )
+      );
+    } finally {
+      uploadControllersRef.current.delete(task.id);
+    }
+  }
+
+  function insertUploadedAsset(task: ProductUploadTask, asset: CloudAsset) {
+    const src = cloudClient.assetUrl(
+      workspaceId as WorkspaceId,
+      asset.hash
+    );
+    const caption = task.file.name.replace(/\.[^.]+$/, "") || task.file.name;
+    if (task.kind === "image" || task.kind === "svg") {
+      if (task.replaceBlockIndex !== undefined) {
+        editorRef.current?.replaceImage(task.replaceBlockIndex, {
+          src,
+          caption
+        });
+      } else {
+        editorRef.current?.insertImage({ src, caption });
+      }
+      return;
+    }
+    editorRef.current?.insertFile({
+      id: asset.id,
+      hash: asset.hash,
+      mime: asset.mime,
+      size: asset.size,
+      name: task.file.name,
+      url: src
+    });
+  }
+
+  function cancelUpload(taskId: string) {
+    uploadControllersRef.current.get(taskId)?.abort();
+  }
+
+  function removeUpload(taskId: string) {
+    uploadControllersRef.current.get(taskId)?.abort();
+    setUploads((current) => current.filter((task) => task.id !== taskId));
+  }
+
   return (
     <div
       ref={rootRef}
       className="product-markdown-editor relative min-h-0"
       onKeyDownCapture={handleKeyDown}
+      onPaste={(event) => {
+        const files = [...event.clipboardData.files];
+        if (files.length === 0) return;
+        event.preventDefault();
+        enqueueFiles(files);
+      }}
+      onDragOver={(event) => {
+        if ([...event.dataTransfer.types].includes("Files")) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        const files = [...event.dataTransfer.files];
+        if (files.length === 0) return;
+        event.preventDefault();
+        enqueueFiles(files);
+      }}
+      onDoubleClick={(event) => {
+        const image = (event.target as Element | null)?.closest("img");
+        if (image instanceof HTMLImageElement && image.src) {
+          setImagePreview(image.src);
+        }
+      }}
     >
       <div
         className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
@@ -658,6 +842,49 @@ export const ProductMarkdownEditor = forwardRef<
                     </DropdownMenu.Portal>
                   </DropdownMenu.Sub>
                   <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  {handle.kind === "image" && (
+                    <>
+                      <BlockMenuItem
+                        icon={<Image size={14} />}
+                        label="替换图片"
+                        onSelect={() => {
+                          setReplaceImageIndex(handle.index);
+                          imageInputRef.current?.click();
+                        }}
+                      />
+                      <BlockMenuItem
+                        icon={<Image size={14} />}
+                        label="图片左对齐"
+                        onSelect={() =>
+                          editorRef.current?.setImageAlignment(
+                            handle.index,
+                            "left"
+                          )
+                        }
+                      />
+                      <BlockMenuItem
+                        icon={<Image size={14} />}
+                        label="图片居中"
+                        onSelect={() =>
+                          editorRef.current?.setImageAlignment(
+                            handle.index,
+                            "center"
+                          )
+                        }
+                      />
+                      <BlockMenuItem
+                        icon={<Image size={14} />}
+                        label="图片右对齐"
+                        onSelect={() =>
+                          editorRef.current?.setImageAlignment(
+                            handle.index,
+                            "right"
+                          )
+                        }
+                      />
+                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                    </>
+                  )}
                   {handle.kind === "toggle" && (
                     <>
                       <BlockMenuItem
@@ -730,6 +957,99 @@ export const ProductMarkdownEditor = forwardRef<
           />
         </Suspense>
       </div>
+
+      <input
+        ref={imageInputRef}
+        className="hidden"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml"
+        onChange={(event) => {
+          const files = [...(event.target.files ?? [])];
+          event.target.value = "";
+          if (files.length > 0) {
+            enqueueFiles(files, "image", replaceImageIndex);
+          }
+          setReplaceImageIndex(undefined);
+        }}
+      />
+      <input
+        ref={attachmentInputRef}
+        className="hidden"
+        type="file"
+        onChange={(event) => {
+          const files = [...(event.target.files ?? [])];
+          event.target.value = "";
+          if (files.length > 0) enqueueFiles(files, "attachment");
+        }}
+      />
+
+      {uploads.length > 0 && (
+        <div className="fixed right-4 bottom-4 z-[85] grid w-[min(calc(100vw-2rem),21rem)] gap-2">
+          {uploads.map((task) => (
+            <div
+              key={task.id}
+              className="rounded-2xl border border-line-soft bg-white p-3 shadow-[0_18px_50px_rgb(20_36_28_/_0.16)]"
+            >
+              <div className="flex items-start gap-2">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                  {task.kind === "attachment" ? (
+                    <Paperclip size={15} />
+                  ) : (
+                    <Image size={15} />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-xs font-semibold text-ink-800">
+                    {task.file.name}
+                  </strong>
+                  <span className="mt-0.5 block text-[0.64rem] text-ink-400">
+                    {task.state === "uploading"
+                      ? `正在上传 · ${task.progress}%`
+                      : task.state === "complete"
+                        ? "已插入文档"
+                        : task.state === "cancelled"
+                          ? "已取消"
+                          : task.error}
+                  </span>
+                </span>
+                {task.state === "uploading" ? (
+                  <IconButton
+                    aria-label="取消上传"
+                    onClick={() => cancelUpload(task.id)}
+                  >
+                    <X size={14} />
+                  </IconButton>
+                ) : (
+                  <div className="flex">
+                    {task.state === "failed" && (
+                      <IconButton
+                        aria-label="重试上传"
+                        onClick={() => void runUpload(task)}
+                      >
+                        <RotateCcw size={14} />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      aria-label="移除上传任务"
+                      onClick={() => removeUpload(task.id)}
+                    >
+                      <X size={14} />
+                    </IconButton>
+                  </div>
+                )}
+              </div>
+              {task.state === "uploading" && (
+                <span className="mt-2 block h-1 overflow-hidden rounded-full bg-line-soft">
+                  <span
+                    className="block h-full rounded-full bg-brand-500 transition-[width] duration-200"
+                    style={{ width: `${task.progress}%` }}
+                  />
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {selection && (
         <div
@@ -905,6 +1225,26 @@ export const ProductMarkdownEditor = forwardRef<
           )}
         </form>
       </AppDialog>
+
+      <AppDialog
+        open={imagePreview !== undefined}
+        title="图片预览"
+        description="双击图片可再次打开大图。"
+        onClose={() => setImagePreview(undefined)}
+        footer={
+          <Button variant="secondary" onClick={() => setImagePreview(undefined)}>
+            关闭
+          </Button>
+        }
+      >
+        {imagePreview && (
+          <img
+            className="max-h-[68dvh] w-full rounded-xl bg-[#f7f9f7] object-contain"
+            src={imagePreview}
+            alt="图片预览"
+          />
+        )}
+      </AppDialog>
     </div>
   );
 });
@@ -952,6 +1292,10 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
       return <ListChecks size={15} />;
     case "link":
       return <Link2 size={15} />;
+    case "image":
+      return <Image size={15} />;
+    case "attachment":
+      return <Paperclip size={15} />;
     case "quote":
       return <Quote size={15} />;
     case "divider":
@@ -1071,6 +1415,8 @@ function blockKindFromElement(element: HTMLElement): MarkdownBlockType {
   if (element.matches("blockquote[data-callout]")) return "callout";
   if (element.matches("blockquote")) return "quote";
   if (element.matches("details[data-inkloom-toggle]")) return "toggle";
+  if (element.matches(".milkdown-image-block")) return "image";
+  if (element.matches(".inkloom-file-block")) return "attachment";
   if (element.matches(".milkdown-table-block, table")) return "table";
   if (element.matches(".milkdown-code-block, pre")) {
     return element.closest<HTMLElement>("[data-language='latex']")

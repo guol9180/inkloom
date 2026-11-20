@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Clock3,
   CloudOff,
+  Download,
   FileText,
   FolderPlus,
   Import,
@@ -53,6 +54,7 @@ import {
   useDocumentAutosave,
   type AutosaveStatus
 } from "../features/editor/use-document-autosave";
+import { exportDocumentZip } from "../features/editor/document-export";
 import { useEditorOwnership } from "../features/editor/use-editor-ownership";
 import {
   ProductMarkdownEditor
@@ -1007,6 +1009,7 @@ function DocumentSurface({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(mode === "notes");
+  const [exporting, setExporting] = useState(false);
   const ownership = useEditorOwnership(
     userId
       ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
@@ -1038,6 +1041,16 @@ function DocumentSurface({
     if (saved) setEditing(false);
   }
 
+  async function exportCurrentDocument() {
+    setExporting(true);
+    try {
+      await autosave.flush(true);
+      await exportDocumentZip(document, autosave.markdown);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const showEditor = editorActive;
 
   return (
@@ -1060,6 +1073,17 @@ function DocumentSurface({
               lastSavedAt={autosave.lastSavedAt}
             />
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void exportCurrentDocument()}
+            disabled={exporting}
+          >
+            <Download size={13} />
+            <span className="hidden sm:inline">
+              {exporting ? "导出中…" : "导出"}
+            </span>
+          </Button>
           {mode === "knowledge" && !editing && ownsEditor && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               编辑
@@ -1139,6 +1163,7 @@ function DocumentSurface({
           <ProductMarkdownEditor
             value={autosave.markdown}
             title={document.meta.title}
+            workspaceId={document.meta.workspaceId}
             onChange={autosave.changeMarkdown}
             onFocusSearch={onFocusSearch}
           />

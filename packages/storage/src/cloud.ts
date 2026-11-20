@@ -49,10 +49,24 @@ export type CloudKnowledgeBase = {
 
 export type CloudDocumentSort = "updated" | "created" | "title";
 
+export type CloudAssetKind = "image" | "attachment" | "excalidraw" | "svg";
+
+export type CloudAsset = {
+  id: string;
+  workspaceId: WorkspaceId;
+  hash: string;
+  mime: string;
+  size: number;
+  kind: CloudAssetKind;
+  createdAt: string;
+  url: string;
+};
+
 export type CloudFetchResponse = {
   readonly ok: boolean;
   readonly status: number;
   json(): Promise<unknown>;
+  arrayBuffer?(): Promise<ArrayBuffer>;
 };
 
 export type CloudFetch = (
@@ -60,8 +74,9 @@ export type CloudFetch = (
   init?: {
     method?: string;
     headers?: Record<string, string>;
-    body?: string;
+    body?: string | ArrayBuffer;
     credentials?: "include" | "same-origin" | "omit";
+    signal?: AbortSignal;
   }
 ) => Promise<CloudFetchResponse>;
 
@@ -310,6 +325,91 @@ export class CloudClient {
     return response.document;
   }
 
+  async uploadAsset(
+    workspaceId: WorkspaceId,
+    input: {
+      data: ArrayBuffer;
+      mime: string;
+      kind: CloudAssetKind;
+      filename?: string;
+      signal?: AbortSignal;
+    }
+  ): Promise<{ asset: CloudAsset; deduplicated: boolean }> {
+    const response = await this.fetch(
+      `${this.baseUrl}${this.workspaceAssetPath(workspaceId)}`,
+      {
+        method: "POST",
+        credentials: "include",
+        signal: input.signal,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": input.mime,
+          "X-InkLoom-Kind": input.kind,
+          ...(input.filename
+            ? { "X-InkLoom-Filename": encodeURIComponent(input.filename) }
+            : {})
+        },
+        body: input.data
+      }
+    );
+    const payload = (await response.json()) as {
+      asset?: CloudAsset;
+      deduplicated?: boolean;
+      error?: { message?: string };
+    };
+    if (!response.ok || !payload.asset) {
+      throw new CloudRequestError(
+        response.status,
+        "ASSET_UPLOAD_FAILED",
+        payload.error?.message ?? "资产上传失败。"
+      );
+    }
+    return {
+      asset: payload.asset,
+      deduplicated: Boolean(payload.deduplicated)
+    };
+  }
+
+  async getAssetInfo(
+    workspaceId: WorkspaceId,
+    hash: string
+  ): Promise<CloudAsset> {
+    const response = await this.request<{ asset: CloudAsset }>(
+      `${this.workspaceAssetPath(workspaceId)}/${encodeURIComponent(hash)}/info`
+    );
+    return response.asset;
+  }
+
+  async downloadAsset(
+    workspaceId: WorkspaceId,
+    hash: string
+  ): Promise<Uint8Array> {
+    const response = await this.fetch(
+      `${this.baseUrl}${this.workspaceAssetPath(
+        workspaceId
+      )}/${encodeURIComponent(hash)}`,
+      { credentials: "include" }
+    );
+    if (!response.ok || !response.arrayBuffer) {
+      throw new CloudRequestError(
+        response.status,
+        "ASSET_DOWNLOAD_FAILED",
+        "资产读取失败。"
+      );
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  assetUrl(workspaceId: WorkspaceId, hash: string) {
+    return `${this.baseUrl}${this.workspaceAssetPath(
+      workspaceId
+    )}/${encodeURIComponent(hash)}`;
+  }
+
+  assetEndpoint(workspaceId: WorkspaceId) {
+    return `${this.baseUrl}${this.workspaceAssetPath(workspaceId)}`;
+  }
+
   async restoreRevision(
     workspaceId: WorkspaceId,
     documentId: DocumentId,
@@ -381,6 +481,10 @@ export class CloudClient {
     }
 
     return payload as T;
+  }
+
+  private workspaceAssetPath(workspaceId: WorkspaceId) {
+    return `/api/workspaces/${encodeURIComponent(workspaceId)}/assets`;
   }
 }
 

@@ -15,4 +15,6 @@ export type MarkdownBlockType =
   | "table"
   | "callout"
   | "toggle"
+  | "image"
+  | "attachment"
   | "divider";

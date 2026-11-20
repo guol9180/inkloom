@@ -16,6 +16,8 @@ export type EditorCommandId =
   | "ordered-list"
   | "task-list"
   | "link"
+  | "image"
+  | "attachment"
   | "quote"
   | "divider"
   | "code-block"
@@ -51,6 +53,8 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   { id: "ordered-list", label: "有序列表", keywords: ["ordered", "number", "列表"], group: "list", slash: true },
   { id: "task-list", label: "任务列表", keywords: ["task", "todo", "任务"], group: "list", slash: true },
   { id: "link", label: "链接", hint: "Ctrl K", keywords: ["link", "url"], group: "inline", slash: true },
+  { id: "image", label: "图片", keywords: ["image", "photo", "图片"], group: "insert", slash: true },
+  { id: "attachment", label: "附件", keywords: ["file", "attachment", "附件"], group: "insert", slash: true },
   { id: "quote", label: "引用", keywords: ["quote", "blockquote"], group: "block", slash: true },
   { id: "divider", label: "分隔线", keywords: ["divider", "hr"], group: "insert", slash: true },
   { id: "code-block", label: "代码块", keywords: ["code", "fence"], group: "insert", slash: true },
@@ -78,6 +82,8 @@ const TOOLBAR_ORDER: readonly EditorCommandId[] = [
   "ordered-list",
   "task-list",
   "link",
+  "image",
+  "attachment",
   "quote",
   "divider",
   "code-block",

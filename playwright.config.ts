@@ -32,6 +32,7 @@ export default defineConfig({
         ...inheritedEnvironment,
         PORT: "3001",
         INKLOOM_DATABASE_PATH: ".inkloom/e2e.sqlite",
+        INKLOOM_ASSET_DIR: ".inkloom/e2e-assets",
         INKLOOM_WEB_ORIGINS: "http://127.0.0.1:4173"
       }
     },

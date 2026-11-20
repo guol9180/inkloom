@@ -45,13 +45,18 @@ import {
   insertCallout,
   insertCodeBlock,
   insertDivider,
+  insertFile,
   insertFormula,
+  insertImageBlock,
   insertTable,
   insertToggle,
   PRODUCT_BLOCK_PLUGINS,
+  replaceImageBlock,
   setCalloutKind,
+  setImageAlignment,
   setToggleSummary,
-  toggleToggleOpen
+  toggleToggleOpen,
+  type FileBlockAttrs
 } from "../editor/editor-blocks";
 import type { CalloutKind } from "../editor/editor-block-meta";
 import "@milkdown/crepe/theme/common/style.css";
@@ -68,6 +73,16 @@ export type RichMarkdownEditorHandle = {
   setCalloutKind: (blockIndex: number, kind: CalloutKind) => void;
   setToggleSummary: (blockIndex: number, summary: string) => void;
   toggleToggleOpen: (blockIndex: number) => void;
+  insertImage: (input: { src: string; caption: string }) => void;
+  insertFile: (attrs: FileBlockAttrs) => void;
+  replaceImage: (
+    blockIndex: number,
+    input: { src: string; caption: string }
+  ) => void;
+  setImageAlignment: (
+    blockIndex: number,
+    alignment: "left" | "center" | "right"
+  ) => void;
   tableAction: (action: TableAction) => void;
   moveTopLevelBlock: (fromIndex: number, toIndex: number) => void;
   duplicateTopLevelBlock: (index: number) => void;
@@ -296,6 +311,30 @@ export const RichMarkdownEditor = forwardRef<
         const crepe = crepeRef.current;
         if (!crepe || !readyRef.current) return;
         crepe.editor.action((ctx) => toggleToggleOpen(ctx, blockIndex));
+      },
+      insertImage(input) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => insertImageBlock(ctx, input));
+      },
+      insertFile(attrs) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => insertFile(ctx, attrs));
+      },
+      replaceImage(blockIndex, input) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) =>
+          replaceImageBlock(ctx, blockIndex, input)
+        );
+      },
+      setImageAlignment(blockIndex, alignment) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) =>
+          setImageAlignment(ctx, blockIndex, alignment)
+        );
       },
       tableAction(action) {
         const crepe = crepeRef.current;

@@ -53,14 +53,12 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T33 now that T25–T32 are completed:
+Start with T34 now that T25–T33 are completed:
 
-- Connect image paste, drag/drop, upload progress, cancel and retry to the asset
-  service.
-- Add image alignment, width, alt/caption, lightbox, replace and attachment
-  download blocks.
-- Include Markdown, images, attachments, canvas scenes and SVG previews in ZIP
-  export.
+- Add Mermaid as an independent lazy-loaded diagram block.
+- Render after a short idle window with strict security and unique IDs.
+- Keep syntax errors local to the block, preserve source and provide desktop
+  split editing plus a mobile stacked layout.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

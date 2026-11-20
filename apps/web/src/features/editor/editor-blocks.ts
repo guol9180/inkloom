@@ -14,7 +14,11 @@ import {
   tableSchema
 } from "@milkdown/kit/preset/gfm";
 import { editorViewCtx, schemaCtx } from "@milkdown/kit/core";
-import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { imageBlockSchema } from "@milkdown/kit/component/image-block";
+import type {
+  Attrs,
+  Node as ProseNode
+} from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { findTable, isInTable, type FindNodeResult } from "@milkdown/kit/prose/tables";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
@@ -34,14 +38,26 @@ type MarkdownTreeNode = {
   children?: MarkdownTreeNode[];
   summary?: string;
   open?: boolean;
+  url?: string;
+  fileAttrs?: FileBlockAttrs;
 };
 
 type MarkdownRoot = {
   children?: MarkdownTreeNode[];
 };
 
-const toggleRemark = $remark("inkloomToggleRemark", () => () => (tree) => {
+export type FileBlockAttrs = {
+  id: string;
+  hash: string;
+  mime: string;
+  size: number;
+  name: string;
+  url: string;
+};
+
+const inkloomBlocksRemark = $remark("inkloomBlocksRemark", () => () => (tree) => {
   transformToggles(tree as MarkdownRoot);
+  transformFiles(tree as MarkdownRoot);
 });
 
 const toggleSchema = $nodeSchema("inkloom_toggle", () => ({
@@ -107,6 +123,77 @@ const toggleSchema = $nodeSchema("inkloom_toggle", () => ({
       );
       state.next(node.content);
       state.addNode("html", undefined, "</details>");
+    }
+  }
+}));
+
+const fileSchema = $nodeSchema("inkloom_file", () => ({
+  atom: true,
+  group: "block",
+  selectable: true,
+  draggable: true,
+  attrs: {
+    id: { default: "" },
+    hash: { default: "" },
+    mime: { default: "application/octet-stream" },
+    size: { default: 0 },
+    name: { default: "附件" },
+    url: { default: "" }
+  },
+  parseDOM: [
+    {
+      tag: "div[data-type='inkloom-file']",
+      getAttrs: (dom) => {
+        if (!(dom instanceof HTMLElement)) return false;
+        return {
+          id: dom.dataset.id ?? "",
+          hash: dom.dataset.hash ?? "",
+          mime: dom.dataset.mime ?? "application/octet-stream",
+          size: Number(dom.dataset.size ?? 0),
+          name: dom.dataset.name ?? "附件",
+          url: dom.dataset.url ?? ""
+        };
+      }
+    }
+  ],
+  toDOM: (node) => [
+    "div",
+    {
+      class: "inkloom-file-block",
+      "data-type": "inkloom-file",
+      "data-id": node.attrs.id,
+      "data-hash": node.attrs.hash,
+      "data-mime": node.attrs.mime,
+      "data-size": String(node.attrs.size),
+      "data-name": node.attrs.name,
+      "data-url": node.attrs.url
+    },
+    [
+      "a",
+      {
+        href: node.attrs.url,
+        download: node.attrs.name,
+        target: "_blank",
+        rel: "noreferrer"
+      },
+      String(node.attrs.name)
+    ],
+    ["span", { class: "inkloom-file-meta" }, formatAssetSize(node.attrs.size)]
+  ],
+  parseMarkdown: {
+    match: (node) => node.type === "inkloom_file",
+    runner: (state, node, type) => {
+      state.addNode(type, node.fileAttrs as Attrs);
+    }
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "inkloom_file",
+    runner: (state, node) => {
+      state.addNode(
+        "html",
+        undefined,
+        fileBlockMarkdown(node.attrs as FileBlockAttrs)
+      );
     }
   }
 }));
@@ -217,8 +304,9 @@ const tablePaste = $prose(
 );
 
 export const PRODUCT_BLOCK_PLUGINS = [
-  ...toggleRemark,
+  ...inkloomBlocksRemark,
   ...toggleSchema,
+  ...fileSchema,
   toggleBehavior,
   calloutDecorations,
   tablePaste
@@ -266,6 +354,66 @@ export function insertDivider(ctx: Ctx) {
 
 export function insertTable(ctx: Ctx) {
   replaceOrInsertTopLevelBlock(ctx, createTable(ctx, 3, 3));
+}
+
+export function insertFile(ctx: Ctx, attrs: FileBlockAttrs) {
+  replaceOrInsertTopLevelBlock(
+    ctx,
+    fileSchema.type(ctx).create({ ...attrs } as Attrs)
+  );
+}
+
+export function insertImageBlock(
+  ctx: Ctx,
+  input: { src: string; caption: string }
+) {
+  replaceOrInsertTopLevelBlock(
+    ctx,
+    imageBlockSchema.type(ctx).create({
+      src: imageUrlWithAlignment(input.src, "center"),
+      caption: input.caption,
+      ratio: 1
+    })
+  );
+}
+
+export function setImageAlignment(
+  ctx: Ctx,
+  blockIndex: number,
+  alignment: "left" | "center" | "right"
+) {
+  const view = ctx.get(editorViewCtx);
+  const block = topLevelNode(view.state.doc, blockIndex);
+  if (!block || block.node.type.name !== "image-block") return;
+  view.dispatch(
+    view.state.tr.setNodeMarkup(block.position, undefined, {
+      ...block.node.attrs,
+      src: imageUrlWithAlignment(String(block.node.attrs.src), alignment)
+    })
+  );
+  view.focus();
+}
+
+export function replaceImageBlock(
+  ctx: Ctx,
+  blockIndex: number,
+  input: { src: string; caption: string }
+) {
+  const view = ctx.get(editorViewCtx);
+  const block = topLevelNode(view.state.doc, blockIndex);
+  if (!block || block.node.type.name !== "image-block") return;
+  view.dispatch(
+    view.state.tr.setNodeMarkup(
+      block.position,
+      undefined,
+      {
+        ...block.node.attrs,
+        src: imageUrlWithAlignment(input.src, "center"),
+        caption: input.caption
+      }
+    )
+  );
+  view.focus();
 }
 
 export function setCalloutKind(
@@ -541,6 +689,82 @@ function transformToggles(root: MarkdownRoot) {
   root.children = next;
 }
 
+function transformFiles(root: MarkdownRoot) {
+  const children = root.children;
+  if (!children?.length) return;
+  const next: MarkdownTreeNode[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    const metadata = parseFileOpening(children[index]);
+    if (!metadata) {
+      next.push(children[index]);
+      continue;
+    }
+    const closingIndex = findFileClosing(children, index + 1);
+    if (closingIndex === -1) {
+      next.push(children[index]);
+      continue;
+    }
+    const url = findFirstLink(children.slice(index + 1, closingIndex));
+    if (!url) {
+      next.push(children[index]);
+      continue;
+    }
+    next.push({
+      type: "inkloom_file",
+      fileAttrs: {
+        ...metadata,
+        url
+      }
+    });
+    index = closingIndex;
+  }
+  root.children = next;
+}
+
+function parseFileOpening(node: MarkdownTreeNode) {
+  if (node.type !== "html" && node.type !== "paragraph") return undefined;
+  const match = markdownNodeText(node)
+    .trim()
+    .match(/^<!--\s*inkloom:file\s*\n([\s\S]*?)-->$/i);
+  if (!match) return undefined;
+  const values = new Map<string, string>();
+  for (const line of match[1].split(/\r?\n/)) {
+    const entry = line.match(/^\s*([a-z][a-z0-9_-]*):\s*(.*?)\s*$/i);
+    if (entry) values.set(entry[1].toLowerCase(), entry[2]);
+  }
+  const id = values.get("id");
+  const hash = values.get("hash");
+  const mime = values.get("mime");
+  const name = values.get("name");
+  const size = Number(values.get("size") ?? 0);
+  if (!id || !hash || !mime || !name) return undefined;
+  return {
+    id,
+    hash,
+    mime,
+    size: Number.isFinite(size) && size >= 0 ? size : 0,
+    name
+  };
+}
+
+function findFileClosing(children: MarkdownTreeNode[], start: number) {
+  for (let index = start; index < children.length; index += 1) {
+    if (/^\s*<!--\s*\/inkloom:file\s*-->\s*$/i.test(markdownNodeText(children[index]))) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function findFirstLink(nodes: MarkdownTreeNode[]): string | undefined {
+  for (const node of nodes) {
+    if (node.type === "link" && typeof node.url === "string") return node.url;
+    const nested = findFirstLink(node.children ?? []);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 function parseToggleOpening(node: MarkdownTreeNode) {
   if (node.type !== "html" && node.type !== "paragraph") return undefined;
   const match = markdownNodeText(node).match(
@@ -586,4 +810,30 @@ function escapeHtml(value: string) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function fileBlockMarkdown(attrs: FileBlockAttrs) {
+  const name = String(attrs.name).replace(/[\[\]\r\n]/g, " ");
+  return `<!-- inkloom:file
+id: ${attrs.id}
+hash: ${attrs.hash}
+mime: ${attrs.mime}
+size: ${attrs.size}
+name: ${name}
+-->
+[${name}](<${attrs.url}>)
+<!-- /inkloom:file -->`;
+}
+
+function formatAssetSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function imageUrlWithAlignment(
+  src: string,
+  alignment: "left" | "center" | "right"
+) {
+  return `${src.replace(/#align=(?:left|center|right)$/i, "")}#align=${alignment}`;
 }
