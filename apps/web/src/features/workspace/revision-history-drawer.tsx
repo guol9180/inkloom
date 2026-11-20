@@ -99,7 +99,7 @@ export function RevisionHistoryDrawer({
       <div className="fixed inset-0 z-[90] bg-ink-950/16 backdrop-blur-[2px]" />
       <aside
         aria-label="版本历史"
-        className="fixed inset-y-0 right-0 z-[95] flex w-[min(96vw,58rem)] flex-col border-l border-line-soft bg-white shadow-[-24px_0_70px_rgb(22_40_31_/_0.16)]"
+        className="fixed inset-y-0 right-0 z-[95] flex w-[min(96vw,58rem)] flex-col border-l border-line-soft bg-white shadow-popover"
       >
         <header className="flex min-h-14 items-center gap-3 border-b border-line-soft px-4">
           <span className="grid size-8 place-items-center rounded-xl bg-brand-50 text-brand-700">
@@ -128,7 +128,7 @@ export function RevisionHistoryDrawer({
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
-          <div className="max-h-44 overflow-y-auto border-b border-line-soft bg-[#fafbf9] p-2 md:max-h-none md:border-r md:border-b-0">
+          <div className="max-h-44 overflow-y-auto border-b border-line-soft bg-paper-warm p-2 md:max-h-none md:border-r md:border-b-0">
             {revisions.isPending ? (
               <div className="grid gap-2">
                 {Array.from({ length: 5 }, (_, index) => (
@@ -275,7 +275,7 @@ function RevisionList({
         return (
           <div key={revision.revisionId}>
             {showDate && (
-              <div className="px-2 pt-3 pb-1 text-[0.58rem] font-bold tracking-[0.08em] text-ink-300 uppercase">
+              <div className="px-2 pt-3 pb-1 text-[0.62rem] font-bold tracking-[0.08em] text-ink-300 uppercase">
                 {date}
               </div>
             )}
@@ -330,11 +330,11 @@ function BlockDiff({
                 ? "border-brand-200 bg-brand-50"
                 : row.kind === "removed"
                   ? "border-danger-200 bg-danger-50"
-                  : "border-line-soft bg-[#fafbf9]"
+                  : "border-line-soft bg-paper-warm"
             }`}
           >
             <div
-              className={`mb-1 text-[0.55rem] font-bold tracking-[0.08em] uppercase ${
+              className={`mb-1 text-[0.62rem] font-bold tracking-[0.08em] uppercase ${
                 row.kind === "added"
                   ? "text-brand-700"
                   : row.kind === "removed"

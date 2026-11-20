@@ -47,15 +47,15 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   if (session) return <Navigate to={next} replace />;
 
   return (
-    <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-[#f7f8f6] px-4 py-8 sm:px-6">
+    <main className="app-auth-shell relative grid min-h-dvh place-items-center overflow-hidden bg-canvas px-4 py-8 sm:px-6">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgb(255_255_255/.95),transparent_34rem)]" />
       <section className="relative w-full max-w-[27rem]">
         <div className="mb-7 flex justify-center">
           <BrandLockup />
         </div>
-        <div className="rounded-[1.65rem] border border-black/[0.055] bg-white/90 p-5 shadow-[0_24px_80px_rgb(18_35_27_/_0.08)] backdrop-blur-xl sm:p-7">
+        <div className="rounded-dialog border border-line-soft bg-white/92 p-5 shadow-panel backdrop-blur-xl sm:p-7">
           <div
-            className="grid grid-cols-2 rounded-xl bg-[#f4f6f3] p-1"
+            className="grid grid-cols-2 rounded-xl bg-surface-subtle p-1"
             role="tablist"
             aria-label="账号入口"
           >
@@ -80,7 +80,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           </div>
 
           <div className="mt-7 text-center">
-            <h1 className="font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-ink-950">
+            <h1 className="text-balance font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-ink-950">
               {mode === "login" ? "继续写下去" : "建立你的空间"}
             </h1>
             <p className="mt-2 text-sm leading-6 text-ink-500">

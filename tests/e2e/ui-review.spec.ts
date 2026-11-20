@@ -78,6 +78,58 @@ for (const viewport of viewports) {
   });
 }
 
+test.describe("interaction accessibility", () => {
+  test.use({
+    viewport: { width: 720, height: 480 },
+    hasTouch: true
+  });
+
+  test("supports touch, keyboard, 200% zoom and reduced motion", async ({
+    page
+  }) => {
+    await page.goto("/login");
+    await registerUser(page);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: "新建随记" })
+      .tap();
+    await expect(page.getByLabel("Markdown 正文")).toBeVisible();
+
+    await page.keyboard.press("Control+j");
+    await expect(page.getByPlaceholder("搜索")).toBeFocused();
+    await page
+      .locator("aside")
+      .getByRole("button", { name: "关闭导航" })
+      .tap();
+
+    const reducedMotion = await page.evaluate(() => {
+      const skeleton = document.createElement("span");
+      skeleton.className = "skeleton-shimmer";
+      document.body.append(skeleton);
+      const duration = getComputedStyle(skeleton).animationDuration;
+      skeleton.remove();
+      return duration;
+    });
+    expect(Number.parseFloat(reducedMotion)).toBeLessThanOrEqual(0.01);
+
+    await page.getByRole("button", { name: "文档操作" }).tap();
+    await page.getByRole("menuitem", { name: "管理标签" }).tap();
+    const dialog = page.getByRole("dialog", { name: "管理标签" });
+    await expect(dialog).toBeVisible();
+    const dialogAnimation = await dialog.evaluate(
+      (element) => getComputedStyle(element).animationDuration
+    );
+    expect(Number.parseFloat(dialogAnimation)).toBeLessThanOrEqual(0.01);
+    await dialog.getByRole("button", { name: "取消" }).tap();
+
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "200%";
+    });
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
 async function registerUser(page: Page) {
   const email = `review-${Date.now()}-${Math.random()
     .toString(36)

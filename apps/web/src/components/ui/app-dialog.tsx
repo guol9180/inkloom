@@ -32,7 +32,7 @@ export function AppDialog({
         <DialogPrimitive.Overlay className="app-dialog-overlay fixed inset-0 z-50 bg-ink-950/28 backdrop-blur-[3px]" />
         <DialogPrimitive.Content
           className={cn(
-            "app-dialog fixed top-1/2 left-1/2 z-50 max-h-[min(88dvh,860px)] w-[min(calc(100vw-1.25rem),36rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[1.4rem] border border-white/80 bg-paper text-ink-950 shadow-[0_30px_90px_rgb(20_40_32_/_0.24)] outline-none",
+            "app-dialog fixed top-1/2 left-1/2 z-50 max-h-[min(88dvh,860px)] w-[min(calc(100vw-1.25rem),36rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-dialog border border-white/80 bg-paper text-ink-950 shadow-dialog outline-none",
             size === "wide" && "w-[min(calc(100vw-1.25rem),52rem)]"
           )}
         >

@@ -53,12 +53,12 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T42 now that T25–T41 are completed:
+Start with T43 now that T25–T42 are completed:
 
-- Apply the near-white visual system, Geist typography, rounded controls,
-  skeleton loading and restrained motion consistently across all surfaces.
-- Verify 320, 375, 768, 1024, 1440 and 2560 widths plus 200% zoom, keyboard,
-  touch and reduced-motion behavior.
+- Run the full M1.1 acceptance suite and visual review across all task cards.
+- Review screenshots at 320, 375, 768, 1024, 1440 and 2560, plus 200% zoom,
+  keyboard, touch and reduced-motion.
+- Record every unresolved risk before requesting T44 deployment authorization.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

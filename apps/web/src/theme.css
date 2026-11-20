@@ -12,6 +12,9 @@
   --color-line: #e5e9e4;
   --color-line-soft: #eef1ed;
   --color-line-strong: #d4dbd4;
+  --color-surface-subtle: #f4f6f3;
+  --color-surface-hover: #f2f5f2;
+  --color-surface-selected: #eef3ef;
 
   --color-ink-50: #f8f9f8;
   --color-ink-100: #f0f2f0;
@@ -54,6 +57,16 @@
   --color-danger-800: #873b32;
 
   --shadow-xs: 0 1px 2px rgb(31 64 52 / 0.06);
+  --shadow-popover: 0 18px 50px rgb(20 36 28 / 0.14);
+  --shadow-panel: 0 24px 80px rgb(18 35 27 / 0.08);
+  --shadow-dialog: 0 30px 90px rgb(20 40 32 / 0.2);
+  --radius-row: 0.625rem;
+  --radius-control: 0.75rem;
+  --radius-panel: 1rem;
+  --radius-dialog: 1.5rem;
+  --ease-fluid: cubic-bezier(0.2, 0.85, 0.28, 1);
+  --duration-fast: 140ms;
+  --duration-standard: 190ms;
 }
 
 @layer base {
@@ -66,6 +79,7 @@
     color: var(--color-ink-900);
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
@@ -83,6 +97,7 @@
 
   button {
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   ::selection {
@@ -1669,6 +1684,20 @@
 
 @media (max-width: 639px) {
   .canvas-save-note { display: none; }
+}
+
+@media (pointer: coarse) {
+  .app-product-shell button,
+  .app-product-shell [role="menuitem"],
+  .app-auth-shell button,
+  .app-dialog button {
+    min-height: 2.75rem;
+  }
+
+  .app-product-shell .pm-block-handle {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
 }
 
 @media (min-width: 2000px) {

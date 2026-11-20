@@ -65,7 +65,7 @@ export function DocumentContextPanel({
     >
       <div className="flex min-h-14 items-center justify-between border-b border-line-soft px-4">
         <div>
-          <span className="block text-[0.6rem] font-bold tracking-[0.12em] text-ink-300 uppercase">
+          <span className="block text-[0.64rem] font-bold tracking-[0.12em] text-ink-300 uppercase">
             Document
           </span>
           <strong className="mt-0.5 block text-sm font-semibold text-ink-900">
@@ -286,7 +286,7 @@ function LinkList({
               {link.title}
             </strong>
             {link.broken && (
-              <span className="text-[0.55rem] font-bold uppercase">断链</span>
+              <span className="text-[0.62rem] font-bold uppercase">断链</span>
             )}
           </span>
           <small className="mt-0.5 line-clamp-2 block text-[0.6rem] leading-4 opacity-70">
@@ -315,7 +315,7 @@ function ContextSection({
         {icon}
         {title}
         {count !== undefined && (
-          <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand-100 px-1.5 py-0.5 text-[0.56rem] text-brand-700">
+          <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand-100 px-1.5 py-0.5 text-[0.62rem] text-brand-700">
             {count}
           </span>
         )}

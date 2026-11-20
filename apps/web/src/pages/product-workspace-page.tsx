@@ -471,7 +471,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   }
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[#fafbf9] text-ink-900">
+    <div className="app-product-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-paper-warm text-ink-900">
       <header className="flex h-16 shrink-0 items-center border-b border-line-soft bg-white/95 px-3 backdrop-blur-xl sm:px-4">
         <IconButton
           className="mr-1 lg:hidden"
@@ -484,7 +484,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button
-              className="ml-1.5 grid size-8 place-items-center rounded-lg text-ink-400 transition hover:bg-[#f3f5f2] hover:text-ink-800"
+              className="ml-1.5 grid size-8 place-items-center rounded-lg text-ink-400 transition hover:bg-surface-hover hover:text-ink-800"
               type="button"
               aria-label="切换工作区"
             >
@@ -495,7 +495,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
             <DropdownMenu.Content
               align="start"
               sideOffset={8}
-              className="z-50 w-64 rounded-2xl border border-line-soft bg-white p-2 shadow-[0_20px_60px_rgb(20_36_28_/_0.16)]"
+              className="z-50 w-64 rounded-2xl border border-line-soft bg-white p-2 shadow-popover"
             >
               <DropdownMenu.Label className="px-2 py-1.5 text-[0.62rem] font-bold tracking-[0.1em] text-ink-300 uppercase">
                 Workspace
@@ -503,7 +503,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
               {workspaces.data?.workspaces.map((item) => (
                 <DropdownMenu.Item
                   key={item.id}
-                  className="flex min-h-10 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  className="flex min-h-10 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() =>
                     navigate(
                       `/workspaces/${encodeURIComponent(item.id)}/notes`
@@ -527,7 +527,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button
-                className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-ink-500 transition hover:bg-[#f4f6f3] hover:text-ink-900"
+                className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-ink-500 transition hover:bg-surface-subtle hover:text-ink-900"
                 type="button"
                 aria-label="账号设置"
               >
@@ -541,10 +541,10 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
               <DropdownMenu.Content
                 align="end"
                 sideOffset={8}
-                className="z-50 w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                className="z-50 w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
               >
                 <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() => void logout()}
                 >
                   <LogOut size={14} />
@@ -944,7 +944,7 @@ function WorkspaceSidebar({
       </div>
 
       <div className="flex items-center gap-2 px-3 pb-3">
-        <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line-soft bg-[#fafbf9] px-3 text-ink-400 transition focus-within:border-brand-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-100/70">
+        <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line-soft bg-paper-warm px-3 text-ink-400 transition focus-within:border-brand-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-100/70">
           <Search size={15} />
           <input
             ref={searchRef}
@@ -967,7 +967,7 @@ function WorkspaceSidebar({
             <DropdownMenu.Content
               align="end"
               sideOffset={8}
-              className="z-50 w-52 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+              className="z-50 w-52 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
             >
               <SidebarMenuItem icon={<FileText size={14} />} onSelect={onCreateNote}>
                 新建随记
@@ -996,7 +996,7 @@ function WorkspaceSidebar({
             type="button"
             className={`shrink-0 rounded-full px-2.5 py-1 text-[0.62rem] font-semibold transition ${
               tagFilter
-                ? "bg-[#f4f6f3] text-ink-500 hover:text-ink-800"
+                ? "bg-surface-subtle text-ink-500 hover:text-ink-800"
                 : "bg-brand-50 text-brand-800"
             }`}
             onClick={() => onTagFilter("")}
@@ -1010,7 +1010,7 @@ function WorkspaceSidebar({
               className={`shrink-0 rounded-full px-2.5 py-1 text-[0.62rem] font-semibold transition ${
                 tagFilter === tag
                   ? "bg-brand-50 text-brand-800"
-                  : "bg-[#f4f6f3] text-ink-500 hover:text-ink-800"
+                  : "bg-surface-subtle text-ink-500 hover:text-ink-800"
               }`}
               onClick={() => onTagFilter(tagFilter === tag ? "" : tag)}
             >
@@ -1057,7 +1057,7 @@ function WorkspaceSidebar({
               {searchHasMore && (
                 <button
                   type="button"
-                  className="mx-1 mt-2 min-h-9 w-[calc(100%-0.5rem)] rounded-lg border border-line-soft text-xs font-semibold text-ink-500 transition hover:bg-[#f7f8f6] hover:text-ink-900"
+                  className="mx-1 mt-2 min-h-9 w-[calc(100%-0.5rem)] rounded-lg border border-line-soft text-xs font-semibold text-ink-500 transition hover:bg-canvas hover:text-ink-900"
                   onClick={onLoadMoreSearch}
                 >
                   加载更多
@@ -1115,8 +1115,8 @@ function WorkspaceSidebar({
                   key={item.id}
                   className={`group flex min-h-10 w-full items-center rounded-xl pr-1 transition ${
                     item.id === knowledgeBaseId
-                      ? "bg-[#f1f5f2] text-brand-800"
-                      : "text-ink-600 hover:bg-[#f7f8f6] hover:text-ink-900"
+                      ? "bg-surface-selected text-brand-800"
+                      : "text-ink-600 hover:bg-canvas hover:text-ink-900"
                   }`}
                 >
                   <button
@@ -1150,7 +1150,7 @@ function WorkspaceSidebar({
                       <DropdownMenu.Content
                         align="end"
                         sideOffset={6}
-                        className="z-50 w-40 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                        className="z-50 w-40 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                       >
                         <SidebarMenuItem
                           icon={<Pencil size={14} />}
@@ -1221,7 +1221,7 @@ function WorkspaceSidebar({
       <div className="border-t border-line-soft p-3">
         <button
           type="button"
-          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-xs font-medium text-ink-500 transition hover:bg-[#f7f8f6] hover:text-ink-900"
+          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-xs font-medium text-ink-500 transition hover:bg-canvas hover:text-ink-900"
           onClick={() => onCreateKnowledgeBase()}
         >
           <Settings size={14} />
@@ -1249,7 +1249,7 @@ function ModeButton({
       className={`flex min-h-10 items-center justify-center gap-2 rounded-xl text-xs font-semibold transition ${
         active
           ? "bg-ink-950 text-white shadow-sm"
-          : "text-ink-500 hover:bg-[#f4f6f3] hover:text-ink-900"
+          : "text-ink-500 hover:bg-surface-subtle hover:text-ink-900"
       }`}
       onClick={onClick}
     >
@@ -1314,8 +1314,8 @@ function SearchResultGroup({
             type="button"
             className={`flex min-h-11 w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left transition ${
               item.id === activeDocumentId
-                ? "bg-[#eef3ef] text-ink-950 ring-1 ring-brand-200/60"
-                : "text-ink-600 hover:bg-[#f7f8f6] hover:text-ink-900"
+                ? "bg-surface-selected text-ink-950 ring-1 ring-brand-200/60"
+                : "text-ink-600 hover:bg-canvas hover:text-ink-900"
             }`}
             onClick={() => navigate(route)}
           >
@@ -1332,7 +1332,7 @@ function SearchResultGroup({
                   {item.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full bg-[#f4f6f3] px-1.5 py-0.5 text-[0.55rem] font-medium text-ink-400"
+                      className="rounded-full bg-surface-subtle px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-400"
                     >
                       #{tag}
                     </span>
@@ -1386,8 +1386,8 @@ function DocumentRow({
       type="button"
       className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-2.5 text-left transition ${
         active
-          ? "bg-[#eef3ef] text-ink-950 ring-1 ring-brand-200/60"
-          : "text-ink-600 hover:bg-[#f7f8f6] hover:text-ink-900"
+          ? "bg-surface-selected text-ink-950 ring-1 ring-brand-200/60"
+          : "text-ink-600 hover:bg-canvas hover:text-ink-900"
       }`}
       aria-current={active ? "page" : undefined}
       onClick={onClick}
@@ -1419,7 +1419,7 @@ function SidebarMenuItem({
 }) {
   return (
     <DropdownMenu.Item
-      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
       onSelect={onSelect}
     >
       {icon}
@@ -1707,7 +1707,7 @@ function DocumentSurface({
   const showEditor = editorActive;
 
   return (
-    <div className="relative flex h-full min-h-0 bg-[#fafbf9]">
+    <div className="relative flex h-full min-h-0 bg-paper-warm">
       <div className="min-w-0 flex-1 overflow-y-auto">
         <article className="mx-auto min-h-full w-full max-w-[58rem] border-x border-line-soft bg-white">
         <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
@@ -1726,7 +1726,7 @@ function DocumentSurface({
                   <button
                     key={tag}
                     type="button"
-                    className="rounded-full bg-[#f4f6f3] px-2 py-0.5 text-[0.6rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
+                    className="rounded-full bg-surface-subtle px-2 py-0.5 text-[0.66rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
                     onClick={() => {
                       setTagDraft(autosave.tags.join(", "));
                       setTagDialogOpen(true);
@@ -1765,17 +1765,17 @@ function DocumentSurface({
               <DropdownMenu.Content
                 align="end"
                 sideOffset={8}
-                className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
               >
                 <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() => setHistoryOpen(true)}
                 >
                   <History size={14} />
                   版本历史
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() => {
                     setTagDraft(autosave.tags.join(", "));
                     setTagDialogOpen(true);
@@ -1786,7 +1786,7 @@ function DocumentSurface({
                 </DropdownMenu.Item>
                 {mode === "notes" && (
                   <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3] data-[disabled]:opacity-40"
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:opacity-40"
                     disabled={knowledgeBases.length === 0}
                     onSelect={() => {
                       setArchiveKnowledgeBaseId(
@@ -1801,7 +1801,7 @@ function DocumentSurface({
                 )}
                 {mode === "knowledge" && (
                   <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                     onSelect={() => void restoreCurrentDocumentToNotes()}
                   >
                     <FileText size={14} />
@@ -2022,7 +2022,7 @@ function DocumentSurface({
               className={`flex min-h-11 items-center gap-2.5 rounded-xl border px-3 text-left text-sm font-medium transition ${
                 archiveKnowledgeBaseId === knowledgeBase.id
                   ? "border-brand-300 bg-brand-50 text-brand-800"
-                  : "border-line-soft text-ink-600 hover:border-line hover:bg-[#fafbf9]"
+                  : "border-line-soft text-ink-600 hover:border-line hover:bg-paper-warm"
               }`}
               onClick={() => setArchiveKnowledgeBaseId(knowledgeBase.id)}
             >
@@ -2180,7 +2180,7 @@ function RouteError({
   onRetry: () => void;
 }) {
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#fafbf9] px-5 text-center">
+    <main className="grid min-h-dvh place-items-center bg-paper-warm px-5 text-center">
       <section className="max-w-md rounded-[1.5rem] border border-line-soft bg-white p-8 shadow-sm">
         <BrandMark className="mx-auto size-12" />
         <h1 className="mt-5 font-display text-2xl font-semibold">{title}</h1>

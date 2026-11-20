@@ -889,9 +889,9 @@ export const ProductMarkdownEditor = forwardRef<
                 )}
                 <button
                   type="button"
-                  className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-[#f2f5f2] hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
+                  className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
                     commandIdMatchesBlockType(command.id, blockType)
-                      ? "bg-[#eef3ef] text-brand-800"
+                      ? "bg-surface-selected text-brand-800"
                       : "text-ink-500"
                   }`}
                   title={
@@ -926,7 +926,7 @@ export const ProductMarkdownEditor = forwardRef<
               <DropdownMenu.Trigger asChild>
                 <button
                   type="button"
-                  className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-[#f2f5f2] hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
+                  className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-surface-hover hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
                     dropIndex === handle.index ? "bg-brand-100 text-brand-800" : ""
                   }`}
                   style={{
@@ -989,7 +989,7 @@ export const ProductMarkdownEditor = forwardRef<
                   side="right"
                   align="start"
                   sideOffset={4}
-                  className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                  className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                 >
                   <BlockMenuItem
                     icon={<Pilcrow size={14} />}
@@ -1027,7 +1027,7 @@ export const ProductMarkdownEditor = forwardRef<
                     onSelect={() => editorRef.current?.setHeading(6)}
                   />
                   <DropdownMenu.Sub>
-                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]">
+                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
                       <MessageSquareText size={14} />
                       <span className="flex-1">提示块类型</span>
                       <span className="text-ink-300">›</span>
@@ -1035,7 +1035,7 @@ export const ProductMarkdownEditor = forwardRef<
                     <DropdownMenu.Portal>
                       <DropdownMenu.SubContent
                         sideOffset={6}
-                        className="z-[80] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                        className="z-[80] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                       >
                         {CALLOUT_KINDS.map((kind) => (
                           <BlockMenuItem
@@ -1241,7 +1241,7 @@ export const ProductMarkdownEditor = forwardRef<
           {uploads.map((task) => (
             <div
               key={task.id}
-              className="rounded-2xl border border-line-soft bg-white p-3 shadow-[0_18px_50px_rgb(20_36_28_/_0.16)]"
+              className="rounded-2xl border border-line-soft bg-white p-3 shadow-popover"
             >
               <div className="flex items-start gap-2">
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -1306,7 +1306,7 @@ export const ProductMarkdownEditor = forwardRef<
 
       {selection && (
         <div
-          className="fixed z-[80] -translate-x-1/2 rounded-xl border border-line-soft bg-white p-1 shadow-[0_14px_40px_rgb(20_36_28_/_0.16)]"
+          className="fixed z-[80] -translate-x-1/2 rounded-xl border border-line-soft bg-white p-1 shadow-popover"
           style={{ top: selection.top, left: selection.left }}
           role="toolbar"
           aria-label="选区格式"
@@ -1316,7 +1316,7 @@ export const ProductMarkdownEditor = forwardRef<
             (command) => (
               <button
                 type="button"
-                className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-[#f2f5f2] hover:text-ink-900"
+                className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
                 key={command}
                 aria-label={editorCommandLabel(command)}
                 onClick={() => executeCommand(command)}
@@ -1331,7 +1331,7 @@ export const ProductMarkdownEditor = forwardRef<
       {slash && (
         <div
           data-slash-menu
-          className="fixed z-[90] w-[min(88vw,19rem)] rounded-2xl border border-line-soft bg-white p-2 shadow-[0_22px_65px_rgb(20_36_28_/_0.18)]"
+          className="fixed z-[90] w-[min(88vw,19rem)] rounded-2xl border border-line-soft bg-white p-2 shadow-popover"
           style={{
             top: Math.max(
               8,
@@ -1353,8 +1353,8 @@ export const ProductMarkdownEditor = forwardRef<
                 key={command.id}
                 className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs ${
                   index === slash.activeIndex
-                    ? "bg-[#eef3ef] text-ink-950"
-                    : "text-ink-600 hover:bg-[#f7f8f6]"
+                    ? "bg-surface-selected text-ink-950"
+                    : "text-ink-600 hover:bg-canvas"
                 }`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
@@ -1492,7 +1492,7 @@ export const ProductMarkdownEditor = forwardRef<
       >
         {imagePreview && (
           <img
-            className="max-h-[68dvh] w-full rounded-xl bg-[#f7f9f7] object-contain"
+            className="max-h-[68dvh] w-full rounded-xl bg-paper-warm object-contain"
             src={imagePreview}
             alt="图片预览"
           />
@@ -1590,7 +1590,7 @@ function BlockMenuItem({
       className={`flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium outline-none ${
         danger
           ? "text-danger-700 data-[highlighted]:bg-danger-50"
-          : "text-ink-700 data-[highlighted]:bg-[#f4f6f3]"
+          : "text-ink-700 data-[highlighted]:bg-surface-subtle"
       }`}
       onSelect={onSelect}
     >
@@ -1616,7 +1616,7 @@ function TableToolbarButton({
   return (
     <button
       type="button"
-      className="grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-ink-500 transition hover:bg-[#f2f5f2] hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-35"
+      className="grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-ink-500 transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-35"
       title={label}
       aria-label={label}
       disabled={disabled}
