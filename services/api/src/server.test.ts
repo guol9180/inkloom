@@ -969,6 +969,102 @@ describe("InkLoom API", () => {
     expect(firstPage).toMatchObject({ total: 2, page: 1, pageSize: 1 });
     expect(firstPage.results).toHaveLength(1);
   });
+
+  it("returns real backlinks, snippets and broken-link state", async () => {
+    const fixture = await startServer();
+    const writer = await register(fixture, "links@example.com", "secret-123");
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: writer.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+    const create = (input: {
+      title: string;
+      path: string;
+      markdown: string;
+    }) =>
+      json<{ document: { meta: { id: string; revision: number } } }>(
+        fixture,
+        `/api/workspaces/${workspaceId}/documents`,
+        {
+          method: "POST",
+          cookie: writer.cookie,
+          body: input
+        }
+      );
+    const target = await create({
+      title: "目标文档",
+      path: "目标文档.md",
+      markdown: "# 目标文档\n"
+    });
+    const source = await create({
+      title: "来源文档",
+      path: "来源文档.md",
+      markdown:
+        "# 来源文档\n\n前往 [目标文档](目标文档.md#正文)，以及 [缺失文档](缺失.md)。"
+    });
+
+    const targetContext = await json<{
+      context: {
+        backlinks: Array<{
+          documentId: string;
+          snippet: string;
+          linkText: string;
+        }>;
+      };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${target.document.meta.id}/context`,
+      { cookie: writer.cookie }
+    );
+    expect(targetContext.context.backlinks).toEqual([
+      expect.objectContaining({
+        documentId: source.document.meta.id,
+        linkText: "目标文档"
+      })
+    ]);
+    expect(targetContext.context.backlinks[0].snippet).toContain("目标文档.md");
+
+    const sourceContext = await json<{
+      context: {
+        outgoingLinks: Array<{ targetPath: string; broken: boolean }>;
+      };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${source.document.meta.id}/context`,
+      { cookie: writer.cookie }
+    );
+    expect(sourceContext.context.outgoingLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetPath: "目标文档.md", broken: false }),
+        expect.objectContaining({ targetPath: "缺失.md", broken: true })
+      ])
+    );
+
+    await json(
+      fixture,
+      `/api/workspaces/${workspaceId}/nodes/${target.document.meta.id}`,
+      {
+        method: "PUT",
+        cookie: writer.cookie,
+        body: {
+          targetPath: "归档/目标文档.md",
+          baseRevision: target.document.meta.revision
+        }
+      }
+    );
+    const movedContext = await json<{
+      context: { backlinks: Array<{ targetPath: string }> };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${target.document.meta.id}/context`,
+      { cookie: writer.cookie }
+    );
+    expect(movedContext.context.backlinks[0].targetPath).toBe(
+      "归档/目标文档.md"
+    );
+  });
 });
 
 async function startServer(): Promise<TestServer> {

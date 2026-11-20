@@ -4,8 +4,22 @@ import { countWords, extractHeadings, slugifyHeading } from "./index";
 describe("Markdown view helpers", () => {
   it("extracts the visible outline without Markdown decoration", () => {
     expect(extractHeadings("# 产品\n\n## **同步** 与离线 ### ignored")).toEqual([
-      { depth: 1, text: "产品", id: "产品" },
-      { depth: 2, text: "同步 与离线 ### ignored", id: "同步-与离线-ignored" }
+      {
+        depth: 1,
+        text: "产品",
+        id: "产品",
+        offset: 0,
+        line: 1,
+        column: 1
+      },
+      {
+        depth: 2,
+        text: "同步 与离线 ### ignored",
+        id: "同步-与离线-ignored",
+        offset: 6,
+        line: 3,
+        column: 1
+      }
     ]);
   });
 

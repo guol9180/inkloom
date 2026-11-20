@@ -539,6 +539,23 @@ async function route({
       segments.length === 6 &&
       segments[3] === "documents" &&
       segments[4] &&
+      segments[5] === "context" &&
+      method === "GET"
+    ) {
+      sendJson(response, 200, {
+        context: database.getDocumentContext(
+          user.id,
+          workspaceId,
+          segments[4]
+        )
+      });
+      return;
+    }
+
+    if (
+      segments.length === 6 &&
+      segments[3] === "documents" &&
+      segments[4] &&
       method === "POST"
     ) {
       const input = parseRecord(body);

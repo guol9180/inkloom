@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  PanelRight,
   Pencil,
   Plus,
   RefreshCw,
@@ -68,6 +69,7 @@ import {
 } from "../features/editor/use-document-autosave";
 import { exportDocumentZip } from "../features/editor/document-export";
 import { useEditorOwnership } from "../features/editor/use-editor-ownership";
+import { DocumentContextPanel } from "../features/workspace/document-context-panel";
 import {
   ProductMarkdownEditor
 } from "../features/editor/product-markdown-editor";
@@ -1510,6 +1512,7 @@ function DocumentSurface({
   const [archiveKnowledgeBaseId, setArchiveKnowledgeBaseId] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [documentActionPending, setDocumentActionPending] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const ownership = useEditorOwnership(
     userId
       ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
@@ -1674,8 +1677,9 @@ function DocumentSurface({
   const showEditor = editorActive;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#fafbf9]">
-      <article className="mx-auto min-h-full w-full max-w-[58rem] border-x border-line-soft bg-white">
+    <div className="relative flex h-full min-h-0 bg-[#fafbf9]">
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <article className="mx-auto min-h-full w-full max-w-[58rem] border-x border-line-soft bg-white">
         <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-ink-900">
@@ -1778,6 +1782,14 @@ function DocumentSurface({
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
+          <IconButton
+            aria-label={infoOpen ? "关闭文档信息" : "打开文档信息"}
+            aria-pressed={infoOpen}
+            className={infoOpen ? "bg-brand-50 text-brand-800" : ""}
+            onClick={() => setInfoOpen((current) => !current)}
+          >
+            <PanelRight size={16} />
+          </IconButton>
           {mode === "knowledge" && !editing && ownsEditor && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               编辑
@@ -1868,6 +1880,27 @@ function DocumentSurface({
           onFocusSearch={onFocusSearch}
         />
       </article>
+      </div>
+      <DocumentContextPanel
+        open={infoOpen}
+        document={document}
+        workspaceId={document.meta.workspaceId}
+        markdown={autosave.markdown}
+        onClose={() => setInfoOpen(false)}
+        onNavigate={(link) => {
+          navigate(
+            link.lifecycle === "knowledge" && link.knowledgeBaseId
+              ? `/workspaces/${encodeURIComponent(
+                  document.meta.workspaceId
+                )}/knowledge/${encodeURIComponent(
+                  link.knowledgeBaseId
+                )}/${encodeURIComponent(link.documentId)}`
+              : `/workspaces/${encodeURIComponent(
+                  document.meta.workspaceId
+                )}/notes/${encodeURIComponent(link.documentId)}`
+          );
+        }}
+      />
       <AppDialog
         open={tagDialogOpen}
         title="管理标签"

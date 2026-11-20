@@ -439,6 +439,95 @@ test("searches scratch and knowledge documents through the server index", async 
   );
 });
 
+test("shows AST outline, real backlinks and broken-link context", async ({
+  page
+}) => {
+  const currentUrl = await openScratchNote(page);
+  const workspaceId = decodeURIComponent(
+    new URL(currentUrl).pathname.split("/")[2]
+  );
+  const longBody = Array.from(
+    { length: 30 },
+    (_, index) => `长文内容 ${index + 1}`
+  ).join("\n\n");
+  const documents = await page.evaluate(
+    async ({ workspaceId, longBody }) => {
+      const create = async (path: string, title: string, markdown: string) => {
+        const response = await fetch(
+          `http://127.0.0.1:3001/api/workspaces/${encodeURIComponent(
+            workspaceId
+          )}/documents`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path, title, markdown })
+          }
+        );
+        if (!response.ok) throw new Error(await response.text());
+        return (await response.json()) as {
+          document: { meta: { id: string } };
+        };
+      };
+      const target = await create(
+        "上下文目标.md",
+        "上下文目标",
+        "# 上下文目标\n\n[回到来源](上下文来源.md)\n"
+      );
+      const source = await create(
+        "上下文来源.md",
+        "上下文来源",
+        `# 上下文来源\n\n## 第一节\n\n[上下文目标](上下文目标.md)\n\n## 第二节\n\n[缺失文档](缺失文档.md)\n\n${longBody}`
+      );
+      return {
+        targetId: target.document.meta.id,
+        sourceId: source.document.meta.id
+      };
+    },
+    { workspaceId, longBody }
+  );
+
+  await page.goto(
+    `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(
+      documents.sourceId
+    )}`
+  );
+  await expect(page.getByLabel("Markdown 正文")).toContainText("上下文来源");
+  await page.getByRole("button", { name: "打开文档信息" }).click();
+  const panel = page.getByRole("complementary", { name: "文档信息栏" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: "第二节" })).toBeVisible();
+  await expect(panel.getByText("上下文目标").first()).toBeVisible();
+  await expect(panel.getByText("缺失文档").first()).toBeVisible();
+  await expect(panel.getByText("断链").first()).toBeVisible();
+  await expect(panel.getByText("上下文来源.md").first()).toBeVisible();
+
+  const scroller = page
+    .getByLabel("Markdown 正文")
+    .locator('xpath=ancestor::div[contains(@class,"overflow-y-auto")]');
+  await panel.getByRole("button", { name: "第二节" }).click();
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+});
+
+test("keeps document content usable when context loading fails", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("上下文失败不影响正文");
+  const contextRoute = /\/api\/workspaces\/[^/]+\/documents\/[^/]+\/context$/;
+  await page.route(contextRoute, (route) => route.abort("failed"));
+  await page.getByRole("button", { name: "打开文档信息" }).click();
+  await expect(
+    page.getByText("文档上下文暂时无法加载，正文仍可正常阅读和编辑。")
+  ).toBeVisible();
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "上下文失败不影响正文"
+  );
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {

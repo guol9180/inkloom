@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { extractDocumentLinks } from "./links";
 import { filenameFromPath, searchIndexTerms } from "./search";
 
 type Migration = {
@@ -240,6 +241,58 @@ const MIGRATIONS: readonly Migration[] = [
           ).join(" ")
         );
       }
+    }
+  },
+  {
+    version: 5,
+    name: "document-link-index",
+    up(database, appliedAt) {
+      const documents = database
+        .prepare(
+          `SELECT id, workspace_id, markdown
+           FROM documents
+           WHERE deleted_at IS NULL`
+        )
+        .all() as Array<{ id: string; workspace_id: string; markdown: string }>;
+      const insert = database.prepare(
+        `INSERT INTO document_links
+          (id, workspace_id, source_document_id, target_document_id, target_path,
+           link_text, anchor, broken, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, 1, ?)`
+      );
+      let sequence = 0;
+      for (const document of documents) {
+        for (const link of extractDocumentLinks(document.markdown)) {
+          insert.run(
+            `link-migration-${sequence++}`,
+            document.workspace_id,
+            document.id,
+            link.targetPath,
+            link.linkText,
+            link.anchor ?? null,
+            appliedAt
+          );
+        }
+      }
+      database.exec(`
+        UPDATE document_links
+        SET target_document_id = (
+          SELECT documents.id FROM documents
+          WHERE documents.workspace_id = document_links.workspace_id
+            AND documents.deleted_at IS NULL
+            AND (
+              documents.path = document_links.target_path
+              OR documents.path = document_links.target_path || '.md'
+              OR documents.title = document_links.target_path
+            )
+          LIMIT 1
+        );
+        UPDATE document_links
+        SET broken = CASE
+          WHEN target_document_id IS NULL THEN 1
+          ELSE 0
+        END;
+      `);
     }
   }
 ];

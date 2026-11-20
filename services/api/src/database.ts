@@ -18,6 +18,7 @@ import {
   type WorkspacePath
 } from "@inkloom/core";
 import { hashSessionToken } from "./auth";
+import { extractDocumentLinks } from "./links";
 import { runMigrations } from "./migrations";
 import {
   buildFtsQuery,
@@ -70,6 +71,37 @@ export type ApiSearchPage = {
   total: number;
   page: number;
   pageSize: number;
+};
+
+export type ApiDocumentLink = {
+  documentId: string;
+  title: string;
+  path: string;
+  lifecycle: DocumentLifecycle;
+  knowledgeBaseId?: KnowledgeBaseId;
+  linkText: string;
+  targetPath: string;
+  anchor?: string;
+  snippet: string;
+  broken: boolean;
+};
+
+export type ApiDocumentAsset = {
+  id: string;
+  hash: string;
+  mime: string;
+  size: number;
+  kind: AssetKind;
+  createdAt: IsoTimestamp;
+};
+
+export type ApiDocumentContext = {
+  document: DocumentMeta & { contentHash: ContentHash };
+  outlineSource: string;
+  outgoingLinks: ApiDocumentLink[];
+  backlinks: ApiDocumentLink[];
+  assets: ApiDocumentAsset[];
+  revisions: WorkspaceDocumentRevision[];
 };
 
 export type AssetKind = "image" | "attachment" | "excalidraw" | "svg";
@@ -157,6 +189,25 @@ type AssetRow = {
 type SearchRow = DocumentRow & {
   snippet: string;
   rank: number;
+};
+
+type DocumentLinkRow = {
+  id: string;
+  source_document_id: string;
+  target_document_id: string | null;
+  target_path: string;
+  link_text: string;
+  anchor: string | null;
+  broken: number;
+  updated_at: string;
+  source_title?: string;
+  source_path?: string;
+  source_lifecycle?: DocumentLifecycle;
+  source_knowledge_base_id?: string | null;
+  source_markdown?: string;
+  target_title?: string | null;
+  target_lifecycle?: DocumentLifecycle | null;
+  target_knowledge_base_id?: string | null;
 };
 
 export type WorkspaceDocumentRevision = DocumentSnapshot & {
@@ -257,6 +308,7 @@ export class DocumentDatabase {
         );
     });
     this.syncDocumentSearch(workspaceId, documentId);
+    this.syncDocumentLinks(workspaceId, documentId);
 
     return { id: userId, email, displayName, createdAt: timestamp };
   }
@@ -534,6 +586,13 @@ export class DocumentDatabase {
     });
     for (const row of documents) {
       this.syncDocumentSearch(workspaceId, row.id);
+      const updated = this.requireDocument(workspaceId, row.id);
+      this.refreshIncomingLinksForPath(
+        workspaceId,
+        row.path,
+        row.id,
+        updated.path
+      );
     }
 
     return documents.map((row) =>
@@ -693,6 +752,12 @@ export class DocumentDatabase {
       this.touchWorkspace(workspaceId, timestamp);
     });
     this.syncDocumentSearch(workspaceId, documentId);
+    this.refreshIncomingLinksForPath(
+      workspaceId,
+      currentRow.path,
+      documentId,
+      nextPath
+    );
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -732,6 +797,12 @@ export class DocumentDatabase {
       this.touchWorkspace(workspaceId, timestamp);
     });
     this.syncDocumentSearch(workspaceId, documentId);
+    this.refreshIncomingLinksForPath(
+      workspaceId,
+      currentRow.path,
+      documentId,
+      nextPath
+    );
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -776,6 +847,86 @@ export class DocumentDatabase {
   ): DocumentSnapshot {
     this.requireWorkspace(userId, workspaceId);
     return documentFromRow(this.requireDocument(workspaceId, documentId));
+  }
+
+  getDocumentContext(
+    userId: string,
+    workspaceId: string,
+    documentId: string
+  ): ApiDocumentContext {
+    this.requireWorkspace(userId, workspaceId);
+    const current = documentFromRow(
+      this.requireDocument(workspaceId, documentId)
+    );
+    const outgoingRows = this.db
+      .prepare(
+        `SELECT links.*, source.title AS source_title,
+                source.path AS source_path,
+                source.lifecycle AS source_lifecycle,
+                source.knowledge_base_id AS source_knowledge_base_id,
+                source.markdown AS source_markdown,
+                target.title AS target_title,
+                target.lifecycle AS target_lifecycle,
+                target.knowledge_base_id AS target_knowledge_base_id
+         FROM document_links links
+         JOIN documents source ON source.id = links.source_document_id
+         LEFT JOIN documents target ON target.id = links.target_document_id
+         WHERE links.workspace_id = ?
+           AND links.source_document_id = ?
+           AND source.deleted_at IS NULL
+         ORDER BY links.updated_at DESC, links.id ASC`
+      )
+      .all(workspaceId, documentId) as DocumentLinkRow[];
+    const backlinkRows = this.db
+      .prepare(
+        `SELECT links.*, source.title AS source_title,
+                source.path AS source_path,
+                source.lifecycle AS source_lifecycle,
+                source.knowledge_base_id AS source_knowledge_base_id,
+                source.markdown AS source_markdown,
+                target.title AS target_title,
+                target.lifecycle AS target_lifecycle,
+                target.knowledge_base_id AS target_knowledge_base_id
+         FROM document_links links
+         JOIN documents source ON source.id = links.source_document_id
+         LEFT JOIN documents target ON target.id = links.target_document_id
+         WHERE links.workspace_id = ?
+           AND links.target_document_id = ?
+           AND source.deleted_at IS NULL
+         ORDER BY links.updated_at DESC, links.id ASC`
+      )
+      .all(workspaceId, documentId) as DocumentLinkRow[];
+    const assets = this.db
+      .prepare(
+        `SELECT assets.* FROM document_asset_refs refs
+         JOIN assets ON assets.id = refs.asset_id
+         WHERE refs.document_id = ?
+         ORDER BY assets.created_at DESC`
+      )
+      .all(documentId) as AssetRow[];
+
+    return {
+      document: current.meta,
+      outlineSource: current.markdown,
+      outgoingLinks: outgoingRows.map((row) =>
+        documentLinkFromRow(row, "outgoing")
+      ),
+      backlinks: backlinkRows.map((row) =>
+        documentLinkFromRow(row, "incoming")
+      ),
+      assets: assets.map((asset) => {
+        const value = assetFromRow(asset);
+        return {
+          id: value.id,
+          hash: value.hash,
+          mime: value.mime,
+          size: value.size,
+          kind: value.kind,
+          createdAt: value.createdAt
+        };
+      }),
+      revisions: this.listRevisions(userId, workspaceId, documentId).slice(0, 5)
+    };
   }
 
   createDocument(
@@ -839,6 +990,7 @@ export class DocumentDatabase {
       timestamp
     );
     this.syncDocumentSearch(workspaceId, snapshot.meta.id);
+    this.syncDocumentLinks(workspaceId, snapshot.meta.id);
     this.touchWorkspace(workspace.id, timestamp);
     return snapshot;
   }
@@ -901,6 +1053,7 @@ export class DocumentDatabase {
     });
 
     this.syncDocumentSearch(workspaceId, documentId);
+    this.syncDocumentLinks(workspaceId, documentId);
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -929,6 +1082,12 @@ export class DocumentDatabase {
       )
       .run(path, timestamp, documentId, workspaceId);
     this.touchWorkspace(workspaceId, timestamp);
+    this.refreshIncomingLinksForPath(
+      workspaceId,
+      currentRow.path,
+      documentId,
+      path
+    );
     this.syncDocumentSearch(workspaceId, documentId);
     const snapshot = documentFromRow(this.requireDocument(workspaceId, documentId));
     return {
@@ -959,6 +1118,7 @@ export class DocumentDatabase {
       .run(timestamp, timestamp, documentId, workspaceId);
     this.touchWorkspace(workspaceId, timestamp);
     this.syncDocumentSearch(workspaceId, documentId);
+    this.clearDocumentLinks(workspaceId, documentId, true);
   }
 
   listRevisions(
@@ -1359,6 +1519,123 @@ export class DocumentDatabase {
       );
   }
 
+  private syncDocumentLinks(workspaceId: string, documentId: string): void {
+    this.db
+      .prepare(
+        "DELETE FROM document_links WHERE source_document_id = ? AND workspace_id = ?"
+      )
+      .run(documentId, workspaceId);
+    const source = this.db
+      .prepare(
+        `SELECT * FROM documents
+         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`
+      )
+      .get(documentId, workspaceId) as DocumentRow | undefined;
+    if (!source) return;
+    const timestamp = this.now();
+    const insert = this.db.prepare(
+      `INSERT INTO document_links
+        (id, workspace_id, source_document_id, target_document_id, target_path,
+         link_text, anchor, broken, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const link of extractDocumentLinks(source.markdown)) {
+      const withExtension = /\.md$/i.test(link.targetPath)
+        ? link.targetPath
+        : `${link.targetPath}.md`;
+      const target = this.db
+        .prepare(
+          `SELECT id FROM documents
+           WHERE workspace_id = ? AND deleted_at IS NULL
+             AND (path = ? OR path = ? OR path LIKE ? OR title = ?)
+           ORDER BY CASE WHEN path = ? THEN 0 WHEN path = ? THEN 1 ELSE 2 END
+           LIMIT 1`
+        )
+        .get(
+          workspaceId,
+          link.targetPath,
+          withExtension,
+          `%/${withExtension}`,
+          link.targetPath,
+          link.targetPath,
+          withExtension
+        ) as { id: string } | undefined;
+      insert.run(
+        this.createId(),
+        workspaceId,
+        documentId,
+        target?.id ?? null,
+        link.targetPath,
+        link.linkText,
+        link.anchor ?? null,
+        target ? 0 : 1,
+        timestamp
+      );
+    }
+    this.db
+      .prepare(
+        `UPDATE document_links
+         SET target_document_id = ?, broken = 0, updated_at = ?
+         WHERE workspace_id = ?
+           AND (
+             target_path = ? OR target_path = ? OR target_path = ?
+             OR target_path LIKE ?
+           )`
+      )
+      .run(
+        documentId,
+        timestamp,
+        workspaceId,
+        source.path,
+        source.title,
+        source.path.replace(/\.md$/i, ""),
+        `%/${source.path.replace(/\.md$/i, "")}`
+      );
+  }
+
+  private refreshIncomingLinksForPath(
+    workspaceId: string,
+    oldPath: string,
+    documentId: string,
+    newPath: string
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE document_links
+         SET target_document_id = ?, target_path = ?, broken = 0, updated_at = ?
+         WHERE workspace_id = ? AND (target_document_id = ? OR target_path = ?)`
+      )
+      .run(
+        documentId,
+        newPath,
+        this.now(),
+        workspaceId,
+        documentId,
+        oldPath
+      );
+  }
+
+  private clearDocumentLinks(
+    workspaceId: string,
+    documentId: string,
+    targetDeleted: boolean
+  ): void {
+    this.db
+      .prepare(
+        "DELETE FROM document_links WHERE source_document_id = ? AND workspace_id = ?"
+      )
+      .run(documentId, workspaceId);
+    if (targetDeleted) {
+      this.db
+        .prepare(
+          `UPDATE document_links
+           SET target_document_id = NULL, broken = 1, updated_at = ?
+           WHERE target_document_id = ? AND workspace_id = ?`
+        )
+        .run(this.now(), documentId, workspaceId);
+    }
+  }
+
   private touchWorkspace(workspaceId: string, timestamp: string): void {
     this.db
       .prepare("UPDATE workspaces SET updated_at = ? WHERE id = ?")
@@ -1647,6 +1924,57 @@ function markdownExcerpt(markdown: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 180);
+}
+
+function documentLinkFromRow(
+  row: DocumentLinkRow,
+  direction: "incoming" | "outgoing"
+): ApiDocumentLink {
+  const sourceTitle = row.source_title ?? "未知文档";
+  const sourcePath = row.source_path ?? "";
+  const title = direction === "outgoing" ? row.target_title ?? row.target_path : sourceTitle;
+  const path = direction === "outgoing" ? row.target_path : sourcePath;
+  return {
+    documentId:
+      direction === "outgoing"
+        ? row.target_document_id ?? ""
+        : row.source_document_id,
+    title,
+    path,
+    lifecycle:
+      direction === "incoming"
+        ? row.source_lifecycle ?? "scratch"
+        : row.target_lifecycle ?? "scratch",
+    ...((direction === "incoming"
+      ? row.source_knowledge_base_id
+      : row.target_knowledge_base_id)
+      ? {
+          knowledgeBaseId: (direction === "incoming"
+            ? row.source_knowledge_base_id
+            : row.target_knowledge_base_id) as KnowledgeBaseId
+        }
+      : {}),
+    linkText: row.link_text,
+    targetPath: row.target_path,
+    ...(row.anchor ? { anchor: row.anchor } : {}),
+    snippet: linkSnippet(row.source_markdown ?? "", row.link_text, row.target_path),
+    broken: Boolean(row.broken)
+  };
+}
+
+function linkSnippet(
+  markdown: string,
+  linkText: string,
+  targetPath: string
+): string {
+  const line = markdown
+    .split(/\r?\n/)
+    .find(
+      (candidate) =>
+        candidate.includes(targetPath) ||
+        (linkText.length > 0 && candidate.includes(linkText))
+    );
+  return (line?.trim() || markdownExcerpt(markdown)).slice(0, 180);
 }
 
 function parseTags(value: string): string[] {

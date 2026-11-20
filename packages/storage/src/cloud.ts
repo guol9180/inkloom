@@ -33,6 +33,37 @@ export type CloudDocumentRevision = DocumentSnapshot & {
   recordedAt: string;
 };
 
+export type CloudDocumentLink = {
+  documentId: string;
+  title: string;
+  path: string;
+  lifecycle: "scratch" | "knowledge";
+  knowledgeBaseId?: string;
+  linkText: string;
+  targetPath: string;
+  anchor?: string;
+  snippet: string;
+  broken: boolean;
+};
+
+export type CloudDocumentAsset = {
+  id: string;
+  hash: string;
+  mime: string;
+  size: number;
+  kind: CloudAssetKind;
+  createdAt: string;
+};
+
+export type CloudDocumentContext = {
+  document: DocumentMeta;
+  outlineSource: string;
+  outgoingLinks: CloudDocumentLink[];
+  backlinks: CloudDocumentLink[];
+  assets: CloudDocumentAsset[];
+  revisions: CloudDocumentRevision[];
+};
+
 export type CloudDocumentSummary = DocumentMeta & {
   excerpt: string;
 };
@@ -207,6 +238,18 @@ export class CloudClient {
       )}/revisions`
     );
     return response.revisions;
+  }
+
+  async getDocumentContext(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId
+  ): Promise<CloudDocumentContext> {
+    const response = await this.request<{ context: CloudDocumentContext }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/context`
+    );
+    return response.context;
   }
 
   async listNotes(
