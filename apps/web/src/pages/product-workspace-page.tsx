@@ -1668,25 +1668,20 @@ function DocumentSurface({
             }
           />
         )}
-        {showEditor ? (
-          <ProductMarkdownEditor
-            value={autosave.markdown}
-            title={document.meta.title}
-            documentId={document.meta.id}
-            workspaceId={document.meta.workspaceId}
-            legacyCanvas={
-              document.extensions?.canvas as unknown as
-                | CanvasScene
-                | undefined
-            }
-            onChange={autosave.changeMarkdown}
-            onFocusSearch={onFocusSearch}
-          />
-        ) : (
-          <div className="whitespace-pre-wrap px-[clamp(1.25rem,5vw,4.5rem)] py-10 font-reading text-[1.02rem] leading-8 text-ink-800">
-            {document.markdown || "这篇文档还没有内容。"}
-          </div>
-        )}
+        <ProductMarkdownEditor
+          value={autosave.markdown}
+          title={document.meta.title}
+          documentId={document.meta.id}
+          workspaceId={document.meta.workspaceId}
+          readOnly={!showEditor}
+          legacyCanvas={
+            document.extensions?.canvas as unknown as
+              | CanvasScene
+              | undefined
+          }
+          onChange={autosave.changeMarkdown}
+          onFocusSearch={onFocusSearch}
+        />
       </article>
       <AppDialog
         open={tagDialogOpen}

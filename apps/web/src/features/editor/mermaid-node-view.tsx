@@ -38,19 +38,23 @@ import {
 
 const MERMAID_RENDER_DELAY_MS = 300;
 
-export const mermaidNodeViewPlugin = $prose(
-  () =>
-    new Plugin({
+export function createMermaidNodeViewPlugin(
+  getReadOnly: () => boolean
+) {
+  return $prose(
+    () =>
+      new Plugin({
       key: new PluginKey("INKLOOM_MERMAID_NODE_VIEW"),
       props: {
         nodeViews: {
           inkloom_mermaid(node, view, getPos) {
-            return new MermaidNodeView(node, view, getPos);
+            return new MermaidNodeView(node, view, getPos, getReadOnly);
           }
         }
       }
-    })
-);
+      })
+  );
+}
 
 class MermaidNodeView implements NodeView {
   readonly dom: HTMLElement;
@@ -60,7 +64,8 @@ class MermaidNodeView implements NodeView {
   constructor(
     node: ProseNode,
     private readonly view: ProseEditorView,
-    private readonly getPos: () => number | undefined
+    private readonly getPos: () => number | undefined,
+    private readonly getReadOnly: () => boolean
   ) {
     this.node = node;
     this.dom = document.createElement("div");
@@ -101,11 +106,16 @@ class MermaidNodeView implements NodeView {
 
   private render(source: string) {
     this.root.render(
-      <MermaidBlock source={source} onSourceChange={this.changeSource} />
+      <MermaidBlock
+        source={source}
+        readOnly={this.getReadOnly()}
+        onSourceChange={this.changeSource}
+      />
     );
   }
 
   private readonly changeSource = (source: string) => {
+    if (this.getReadOnly()) return;
     if (source === this.node.textContent) return;
     const position = this.getPos();
     if (position === undefined) return;
@@ -126,9 +136,11 @@ class MermaidNodeView implements NodeView {
 
 function MermaidBlock({
   source,
+  readOnly,
   onSourceChange
 }: {
   source: string;
+  readOnly: boolean;
   onSourceChange: (source: string) => void;
 }) {
   const [svg, setSvg] = useState("");
@@ -200,7 +212,7 @@ function MermaidBlock({
     <section
       className={`inkloom-mermaid-panel ${
         fullscreen ? "is-fullscreen" : ""
-      }`}
+      } ${readOnly ? "is-readonly" : ""}`}
       onKeyDown={handleKeyDown}
       aria-label="Mermaid 图表"
     >
@@ -212,24 +224,26 @@ function MermaidBlock({
           <span>Mermaid</span>
         </div>
         <div className="inkloom-mermaid-actions">
-          <label className="inkloom-mermaid-template">
-            <span className="sr-only">图表模板</span>
-            <select
-              aria-label="图表模板"
-              value={selectedTemplate}
-              onChange={handleTemplate}
-            >
-              {selectedTemplate === "custom" && (
-                <option value="custom">自定义</option>
-              )}
-              {MERMAID_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={12} aria-hidden="true" />
-          </label>
+          {!readOnly && (
+            <label className="inkloom-mermaid-template">
+              <span className="sr-only">图表模板</span>
+              <select
+                aria-label="图表模板"
+                value={selectedTemplate}
+                onChange={handleTemplate}
+              >
+                {selectedTemplate === "custom" && (
+                  <option value="custom">自定义</option>
+                )}
+                {MERMAID_TEMPLATES.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} aria-hidden="true" />
+            </label>
+          )}
           <button
             type="button"
             className="inkloom-mermaid-icon-button"
@@ -243,13 +257,15 @@ function MermaidBlock({
       </header>
 
       <div className="inkloom-mermaid-workspace">
-        <div className="inkloom-mermaid-source">
-          <span className="inkloom-mermaid-pane-label">源码</span>
-          <MermaidSourceEditor
-            value={source}
-            onChange={onSourceChange}
-          />
-        </div>
+        {!readOnly && (
+          <div className="inkloom-mermaid-source">
+            <span className="inkloom-mermaid-pane-label">源码</span>
+            <MermaidSourceEditor
+              value={source}
+              onChange={onSourceChange}
+            />
+          </div>
+        )}
         <div className="inkloom-mermaid-preview">
           <span className="inkloom-mermaid-pane-label">
             预览

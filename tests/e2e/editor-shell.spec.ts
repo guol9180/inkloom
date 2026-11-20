@@ -265,6 +265,99 @@ test("moves a knowledge document back and preserves it when deleting the base", 
   ).toBeVisible();
 });
 
+test("keeps knowledge documents preview-first with lossless edit switching", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  for (let index = 0; index < 18; index += 1) {
+    await page.keyboard.type(
+      `长文预览 ${String(index + 1).padStart(2, "0")}：保持阅读排版与滚动位置。`
+    );
+    if (index < 17) await page.keyboard.press("Enter");
+  }
+  await createKnowledgeBaseFromMenu(page, "预览知识库");
+  await page.getByRole("button", { name: "随记", exact: true }).click();
+  const noteRow = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "长文预览 01" });
+  await expect(noteRow).toBeVisible();
+  await noteRow.click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "归档到知识库" }).click();
+  await page
+    .getByRole("dialog", { name: "归档到知识库" })
+    .getByRole("button", { name: "确认归档" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("button", { name: "预览知识库", exact: true }).click();
+  await page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "长文预览 01" })
+    .click();
+
+  const previewEditor = page.getByLabel("Markdown 正文");
+  await expect(previewEditor).toHaveAttribute("aria-readonly", "true");
+  await expect(
+    page.getByRole("toolbar", { name: "文档格式" })
+  ).toHaveCount(0);
+  await expect(page.locator('[aria-label^="块 "]')).toHaveCount(0);
+
+  const scroller = previewEditor.locator(
+    'xpath=ancestor::div[contains(@class,"overflow-y-auto")]'
+  );
+  await scroller.evaluate((element) => {
+    element.scrollTop = 260;
+  });
+  const scrollBefore = await scroller.evaluate((element) => element.scrollTop);
+  await page.getByRole("button", { name: "编辑", exact: true }).click();
+  await expect(previewEditor).toHaveAttribute("aria-readonly", "false");
+  await expect(
+    page.getByRole("toolbar", { name: "文档格式" })
+  ).toBeVisible();
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollTop))
+    .toBeGreaterThanOrEqual(scrollBefore - 4);
+
+  const routePattern = /\/api\/workspaces\/[^/]+\/documents\/[^/]+$/;
+  await page.route(routePattern, async (route) => {
+    if (route.request().method() === "PUT") {
+      await route.abort("failed");
+      return;
+    }
+    await route.continue();
+  });
+  await previewEditor.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" 保存失败时仍保留编辑。");
+  await page.getByRole("button", { name: "完成", exact: true }).click();
+  await expect(previewEditor).toHaveAttribute("aria-readonly", "false");
+  await expect(
+    page.getByRole("toolbar", { name: "文档格式" })
+  ).toBeVisible();
+
+  await page.unroute(routePattern);
+  await page.getByRole("button", { name: "完成", exact: true }).click();
+  await expect(previewEditor).toHaveAttribute("aria-readonly", "true");
+  await expect(
+    page.getByRole("toolbar", { name: "文档格式" })
+  ).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "true"
+  );
+  await expect(
+    page.getByRole("button", { name: "编辑", exact: true })
+  ).toBeVisible();
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {

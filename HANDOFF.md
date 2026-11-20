@@ -53,12 +53,12 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T38 now that T25–T37 are completed:
+Start with T39 now that T25–T38 are completed:
 
-- Make knowledge-base documents preview-first and read-only by default.
-- Add explicit Edit and Done transitions without reloading, jumping scroll or
-  changing reading layout.
-- Keep failed saves in editing state and preserve local drafts.
+- Replace whole-workspace client search with server-side SQLite FTS5.
+- Index title, body, tags, path and filename with a Chinese-friendly query
+  strategy, result snippets, lifecycle filtering and pagination.
+- Keep search failures isolated to the search surface.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

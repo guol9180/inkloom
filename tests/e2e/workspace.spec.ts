@@ -179,13 +179,21 @@ test("allows only one tab to edit the same document", async ({ page }) => {
   await expect(
     secondPage.getByText("此文档正在另一个标签页编辑")
   ).toBeVisible();
-  await expect(secondPage.getByLabel("Markdown 正文")).toHaveCount(0);
+  await expect(secondPage.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "true"
+  );
+  await expect(
+    secondPage.getByRole("toolbar", { name: "文档格式" })
+  ).toHaveCount(0);
 
   await page.close();
   await secondPage.bringToFront();
-  await expect(secondPage.getByLabel("Markdown 正文")).toBeVisible({
-    timeout: 8_000
-  });
+  await expect(secondPage.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "false",
+    { timeout: 8_000 }
+  );
   await secondPage.close();
 });
 

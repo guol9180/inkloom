@@ -41,7 +41,7 @@ import {
 import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
 import { cn } from "../../lib/utils";
-import { mermaidNodeViewPlugin } from "../editor/mermaid-node-view";
+import { createMermaidNodeViewPlugin } from "../editor/mermaid-node-view";
 import { createCanvasNodeViewPlugin } from "../editor/canvas-node-view";
 import type { CanvasBlockAttrs } from "@inkloom/editor";
 import {
@@ -129,6 +129,7 @@ export const RichMarkdownEditor = forwardRef<
     value: string;
     title: string;
     workspaceId?: string;
+    readOnly?: boolean;
     mermaidSnippet: string;
     canvasSnippet: string;
     onChange: (value: string) => void;
@@ -143,6 +144,7 @@ export const RichMarkdownEditor = forwardRef<
     value,
     title,
     workspaceId = "",
+    readOnly = false,
     mermaidSnippet,
     canvasSnippet,
     onChange,
@@ -166,6 +168,7 @@ export const RichMarkdownEditor = forwardRef<
   const onRequestCanvasRef = useRef(onRequestCanvas);
   const onOpenCanvasRef = useRef(onOpenCanvas);
   const workspaceIdRef = useRef(workspaceId);
+  const readOnlyRef = useRef(readOnly);
   const mermaidSnippetRef = useRef(mermaidSnippet);
   const canvasSnippetRef = useRef(canvasSnippet);
   const [loading, setLoading] = useState(true);
@@ -176,6 +179,7 @@ export const RichMarkdownEditor = forwardRef<
   onRequestCanvasRef.current = onRequestCanvas;
   onOpenCanvasRef.current = onOpenCanvas;
   workspaceIdRef.current = workspaceId;
+  readOnlyRef.current = readOnly;
   mermaidSnippetRef.current = mermaidSnippet;
   canvasSnippetRef.current = canvasSnippet;
   titleRef.current = title;
@@ -502,11 +506,14 @@ export const RichMarkdownEditor = forwardRef<
       }
     });
     crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
-    crepe.editor.use(mermaidNodeViewPlugin);
+    crepe.editor.use(
+      createMermaidNodeViewPlugin(() => readOnlyRef.current)
+    );
     crepe.editor.use(
       createCanvasNodeViewPlugin(
         () => workspaceIdRef.current,
-        (canvas) => onOpenCanvasRef.current?.(canvas)
+        (canvas) => onOpenCanvasRef.current?.(canvas),
+        () => readOnlyRef.current
       )
     );
     crepeRef.current = crepe;
@@ -539,6 +546,12 @@ export const RichMarkdownEditor = forwardRef<
         editor?.setAttribute("aria-label", "Markdown 正文");
         editor?.setAttribute("role", "textbox");
         editor?.setAttribute("aria-multiline", "true");
+        editor?.setAttribute("aria-readonly", String(readOnlyRef.current));
+        crepe.editor.action((ctx) => {
+          ctx.get(editorViewCtx).setProps({
+            editable: () => !readOnlyRef.current
+          });
+        });
         syncTitleHeading(host, titleRef.current);
         setLoading(false);
       })
@@ -566,6 +579,23 @@ export const RichMarkdownEditor = forwardRef<
     if (!host || !readyRef.current) return;
     syncTitleHeading(host, title);
   }, [title]);
+
+  useEffect(() => {
+    const crepe = crepeRef.current;
+    if (!crepe || !readyRef.current) return;
+    crepe.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.setProps({
+        editable: () => !readOnlyRef.current
+      });
+      view.dom.setAttribute("aria-readonly", String(readOnlyRef.current));
+      suppressChangeRef.current = true;
+      view.dispatch(
+        view.state.tr.setMeta("inkloomReadOnly", readOnlyRef.current)
+      );
+      suppressChangeRef.current = false;
+    });
+  }, [readOnly]);
 
   useEffect(() => {
     const crepe = crepeRef.current;

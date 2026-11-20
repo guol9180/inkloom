@@ -19,7 +19,8 @@ import {
 
 export function createCanvasNodeViewPlugin(
   getWorkspaceId: () => string,
-  onOpen: (canvas: CanvasBlockAttrs) => void
+  onOpen: (canvas: CanvasBlockAttrs) => void,
+  getReadOnly: () => boolean
 ) {
   return $prose(
     () =>
@@ -33,7 +34,8 @@ export function createCanvasNodeViewPlugin(
                 view,
                 getPos,
                 getWorkspaceId,
-                onOpen
+                onOpen,
+                getReadOnly
               );
             }
           }
@@ -52,7 +54,8 @@ class CanvasNodeView implements NodeView {
     private readonly view: ProseEditorView,
     private readonly getPos: () => number | undefined,
     private readonly getWorkspaceId: () => string,
-    private readonly onOpen: (canvas: CanvasBlockAttrs) => void
+    private readonly onOpen: (canvas: CanvasBlockAttrs) => void,
+    private readonly getReadOnly: () => boolean
   ) {
     this.node = node;
     this.dom = document.createElement("div");
@@ -95,6 +98,7 @@ class CanvasNodeView implements NodeView {
       <CanvasBlock
         canvas={attrs}
         workspaceId={this.getWorkspaceId()}
+        readOnly={this.getReadOnly()}
         onOpen={() => this.onOpen(attrs)}
       />
     );
@@ -113,10 +117,12 @@ export function canvasAttrs(node: ProseNode): CanvasBlockAttrs {
 function CanvasBlock({
   canvas,
   workspaceId,
+  readOnly,
   onOpen
 }: {
   canvas: CanvasBlockAttrs;
   workspaceId: string;
+  readOnly: boolean;
   onOpen: () => void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "missing">(
@@ -140,15 +146,17 @@ function CanvasBlock({
           </span>
           <span>{canvas.title}</span>
         </div>
-        <button
-          type="button"
-          className="inkloom-canvas-edit"
-          onClick={onOpen}
-          aria-label="编辑画布"
-        >
-          <Pencil size={13} />
-          编辑
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="inkloom-canvas-edit"
+            onClick={onOpen}
+            aria-label="编辑画布"
+          >
+            <Pencil size={13} />
+            编辑
+          </button>
+        )}
       </header>
       <div className="inkloom-canvas-preview" data-state={state}>
         {state === "loading" && (
@@ -161,10 +169,15 @@ function CanvasBlock({
           <button
             type="button"
             className="inkloom-canvas-status inkloom-canvas-missing"
-            onClick={onOpen}
+            onClick={readOnly ? undefined : onOpen}
+            disabled={readOnly}
           >
             <ImageOff size={19} />
-            <span>预览资产缺失，点击重新绘制或上传</span>
+            <span>
+              {readOnly
+                ? "预览资产缺失"
+                : "预览资产缺失，点击重新绘制或上传"}
+            </span>
           </button>
         )}
         {source && (

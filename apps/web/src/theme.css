@@ -1259,6 +1259,14 @@
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
 }
 
+.inkloom-mermaid-panel.is-readonly .inkloom-mermaid-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.inkloom-mermaid-panel.is-readonly .inkloom-mermaid-preview {
+  border-left: 0;
+}
+
 .inkloom-mermaid-source,
 .inkloom-mermaid-preview {
   position: relative;

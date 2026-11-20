@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -134,6 +135,7 @@ export const ProductMarkdownEditor = forwardRef<
     title: string;
     documentId: string;
     workspaceId: string;
+    readOnly?: boolean;
     legacyCanvas?: CanvasScene;
     onChange: (value: string) => void;
     onFocusSearch: () => void;
@@ -144,6 +146,7 @@ export const ProductMarkdownEditor = forwardRef<
     title,
     documentId,
     workspaceId,
+    readOnly = false,
     legacyCanvas,
     onChange,
     onFocusSearch
@@ -188,6 +191,17 @@ export const ProductMarkdownEditor = forwardRef<
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const uploadControllersRef = useRef(new Map<string, AbortController>());
   const legacyCanvasMigrationRef = useRef("");
+  const previousReadOnlyRef = useRef(readOnly);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (previousReadOnlyRef.current === readOnly || !root) return;
+    const scroller = root.closest<HTMLElement>(".overflow-y-auto");
+    if (scroller) {
+      scroller.scrollTop += readOnly ? -48 : 48;
+    }
+    previousReadOnlyRef.current = readOnly;
+  }, [readOnly]);
 
   useImperativeHandle(
     ref,
@@ -274,7 +288,9 @@ export const ProductMarkdownEditor = forwardRef<
   }, [syncHandles]);
 
   useEffect(() => {
-    if (!legacyCanvas || value.includes("<!-- inkloom:canvas")) return;
+    if (readOnly || !legacyCanvas || value.includes("<!-- inkloom:canvas")) {
+      return;
+    }
     const migrationKey = `${workspaceId}:${documentId}:${legacyCanvas.title}`;
     if (legacyCanvasMigrationRef.current === migrationKey) return;
     legacyCanvasMigrationRef.current = migrationKey;
@@ -321,7 +337,7 @@ export const ProductMarkdownEditor = forwardRef<
     return () => {
       cancelled = true;
     };
-  }, [documentId, legacyCanvas, syncHandles, value, workspaceId]);
+  }, [documentId, legacyCanvas, readOnly, syncHandles, value, workspaceId]);
 
   useEffect(() => {
     function syncSelection() {
@@ -768,19 +784,22 @@ export const ProductMarkdownEditor = forwardRef<
     <div
       ref={rootRef}
       className="product-markdown-editor relative min-h-0"
-      onKeyDownCapture={handleKeyDown}
+      onKeyDownCapture={readOnly ? undefined : handleKeyDown}
       onPaste={(event) => {
+        if (readOnly) return;
         const files = [...event.clipboardData.files];
         if (files.length === 0) return;
         event.preventDefault();
         enqueueFiles(files);
       }}
       onDragOver={(event) => {
+        if (readOnly) return;
         if ([...event.dataTransfer.types].includes("Files")) {
           event.preventDefault();
         }
       }}
       onDrop={(event) => {
+        if (readOnly) return;
         const files = [...event.dataTransfer.files];
         if (files.length === 0) return;
         event.preventDefault();
@@ -801,11 +820,12 @@ export const ProductMarkdownEditor = forwardRef<
           {legacyCanvasError}
         </div>
       )}
-      <div
-        className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
-        role="toolbar"
-        aria-label="文档格式"
-      >
+      {!readOnly && (
+        <div
+          className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
+          role="toolbar"
+          aria-label="文档格式"
+        >
         {blockType === "table" ? (
           <>
             <span className="mx-1 shrink-0 text-[0.62rem] font-bold tracking-[0.08em] text-ink-400 uppercase">
@@ -888,11 +908,13 @@ export const ProductMarkdownEditor = forwardRef<
               </span>
             );
           })
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-7rem)]">
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
+        {!readOnly && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
           {handles.map((handle) => (
             <DropdownMenu.Root
               key={handle.index}
@@ -1128,7 +1150,8 @@ export const ProductMarkdownEditor = forwardRef<
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
           ))}
-        </div>
+          </div>
+        )}
 
         <Suspense fallback={<EditorSkeleton />}>
           <RichMarkdownEditor
@@ -1136,6 +1159,7 @@ export const ProductMarkdownEditor = forwardRef<
             value={value}
             title={title}
             workspaceId={workspaceId}
+            readOnly={readOnly}
             mermaidSnippet={"flowchart LR\n  A[开始] --> B[完成]"}
             canvasSnippet={""}
             onChange={(next) => {
