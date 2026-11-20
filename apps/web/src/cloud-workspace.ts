@@ -5,6 +5,7 @@ import {
 } from "@inkloom/core";
 import {
   CloudClient,
+  IndexedDbDraftStore,
   type CloudFetch,
   type CloudWorkspace,
   type CloudWorkspaceAdapter
@@ -15,6 +16,10 @@ import { folderOrder, type Note } from "./data";
 const SESSION_ACTIVE_PREFIX = "inkloom.active.";
 const ACTIVE_WORKSPACE_KEY = "inkloom.active-workspace";
 const DRAFT_PREFIX = "inkloom.draft.";
+const draftStore = new IndexedDbDraftStore();
+let activeDraftScope:
+  | { userId: string; workspaceId: string }
+  | undefined;
 
 export const cloudClient = new CloudClient({
   baseUrl:
@@ -31,23 +36,32 @@ export async function loadCloudWorkspace(
 ): Promise<{ notes: Note[]; activeId: string; recoveredDraft: boolean }> {
   const tree = await adapter.listTree();
   const documentNodes = collectDocumentNodes(tree);
-  const snapshots = await Promise.all(
-    documentNodes.map((node) => adapter.readDocument(node.id))
-  );
+  const [session, snapshots] = await Promise.all([
+    cloudClient.getSession(),
+    Promise.all(documentNodes.map((node) => adapter.readDocument(node.id)))
+  ]);
+  activeDraftScope =
+    session === undefined
+      ? undefined
+      : { userId: session.id, workspaceId: workspace.id };
   let recoveredDraft = false;
-  const notes = snapshots.map((snapshot) => {
-    const note = snapshotToNote(snapshot);
-    const draft = readDraft(note.id);
-    if (!draft) return note;
-    recoveredDraft = true;
-    return {
-      ...note,
-      title: draft.title,
-      content: draft.content,
-      tags: draft.tags,
-      canvas: draft.canvas
-    };
-  });
+  const notes = await Promise.all(
+    snapshots.map(async (snapshot) => {
+      const note = snapshotToNote(snapshot);
+      const draft = session
+        ? await readDraft(session.id, workspace.id, note)
+        : undefined;
+      if (!draft) return note;
+      recoveredDraft = true;
+      return {
+        ...note,
+        title: draft.title,
+        content: draft.content,
+        tags: draft.tags,
+        canvas: draft.canvas
+      };
+    })
+  );
   const storedActiveId = localStorage.getItem(`${SESSION_ACTIVE_PREFIX}${workspace.id}`);
   const activeId =
     notes.find((note) => note.id === storedActiveId)?.id ?? notes[0]?.id ?? "";
@@ -106,29 +120,59 @@ export function snapshotToNote(snapshot: DocumentSnapshot): Note {
   };
 }
 
-export function saveDraft(note: Note): void {
-  const draft = {
+export async function saveDraft(note: Note): Promise<void> {
+  if (!activeDraftScope) return;
+  await draftStore.put({
+    key: `${activeDraftScope.userId}:${activeDraftScope.workspaceId}:${note.id}`,
+    ...activeDraftScope,
+    documentId: note.id,
     title: note.title,
-    content: note.content,
+    markdown: note.content,
     tags: note.tags,
-    canvas: note.canvas
-  };
-  localStorage.setItem(`${DRAFT_PREFIX}${note.id}`, JSON.stringify(draft));
+    baseRevision: note.revision,
+    contentHash: await hashMarkdown(note.content),
+    extensions:
+      note.canvas === undefined ? undefined : { canvas: note.canvas as never },
+    savedAt: new Date().toISOString()
+  });
 }
 
-export function clearDraft(documentId: string): void {
-  localStorage.removeItem(`${DRAFT_PREFIX}${documentId}`);
+export async function clearDraft(documentId: string): Promise<void> {
+  if (!activeDraftScope) return;
+  await draftStore.remove({
+    ...activeDraftScope,
+    documentId
+  });
 }
 
-function readDraft(documentId: string):
+async function readDraft(
+  userId: string,
+  workspaceId: string,
+  note: Note
+):
+  Promise<
   | {
       title: string;
       content: string;
       tags: string[];
       canvas?: CanvasScene;
     }
-  | undefined {
-  const raw = localStorage.getItem(`${DRAFT_PREFIX}${documentId}`);
+  | undefined
+  > {
+  const draft = await draftStore.get({
+    userId,
+    workspaceId,
+    documentId: note.id
+  });
+  if (draft) {
+    return {
+      title: draft.title,
+      content: draft.markdown,
+      tags: [...draft.tags],
+      canvas: draft.extensions?.canvas as unknown as CanvasScene | undefined
+    };
+  }
+  const raw = localStorage.getItem(`${DRAFT_PREFIX}${note.id}`);
   if (!raw) return undefined;
   try {
     const value = JSON.parse(raw) as {
@@ -145,15 +189,44 @@ function readDraft(documentId: string):
     ) {
       return undefined;
     }
-    return {
+    const recovered = {
       title: value.title,
       content: value.content,
       tags: value.tags,
       canvas: value.canvas as CanvasScene | undefined
     };
+    await draftStore.put({
+      key: `${userId}:${workspaceId}:${note.id}`,
+      userId,
+      workspaceId,
+      documentId: note.id,
+      title: recovered.title,
+      markdown: recovered.content,
+      tags: recovered.tags,
+      baseRevision: note.revision,
+      contentHash: await hashMarkdown(recovered.content),
+      extensions:
+        recovered.canvas === undefined
+          ? undefined
+          : { canvas: recovered.canvas as never },
+      savedAt: new Date().toISOString()
+    });
+    localStorage.removeItem(`${DRAFT_PREFIX}${note.id}`);
+    return recovered;
   } catch {
     return undefined;
   }
+}
+
+async function hashMarkdown(value: string) {
+  if (typeof crypto === "undefined" || !crypto.subtle) return value;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value)
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function collectDocumentNodes(node: WorkspaceNode): Array<

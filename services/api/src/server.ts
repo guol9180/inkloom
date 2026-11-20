@@ -434,6 +434,10 @@ async function route({
           {
             markdown: requiredMarkdown(input.markdown),
             baseRevision: requiredRevision(input.baseRevision),
+            checkpoint:
+              input.checkpoint === undefined
+                ? undefined
+                : requiredBoolean(input.checkpoint, "checkpoint"),
             title:
               input.title === undefined
                 ? undefined
@@ -741,6 +745,13 @@ function requiredRevision(value: unknown): number {
     throw new ApiHttpError(400, "INVALID_REVISION", "revision 必须是正整数。");
   }
   return value as number;
+}
+
+function requiredBoolean(value: unknown, name: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new ApiHttpError(400, "INVALID_INPUT", `${name} 必须是布尔值。`);
+  }
+  return value;
 }
 
 function requiredSortOrder(value: unknown): number {

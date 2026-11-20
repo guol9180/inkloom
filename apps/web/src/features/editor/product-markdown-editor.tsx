@@ -424,7 +424,7 @@ export const ProductMarkdownEditor = forwardRef<
       onKeyDownCapture={handleKeyDown}
     >
       <div
-        className="sticky top-0 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
+        className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
         role="toolbar"
         aria-label="文档格式"
       >

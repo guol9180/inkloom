@@ -726,6 +726,7 @@ export class DocumentDatabase {
     input: {
       markdown: string;
       baseRevision: number;
+      checkpoint?: boolean;
       title?: string;
       tags?: readonly string[];
       extensions?: DocumentExtensions;
@@ -745,7 +746,9 @@ export class DocumentDatabase {
     const nextRevision = current.meta.revision + 1;
 
     this.transaction(() => {
-      this.insertRevision(current, timestamp);
+      if (input.checkpoint !== false) {
+        this.insertRevision(current, timestamp);
+      }
       this.db
         .prepare(
           `UPDATE documents

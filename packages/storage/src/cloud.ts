@@ -443,6 +443,7 @@ export class CloudWorkspaceAdapter implements WorkspaceAdapter {
         body: {
           markdown: input.markdown,
           baseRevision: input.baseRevision,
+          checkpoint: input.checkpoint,
           title: input.title,
           tags: input.tags,
           extensions: input.extensions

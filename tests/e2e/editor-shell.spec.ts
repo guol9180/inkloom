@@ -68,6 +68,11 @@ test("reorders blocks from the single-character gutter handle", async ({
   await page.keyboard.type("第一块");
   await page.keyboard.press("Enter");
   await page.keyboard.type("第二块");
+  await page.keyboard.press("Control+Home");
+  await editor.evaluate((root) => {
+    root.closest<HTMLElement>(".overflow-y-auto")?.scrollTo({ top: 0 });
+  });
+  await page.waitForTimeout(100);
 
   const handles = page.locator('[aria-label^="块 "]');
   expect(await handles.count()).toBeGreaterThanOrEqual(2);
@@ -167,17 +172,25 @@ test("edits structured blocks and restores them after saving", async ({
     .fill("部署说明");
   await page.getByRole("button", { name: "保存标题" }).click();
   await expect(toggle.locator("summary")).toHaveText("部署说明");
+  const saveRequest = page.waitForRequest(
+    (request) => {
+      if (
+        request.method() !== "PUT" ||
+        !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+          new URL(request.url()).pathname
+        )
+      ) {
+        return false;
+      }
+      const markdown = String(
+        (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+      );
+      return markdown.includes("部署说明") && markdown.includes("部署步骤");
+    }
+  );
   await toggle.locator("summary").click();
   await expect(toggle).not.toHaveAttribute("open", "");
 
-  const saveRequest = page.waitForRequest(
-    (request) =>
-      request.method() === "PUT" &&
-      /\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
-        new URL(request.url()).pathname
-      )
-  );
-  await page.getByRole("button", { name: "保存", exact: true }).click();
   const request = await saveRequest;
   const markdown = String(
     (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
@@ -296,17 +309,22 @@ test("round-trips quote, task and code blocks", async ({ page }) => {
   await page.getByRole("button", { name: "代码块", exact: true }).click();
   const code = page.locator(".milkdown-code-block .cm-content").last();
   await expect(code).toBeVisible();
+  const saveRequest = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    ).includes("const ready = true;");
+  });
   await code.click();
   await page.keyboard.type("const ready = true;");
 
-  const saveRequest = page.waitForRequest(
-    (request) =>
-      request.method() === "PUT" &&
-      /\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
-        new URL(request.url()).pathname
-      )
-  );
-  await page.getByRole("button", { name: "保存", exact: true }).click();
   const markdown = String(
     ((await saveRequest).postDataJSON() as { markdown?: unknown }).markdown ??
       ""

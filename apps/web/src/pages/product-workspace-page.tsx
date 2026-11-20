@@ -15,12 +15,15 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  CloudOff,
   FileText,
   FolderPlus,
   Import,
+  LoaderCircle,
   LogOut,
   Menu,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   Sparkles,
@@ -47,10 +50,14 @@ import { FieldLabel, TextInput } from "../components/ui/field";
 import { Skeleton, WorkspaceSkeleton } from "../components/ui/skeleton";
 import { cloudClient } from "../cloud-workspace";
 import {
-  ProductMarkdownEditor,
-  type ProductMarkdownEditorHandle
+  useDocumentAutosave,
+  type AutosaveStatus
+} from "../features/editor/use-document-autosave";
+import { useEditorOwnership } from "../features/editor/use-editor-ownership";
+import {
+  ProductMarkdownEditor
 } from "../features/editor/product-markdown-editor";
-import { workspacesQuery } from "../queries";
+import { sessionQuery, workspacesQuery } from "../queries";
 import { useToastStore } from "../stores/toast-store";
 
 export type WorkspaceMode = "notes" | "knowledge";
@@ -64,6 +71,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useToastStore((state) => state.show);
+  const session = useQuery(sessionQuery);
   const workspaces = useQuery(workspacesQuery);
   const workspace = workspaces.data?.workspaces.find(
     (item) => item.id === workspaceId
@@ -185,7 +193,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     return () => window.removeEventListener("keydown", focusDocumentSearch);
   }, []);
 
-  if (workspaces.isPending) return <WorkspaceSkeleton />;
+  if (session.isPending || workspaces.isPending) return <WorkspaceSkeleton />;
   if (workspaces.isError) {
     return (
       <RouteError
@@ -442,16 +450,18 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
             ) : (
               <DocumentSurface
                 document={document.data}
+                userId={session.data?.id ?? ""}
                 mode={mode}
                 onFocusSearch={() => {
                   setSidebarOpen(true);
                   window.setTimeout(() => searchRef.current?.focus(), 30);
                 }}
-                onSaved={async () => {
+                onSaved={async (saved) => {
+                  queryClient.setQueryData(
+                    ["document", workspaceId, documentId],
+                    saved
+                  );
                   await Promise.all([
-                    queryClient.invalidateQueries({
-                      queryKey: ["document", workspaceId, documentId]
-                    }),
                     queryClient.invalidateQueries({
                       queryKey: ["notes", workspaceId]
                     }),
@@ -983,56 +993,52 @@ function EmptyWorkspaceState({
 
 function DocumentSurface({
   document,
+  userId,
   mode,
   onFocusSearch,
   onSaved
 }: {
   document: DocumentSnapshot;
+  userId: string;
   mode: WorkspaceMode;
   onFocusSearch: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (snapshot: DocumentSnapshot) => Promise<void>;
 }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(mode === "notes");
-  const [markdown, setMarkdown] = useState(document.markdown);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(document.meta.revision);
-  const productEditorRef = useRef<ProductMarkdownEditorHandle>(null);
+  const ownership = useEditorOwnership(
+    userId
+      ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
+      : ""
+  );
+  const ownsEditor = ownership === "owned" || ownership === "unavailable";
+  const editorActive =
+    Boolean(userId) && ownsEditor && (mode === "notes" || editing);
+  const autosave = useDocumentAutosave({
+    document,
+    userId,
+    active: editorActive,
+    onSaved: (saved) => {
+      void onSaved(saved);
+    },
+    onConflictCopy: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["notes", document.meta.workspaceId]
+      });
+    }
+  });
 
   useEffect(() => {
-    setMarkdown(document.markdown);
-    setRevision(document.meta.revision);
     setEditing(mode === "notes");
-  }, [document.meta.id, document.markdown, document.meta.revision, mode]);
+  }, [document.meta.id, mode]);
 
-  async function save() {
-    setSaving(true);
-    setError("");
-    try {
-      const currentMarkdown =
-        productEditorRef.current?.getMarkdown() ?? markdown;
-      setMarkdown(currentMarkdown);
-      const saved = await cloudClient
-        .workspace(document.meta.workspaceId)
-        .writeDocument({
-          documentId: document.meta.id,
-          baseRevision: revision,
-          markdown: currentMarkdown,
-          title: document.meta.title,
-          tags: document.meta.tags
-        });
-      setRevision(saved.meta.revision);
-      setMarkdown(saved.markdown);
-      if (mode === "knowledge") setEditing(false);
-      await onSaved();
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "保存失败，请稍后重试。"
-      );
-    } finally {
-      setSaving(false);
-    }
+  async function finishEditing() {
+    const saved = await autosave.flush(true);
+    if (saved) setEditing(false);
   }
+
+  const showEditor = editorActive;
 
   return (
     <div className="h-full overflow-y-auto bg-[#fafbf9]">
@@ -1048,43 +1054,184 @@ function DocumentSurface({
                 : "随记 · Markdown"}
             </p>
           </div>
-          {mode === "knowledge" && !editing && (
+          {editorActive && (
+            <AutosaveIndicator
+              status={autosave.status}
+              lastSavedAt={autosave.lastSavedAt}
+            />
+          )}
+          {mode === "knowledge" && !editing && ownsEditor && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               编辑
             </Button>
           )}
-          {editing && (
+          {mode === "knowledge" && editing && ownsEditor && (
             <Button
               variant="primary"
               size="sm"
-              onClick={() => void save()}
-              disabled={saving}
+              onClick={() => void finishEditing()}
+              disabled={autosave.status === "saving"}
             >
-              {saving ? "保存中…" : "保存"}
+              完成
             </Button>
           )}
         </header>
-        {error && (
-          <p className="mx-4 mt-4 rounded-xl bg-danger-50 px-3 py-2 text-xs text-danger-700 sm:mx-6">
-            {error}
-          </p>
+        {ownership === "blocked" && (
+          <DocumentNotice
+            tone="warning"
+            title="此文档正在另一个标签页编辑"
+            description="当前标签页以只读方式打开。关闭另一个编辑标签页后会重新接管。"
+          />
         )}
-        {editing ? (
+        {autosave.draftRecovered && autosave.status !== "conflict" && (
+          <DocumentNotice
+            tone="neutral"
+            title="已恢复本机草稿"
+            description="草稿保存在 IndexedDB 中，正在与云端重新同步。"
+          />
+        )}
+        {(autosave.status === "error" || autosave.status === "offline") && (
+          <DocumentNotice
+            tone="warning"
+            title={
+              autosave.status === "offline"
+                ? "当前已保存在本机"
+                : "自动保存暂时失败"
+            }
+            description={autosave.error}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void autosave.retry()}
+              >
+                <RefreshCw size={13} />
+                重试
+              </Button>
+            }
+          />
+        )}
+        {autosave.conflictCopy && (
+          <DocumentNotice
+            tone="danger"
+            title="发现版本冲突"
+            description={autosave.error}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  navigate(
+                    `/workspaces/${encodeURIComponent(
+                      document.meta.workspaceId
+                    )}/notes/${encodeURIComponent(
+                      autosave.conflictCopy!.id
+                    )}`
+                  )
+                }
+              >
+                打开本地副本
+              </Button>
+            }
+          />
+        )}
+        {showEditor ? (
           <ProductMarkdownEditor
-            ref={productEditorRef}
-            value={markdown}
+            value={autosave.markdown}
             title={document.meta.title}
-            onChange={setMarkdown}
+            onChange={autosave.changeMarkdown}
             onFocusSearch={onFocusSearch}
           />
         ) : (
           <div className="whitespace-pre-wrap px-[clamp(1.25rem,5vw,4.5rem)] py-10 font-reading text-[1.02rem] leading-8 text-ink-800">
-            {markdown || "这篇文档还没有内容。"}
+            {document.markdown || "这篇文档还没有内容。"}
           </div>
         )}
       </article>
     </div>
   );
+}
+
+function AutosaveIndicator({
+  status,
+  lastSavedAt
+}: {
+  status: AutosaveStatus;
+  lastSavedAt?: string;
+}) {
+  const label =
+    status === "saving"
+      ? "保存中…"
+      : status === "draft"
+        ? "待保存"
+        : status === "offline"
+          ? "已存本机"
+          : status === "error"
+            ? "保存失败"
+            : status === "conflict"
+              ? "版本冲突"
+              : lastSavedAt
+                ? `已保存 · ${formatSavedTime(lastSavedAt)}`
+                : "已保存";
+  return (
+    <span
+      className={`mr-1 flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[0.65rem] font-semibold ${
+        status === "error" || status === "conflict"
+          ? "text-danger-700"
+          : status === "offline"
+            ? "text-sun-700"
+            : "text-ink-400"
+      }`}
+      aria-live="polite"
+    >
+      {status === "saving" ? (
+        <LoaderCircle size={13} className="animate-spin" />
+      ) : status === "offline" ? (
+        <CloudOff size={13} />
+      ) : (
+        <Check size={13} />
+      )}
+      <span className="hidden sm:inline">{label}</span>
+    </span>
+  );
+}
+
+function DocumentNotice({
+  tone,
+  title,
+  description,
+  action
+}: {
+  tone: "neutral" | "warning" | "danger";
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      className={`mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 text-xs sm:mx-6 ${
+        tone === "danger"
+          ? "border-danger-200 bg-danger-50 text-danger-800"
+          : tone === "warning"
+            ? "border-sun-200 bg-sun-50 text-sun-700"
+            : "border-brand-200 bg-brand-50 text-brand-800"
+      }`}
+    >
+      <span className="min-w-0 flex-1">
+        <strong className="block font-semibold">{title}</strong>
+        <span className="mt-0.5 block leading-5 opacity-80">{description}</span>
+      </span>
+      {action}
+    </div>
+  );
+}
+
+function formatSavedTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(value));
 }
 
 function DocumentSkeleton() {

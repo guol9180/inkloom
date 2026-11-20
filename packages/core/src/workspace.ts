@@ -58,6 +58,7 @@ export type WriteDocumentInput = {
   documentId: DocumentId;
   markdown: string;
   baseRevision: Revision;
+  checkpoint?: boolean;
   title?: string;
   tags?: readonly string[];
   extensions?: DocumentExtensions;

@@ -89,6 +89,75 @@ describe("InkLoom API", () => {
     });
   });
 
+  it("writes autosaves without history until an explicit checkpoint", async () => {
+    const fixture = await startServer();
+    const session = await register(
+      fixture,
+      "checkpoint@example.com",
+      "secret-123"
+    );
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: session.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+    const created = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: session.cookie,
+      body: {
+        path: "测试/自动保存.md",
+        title: "自动保存",
+        markdown: "# v1\n"
+      }
+    });
+    const documentId = created.document.meta.id;
+
+    const autosaved = await json<{
+      document: { meta: { revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents/${documentId}`, {
+      method: "PUT",
+      cookie: session.cookie,
+      body: {
+        baseRevision: 1,
+        checkpoint: false,
+        markdown: "# v2\n"
+      }
+    });
+    expect(autosaved.document.meta.revision).toBe(2);
+
+    const emptyHistory = await json<{ revisions: unknown[] }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${documentId}/revisions`,
+      { cookie: session.cookie }
+    );
+    expect(emptyHistory.revisions).toEqual([]);
+
+    const checkpointed = await json<{
+      document: { meta: { revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents/${documentId}`, {
+      method: "PUT",
+      cookie: session.cookie,
+      body: {
+        baseRevision: 2,
+        checkpoint: true,
+        markdown: "# v2\n"
+      }
+    });
+    expect(checkpointed.document.meta.revision).toBe(3);
+
+    const history = await json<{
+      revisions: Array<{ meta: { revision: number } }>;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${documentId}/revisions`,
+      { cookie: session.cookie }
+    );
+    expect(history.revisions.map((entry) => entry.meta.revision)).toEqual([2]);
+  });
+
   it("rejects stale revisions and isolates workspaces between users", async () => {
     const fixture = await startServer();
     const alice = await register(fixture, "alice@example.com", "secret-123");
