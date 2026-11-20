@@ -142,6 +142,109 @@ describe("InkLoom API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  it("round-trips unknown Markdown syntax without changing bytes", async () => {
+    const fixture = await startServer();
+    const session = await register(
+      fixture,
+      "fidelity@example.com",
+      "secret-123"
+    );
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: session.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+    const markdown = [
+      "---",
+      "title: 保留字段",
+      "unknown_field:",
+      "  nested: true",
+      "---",
+      "",
+      "# 中文标题，原样保存！",
+      "",
+      "<!-- inkloom:canvas",
+      "id: canvas_01JABC",
+      "scene: assets/hash.excalidraw",
+      "-->",
+      "![系统边界](assets/hash.svg)",
+      "<!-- /inkloom:canvas -->",
+      "",
+      "```unknown-language",
+      "raw syntax",
+      "```",
+      "",
+      "[reference]: https://example.com \"引用标题\"",
+      "",
+      "使用 [引用][reference] 与脚注[^note]。",
+      "",
+      "[^note]: 脚注定义。",
+      "",
+      "<aside data-unknown=\"yes\">未知 HTML</aside>",
+      "",
+      "最后一行没有换行"
+    ].join("\n");
+
+    const created = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: session.cookie,
+      body: {
+        path: "保真.md",
+        title: "保真",
+        markdown
+      }
+    });
+    const reloaded = await json<{ document: { markdown: string } }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}`,
+      { cookie: session.cookie }
+    );
+    expect(reloaded.document.markdown).toBe(markdown);
+
+    const updated = await json<{
+      document: { markdown: string; meta: { revision: number } };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}`,
+      {
+        method: "PUT",
+        cookie: session.cookie,
+        body: {
+          baseRevision: created.document.meta.revision,
+          markdown: `${markdown}\n\n一次临时修改`
+        }
+      }
+    );
+    expect(updated.document.markdown).toBe(`${markdown}\n\n一次临时修改`);
+
+    const revisions = await json<{
+      revisions: Array<{ revisionId: string; meta: { revision: number } }>;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/revisions`,
+      { cookie: session.cookie }
+    );
+    expect(revisions.revisions[0].meta.revision).toBe(1);
+    await json(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/revisions/${revisions.revisions[0].revisionId}`,
+      {
+        method: "POST",
+        cookie: session.cookie,
+        body: { baseRevision: updated.document.meta.revision }
+      }
+    );
+    const restored = await json<{ document: { markdown: string } }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}`,
+      { cookie: session.cookie }
+    );
+    expect(restored.document.markdown).toBe(markdown);
+  });
+
   it("keeps the session across refresh, logs out, and enforces the origin allow list", async () => {
     const fixture = await startServer();
     const session = await register(fixture, "session@example.com", "secret-123");

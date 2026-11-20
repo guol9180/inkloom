@@ -473,9 +473,13 @@
   - 建立覆盖中文、嵌套列表、表格、公式、Mermaid、InkLoom 扩展块和异常语法的 golden corpus。
   - 只有 corpus、API 回读和刷新恢复测试全部通过后才允许声明 Markdown 无损。
 - 边界：不实现主编辑器 UI；不引入新的自创 Markdown 容器。
-- 状态：planned
+- 状态：completed
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 建立保真内核任务卡，依赖 T26。
+  - 2026-11-20 执行 开始 T27：建立保留源码位置的 source-slice 模型、golden corpus 与 API 回读验证。
+  - 2026-11-20 执行 在 `@inkloom/editor` 新增基于 mdast/GFM/数学语法的 source-slice 模型，记录块类型、源码偏移、行号和保护状态；未修改块始终拼接原始切片，frontmatter、HTML、未知围栏、链接定义、脚注定义与异常语法保留原文。
+  - 2026-11-20 验证 10 组 golden corpus 覆盖中文、内联样式、链接图片、嵌套列表、任务、引用、表格、代码围栏、Mermaid、公式、脚注、定义、HTML、InkLoom canvas/file 块、frontmatter、异常语法、CRLF 和无末尾换行；`pnpm typecheck` 通过；`pnpm test` 50 项通过；`pnpm build` 通过；API 回读、更新、历史恢复均逐字节保持复杂 Markdown。
+  - 2026-11-20 交付 source-slice 保真内核与 API 回读/历史恢复证据；剩余差距：全局“Markdown 无损”声明仍需 T29–T43 的主编辑器接入、真实刷新恢复和完整验收后确认。
 
 ### T28: 白色应用壳、路由与认证页（P0）
 

@@ -1,5 +1,7 @@
 import type { DocumentId } from "@inkloom/core";
 
+export * from "./markdown-source";
+
 export type EditorMode = "rich" | "source" | "split" | "read";
 export type MarkdownViewMode = Exclude<EditorMode, "rich">;
 
