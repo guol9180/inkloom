@@ -53,12 +53,13 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T34 now that T25–T33 are completed:
+Start with T35 now that T25–T34 are completed:
 
-- Add Mermaid as an independent lazy-loaded diagram block.
-- Render after a short idle window with strict security and unique IDs.
-- Keep syntax errors local to the block, preserve source and provide desktop
-  split editing plus a mobile stacked layout.
+- Add Excalidraw as an independent lazy-loaded canvas asset block.
+- Keep document first paint on SVG and load the full canvas bundle only when
+  editing.
+- Save scene and SVG assets separately while preserving a portable Markdown
+  reference block.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

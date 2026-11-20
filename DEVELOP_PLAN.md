@@ -5,7 +5,7 @@
 - 当前生产：M1 Web 云工作区已上线，运行 release `6857821`。
 - 当前开发目标：M1.1 Web 产品级编辑器与知识流。
 - 当前实现模式：只开发 Web；保留桌面、移动、HarmonyOS 和同步的领域/adapter 接入口，不实现对应 host。
-- 当前任务：T24 文档与计划重排；后续从 T25 顺序执行。
+- 当前任务：T35 Excalidraw 画布资产块；T25–T34 已完成。
 - 桌面端 T4 保持 `in-progress` 但暂停；M1D、M2、M3、M4 未获确认不得开始。
 
 ## 任务清单
@@ -598,9 +598,14 @@
   - 语法错误不清空源码，Markdown 只保存标准 `mermaid` fence。
   - Mermaid strict 安全级别、唯一 ID 和懒加载生效。
 - 边界：不加入 PlantUML、Flowchart 或 Graphviz 渲染器。
-- 状态：planned
+- 状态：completed
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-19 计划 建立 Mermaid 任务卡，依赖 T29/T30。
+  - 2026-11-20 执行 开始 T34：盘点现有 diagrams 包与 Mermaid 依赖，接入懒加载块渲染和安全错误边界。
+  - 2026-11-20 执行 新增独立 `inkloom_mermaid` ProseMirror 节点与 Markdown remark 往返，围栏仍序列化为标准 `mermaid` code fence；实现 CodeMirror 6 源码编辑、约 300ms 防抖预览、常用模板、错误行提示、全屏和桌面左右/移动上下布局。
+  - 2026-11-20 执行 Mermaid 保持 strict 安全级别并继续经过 DOMPurify；关闭 HTML label 以输出原生 SVG 文本，避免安全清洗后节点文字丢失。图表包仅在节点首次渲染时动态加载，并接入工具栏与斜杠菜单的新增入口。
+  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 57 项通过；`pnpm build` 通过；Playwright 23 项全部通过，覆盖 Mermaid 插入、源码/预览同屏、语法错误保留源码、标准围栏自动保存、全屏 Esc、刷新恢复和 320px 单列无横向溢出。构建仍有既有大 chunk 告警，Mermaid 已按按需 chunk 输出。
+  - 2026-11-20 交付 产出 Mermaid 安全渲染器、模板与错误解析、独立编辑器节点、CodeMirror 源码面板、全屏和响应式样式；剩余差距：Excalidraw 独立画布资产块属于 T35。
 
 ### T35: Excalidraw 画布资产块（P0）
 

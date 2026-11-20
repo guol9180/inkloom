@@ -35,6 +35,7 @@ const CALLOUT_PATTERN =
 type MarkdownTreeNode = {
   type: string;
   value?: string;
+  lang?: string;
   children?: MarkdownTreeNode[];
   summary?: string;
   open?: boolean;
@@ -56,9 +57,44 @@ export type FileBlockAttrs = {
 };
 
 const inkloomBlocksRemark = $remark("inkloomBlocksRemark", () => () => (tree) => {
+  transformMermaid(tree as MarkdownRoot);
   transformToggles(tree as MarkdownRoot);
   transformFiles(tree as MarkdownRoot);
 });
+
+const mermaidSchema = $nodeSchema("inkloom_mermaid", () => ({
+  content: "text*",
+  group: "block",
+  marks: "",
+  code: true,
+  defining: true,
+  parseDOM: [
+    {
+      tag: "pre[data-inkloom-mermaid]",
+      preserveWhitespace: "full"
+    }
+  ],
+  toDOM: () => [
+    "pre",
+    {
+      "data-inkloom-mermaid": "true",
+      class: "inkloom-mermaid-fallback"
+    },
+    0
+  ],
+  parseMarkdown: {
+    match: (node) => node.type === "inkloom_mermaid",
+    runner: (state, node, type) => {
+      state.openNode(type).next(node.children).closeNode();
+    }
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "inkloom_mermaid",
+    runner: (state, node) => {
+      state.addNode("code", undefined, node.textContent, { lang: "mermaid" });
+    }
+  }
+}));
 
 const toggleSchema = $nodeSchema("inkloom_toggle", () => ({
   content: "block+",
@@ -305,6 +341,7 @@ const tablePaste = $prose(
 
 export const PRODUCT_BLOCK_PLUGINS = [
   ...inkloomBlocksRemark,
+  ...mermaidSchema,
   ...toggleSchema,
   ...fileSchema,
   toggleBehavior,
@@ -687,6 +724,19 @@ function transformToggles(root: MarkdownRoot) {
     index = closingIndex;
   }
   root.children = next;
+}
+
+function transformMermaid(root: MarkdownRoot) {
+  for (const child of root.children ?? []) {
+    if (child.type !== "code" || child.lang?.trim().toLowerCase() !== "mermaid") {
+      continue;
+    }
+    const source = child.value ?? "";
+    child.type = "inkloom_mermaid";
+    child.children = source ? [{ type: "text", value: source }] : [];
+    delete child.value;
+    delete child.lang;
+  }
 }
 
 function transformFiles(root: MarkdownRoot) {

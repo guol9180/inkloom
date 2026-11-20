@@ -10,3 +10,4 @@ export type DiagramAssetRef = {
 
 export * from "./canvas-editor";
 export * from "./markdown";
+export * from "./mermaid";

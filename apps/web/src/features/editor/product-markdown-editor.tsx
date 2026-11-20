@@ -32,6 +32,7 @@ import {
   ListOrdered,
   MessageSquareText,
   Minus,
+  Network,
   Paperclip,
   Pilcrow,
   Quote,
@@ -182,7 +183,7 @@ export const ProductMarkdownEditor = forwardRef<
       const rect = blockElement.getBoundingClientRect();
       const firstLine =
         blockElement.querySelector<HTMLElement>(
-          "h1, h2, h3, h4, h5, h6, p, li, summary, th, td, pre, .cm-content"
+          "h1, h2, h3, h4, h5, h6, p, li, summary, th, td, pre, .cm-content, .inkloom-mermaid-title"
         ) ?? blockElement;
       const lineRect = firstLine.getBoundingClientRect();
       const computed = window.getComputedStyle(firstLine);
@@ -320,6 +321,11 @@ export const ProductMarkdownEditor = forwardRef<
       attachmentInputRef.current?.click();
       return;
     }
+    if (command === "mermaid") {
+      editorRef.current?.insertBlock("mermaid");
+      window.requestAnimationFrame(syncHandles);
+      return;
+    }
     if (command === "link") {
       setLinkUrl("https://");
       setLinkError("");
@@ -346,6 +352,11 @@ export const ProductMarkdownEditor = forwardRef<
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (
+      (event.target as Element | null)?.closest(".inkloom-mermaid-view")
+    ) {
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "j") {
       event.preventDefault();
       onFocusSearch();
@@ -1296,6 +1307,8 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
       return <Image size={15} />;
     case "attachment":
       return <Paperclip size={15} />;
+    case "mermaid":
+      return <Network size={15} />;
     case "quote":
       return <Quote size={15} />;
     case "divider":
@@ -1417,6 +1430,7 @@ function blockKindFromElement(element: HTMLElement): MarkdownBlockType {
   if (element.matches("details[data-inkloom-toggle]")) return "toggle";
   if (element.matches(".milkdown-image-block")) return "image";
   if (element.matches(".inkloom-file-block")) return "attachment";
+  if (element.matches(".inkloom-mermaid-view")) return "mermaid";
   if (element.matches(".milkdown-table-block, table")) return "table";
   if (element.matches(".milkdown-code-block, pre")) {
     return element.closest<HTMLElement>("[data-language='latex']")

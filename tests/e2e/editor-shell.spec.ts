@@ -291,6 +291,100 @@ test("pastes spreadsheet data into the current table", async ({ page }) => {
   await expect(tableContent.locator("tr").nth(1)).toContainText("编辑器");
 });
 
+test("edits Mermaid source beside a live preview and restores it", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+
+  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+  const diagram = page.locator(".inkloom-mermaid-view").last();
+  await expect(diagram).toBeVisible();
+  await expect(
+    diagram.locator(".inkloom-mermaid-svg svg").first()
+  ).toBeVisible({ timeout: 15_000 });
+  const source = diagram.getByLabel("Mermaid 源码");
+  await expect(source).toContainText("A[开始]");
+
+  const desktopColumns = await diagram
+    .locator(".inkloom-mermaid-workspace")
+    .evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
+        .length
+    );
+  expect(desktopColumns).toBe(2);
+
+  await source.click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("flowchart LR\n  A[开始] -->");
+  await expect(diagram.getByRole("status")).toBeVisible({ timeout: 15_000 });
+  await expect(source).toContainText("flowchart LR");
+
+  const saveRequest = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const markdown = String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    );
+    return (
+      markdown.includes("```mermaid") &&
+      markdown.includes("A[开始] --> B[审核]")
+    );
+  });
+
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("flowchart LR\n  A[开始] --> B[审核]");
+  await expect(diagram.locator(".inkloom-mermaid-svg")).toContainText("审核", {
+    timeout: 15_000
+  });
+
+  await diagram.getByRole("button", { name: "全屏编辑图表" }).click();
+  await expect(
+    page.locator(".inkloom-mermaid-panel.is-fullscreen")
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(diagram.locator(".inkloom-mermaid-panel")).not.toHaveClass(
+    /is-fullscreen/
+  );
+
+  const request = await saveRequest;
+  const markdown = String(
+    (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+  );
+  expect(markdown).toContain("```mermaid");
+  expect(markdown).not.toContain("inkloom_mermaid");
+
+  await page.reload();
+  const restored = page.locator(".inkloom-mermaid-view").last();
+  await expect(restored.getByLabel("Mermaid 源码")).toContainText(
+    "A[开始] --> B[审核]"
+  );
+  await expect(
+    restored.locator(".inkloom-mermaid-svg svg").first()
+  ).toBeVisible({ timeout: 15_000 });
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.waitForTimeout(250);
+  const mobileColumns = await restored
+    .locator(".inkloom-mermaid-workspace")
+    .evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
+        .length
+    );
+  expect(mobileColumns).toBe(1);
+  const overflow = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth
+  }));
+  expect(overflow.content).toBeLessThanOrEqual(overflow.viewport);
+});
+
 test("uploads images and attachments and exports a portable zip", async ({
   page
 }) => {

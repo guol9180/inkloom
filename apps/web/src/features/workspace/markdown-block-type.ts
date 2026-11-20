@@ -17,4 +17,5 @@ export type MarkdownBlockType =
   | "toggle"
   | "image"
   | "attachment"
+  | "mermaid"
   | "divider";

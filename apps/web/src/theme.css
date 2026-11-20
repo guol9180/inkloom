@@ -1135,6 +1135,310 @@
   font-size: 0.8rem;
 }
 
+.inkloom-mermaid-view {
+  margin: 1.35rem 0;
+}
+
+.inkloom-mermaid-panel {
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.95rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(32 48 40 / 0.025);
+  color: var(--color-ink-700);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.inkloom-mermaid-view[data-selected="true"] .inkloom-mermaid-panel {
+  border-color: color-mix(in oklab, var(--color-brand-500) 48%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-100) 68%, transparent);
+}
+
+.inkloom-mermaid-toolbar {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--color-line-soft);
+  background: color-mix(in oklab, var(--color-paper-warm) 45%, white);
+  padding: 0.4rem 0.55rem 0.4rem 0.7rem;
+}
+
+.inkloom-mermaid-title,
+.inkloom-mermaid-actions,
+.inkloom-mermaid-template {
+  display: flex;
+  align-items: center;
+}
+
+.inkloom-mermaid-title {
+  min-width: 0;
+  gap: 0.48rem;
+  color: var(--color-ink-600);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.015em;
+}
+
+.inkloom-mermaid-icon {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  background: #edf2ee;
+  color: #536a5e;
+}
+
+.inkloom-mermaid-actions {
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.inkloom-mermaid-template {
+  position: relative;
+  min-width: 0;
+  border-radius: 0.5rem;
+  color: var(--color-ink-500);
+}
+
+.inkloom-mermaid-template select {
+  max-width: 7rem;
+  appearance: none;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  padding: 0.38rem 1.5rem 0.38rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 550;
+  outline: none;
+}
+
+.inkloom-mermaid-template svg {
+  position: absolute;
+  right: 0.42rem;
+  pointer-events: none;
+}
+
+.inkloom-mermaid-template:hover,
+.inkloom-mermaid-template:focus-within {
+  background: #f1f4f0;
+  color: var(--color-ink-800);
+}
+
+.inkloom-mermaid-icon-button {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-ink-400);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.inkloom-mermaid-icon-button:hover,
+.inkloom-mermaid-icon-button:focus-visible {
+  background: #f1f4f0;
+  color: var(--color-ink-800);
+  outline: none;
+}
+
+.inkloom-mermaid-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+}
+
+.inkloom-mermaid-source,
+.inkloom-mermaid-preview {
+  position: relative;
+  min-width: 0;
+  padding-top: 1.65rem;
+}
+
+.inkloom-mermaid-source {
+  border-right: 1px solid var(--color-line-soft);
+  background: #fbfcfa;
+}
+
+.inkloom-mermaid-pane-label {
+  position: absolute;
+  top: 0.54rem;
+  left: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-ink-300);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inkloom-mermaid-rendering {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: var(--color-brand-500);
+  animation: inkloom-mermaid-pulse 900ms ease-in-out infinite alternate;
+}
+
+.inkloom-mermaid-codemirror {
+  height: clamp(11rem, 24vh, 17rem);
+  min-width: 0;
+}
+
+.inkloom-mermaid-codemirror .cm-editor {
+  height: 100%;
+}
+
+.inkloom-mermaid-preview {
+  background:
+    radial-gradient(circle at 1px 1px, #e8ece7 0.7px, transparent 0) 0 0 / 14px 14px,
+    #fff;
+}
+
+.inkloom-mermaid-canvas {
+  display: grid;
+  height: clamp(11rem, 24vh, 17rem);
+  min-width: 0;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.inkloom-mermaid-svg {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  place-items: center;
+}
+
+.inkloom-mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.inkloom-mermaid-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  color: var(--color-ink-300);
+  font-size: 0.68rem;
+}
+
+.inkloom-mermaid-error {
+  display: flex;
+  max-height: 7rem;
+  align-items: flex-start;
+  gap: 0.48rem;
+  overflow: auto;
+  border-top: 1px solid color-mix(in oklab, var(--color-danger-200) 72%, white);
+  background: var(--color-danger-50);
+  padding: 0.62rem 0.78rem;
+  color: var(--color-danger-700);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.63rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.inkloom-mermaid-error svg {
+  margin-top: 0.1rem;
+  flex: 0 0 auto;
+}
+
+.inkloom-mermaid-panel.is-fullscreen {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-toolbar {
+  min-height: 3.35rem;
+  padding-inline: 1rem;
+}
+
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-workspace {
+  min-height: 0;
+  flex: 1;
+}
+
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-codemirror,
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-canvas {
+  height: auto;
+  min-height: 0;
+}
+
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-source,
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-preview {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-codemirror,
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-canvas {
+  flex: 1;
+}
+
+@keyframes inkloom-mermaid-pulse {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .inkloom-mermaid-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inkloom-mermaid-source {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-line-soft);
+  }
+
+  .inkloom-mermaid-codemirror,
+  .inkloom-mermaid-canvas {
+    height: clamp(9rem, 28vh, 14rem);
+  }
+
+  .inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-workspace {
+    grid-template-rows: minmax(13rem, 0.9fr) minmax(12rem, 1.1fr);
+    overflow: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inkloom-mermaid-panel,
+  .inkloom-mermaid-icon-button {
+    transition: none;
+  }
+
+  .inkloom-mermaid-rendering {
+    animation: none;
+  }
+}
+
 .canvas-modal {
   position: fixed;
   inset: 0;

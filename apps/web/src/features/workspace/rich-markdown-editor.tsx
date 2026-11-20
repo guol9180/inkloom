@@ -41,6 +41,7 @@ import {
 import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
 import { cn } from "../../lib/utils";
+import { mermaidNodeViewPlugin } from "../editor/mermaid-node-view";
 import {
   insertCallout,
   insertCodeBlock,
@@ -460,6 +461,7 @@ export const RichMarkdownEditor = forwardRef<
       }
     });
     crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
+    crepe.editor.use(mermaidNodeViewPlugin);
     crepeRef.current = crepe;
     crepe.on((listener) => {
       listener.updated((ctx) => {
@@ -555,6 +557,7 @@ function blockTypeFromSelection(selection: Selection): MarkdownBlockType {
     const node = $from.node(depth);
     if (node.type.name === "table") return "table";
     if (node.type.name === "inkloom_toggle") return "toggle";
+    if (node.type.name === "inkloom_mermaid") return "mermaid";
     if (node.type.name === "blockquote") {
       return /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.test(
         node.firstChild?.textContent ?? ""
@@ -614,10 +617,11 @@ function insertDiagramBlock(
   const view = ctx.get(editorViewCtx);
   const schema = ctx.get(schemaCtx);
   const codeBlock = codeBlockSchema.type(ctx);
-  const node = codeBlock.create(
-    { language: language === "canvas" ? "excalidraw" : "mermaid" },
-    schema.text(source)
-  );
+  const mermaid = schema.nodes.inkloom_mermaid;
+  const node =
+    language === "mermaid" && mermaid
+      ? mermaid.create(null, source ? schema.text(source) : undefined)
+      : codeBlock.create({ language: "excalidraw" }, schema.text(source));
   const { $from } = view.state.selection;
   const position =
     $from.depth > 0 ? $from.after(1) : view.state.doc.content.size;
