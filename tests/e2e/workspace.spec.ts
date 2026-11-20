@@ -21,8 +21,12 @@ test("creates a scratch note, saves it, refreshes and protects routes", async ({
 
   const editor = page.getByLabel("Markdown 正文");
   await expect(editor).toBeVisible();
-  const markdown = "# 真实保存验收\n\n刷新后仍然存在。\n";
-  await editor.fill(markdown);
+  await editor.click();
+  await page.keyboard.type("真实保存验收");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("刷新后仍然存在。");
+  await expect(editor).toContainText("刷新后仍然存在。");
   const save = page.waitForResponse(
     (response) =>
       response.request().method() === "PUT" &&
@@ -35,7 +39,12 @@ test("creates a scratch note, saves it, refreshes and protects routes", async ({
   await save;
 
   await page.reload();
-  await expect(page.getByLabel("Markdown 正文")).toHaveValue(markdown);
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "真实保存验收"
+  );
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "刷新后仍然存在。"
+  );
 
   const protectedPath = new URL(page.url()).pathname;
   await page.getByRole("button", { name: "账号设置" }).click();
@@ -48,7 +57,9 @@ test("creates a scratch note, saves it, refreshes and protects routes", async ({
   await page.getByLabel("邮箱").fill(await testEmail(page));
   await page.getByLabel("密码").fill("review-password");
   await page.getByRole("button", { name: "进入工作区" }).click();
-  await expect(page.getByLabel("Markdown 正文")).toHaveValue(markdown);
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "刷新后仍然存在。"
+  );
 });
 
 test("creates and refreshes a flat knowledge base route", async ({ page }) => {

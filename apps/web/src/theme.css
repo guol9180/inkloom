@@ -285,6 +285,52 @@
   line-height: 1.82;
 }
 
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror {
+  min-height: calc(100dvh - 7rem);
+  padding: 2.5rem clamp(2.75rem, 5vw, 4.5rem) 7rem;
+  font-family: var(--font-reading);
+  font-size: clamp(0.98rem, 0.2vw + 0.92rem, 1.08rem);
+  line-height: 1.9;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1,
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h2,
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h3,
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h4,
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h5,
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h6 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.025em;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1:first-of-type {
+  display: block;
+}
+
+.product-markdown-editor .pm-block-handle {
+  left: 0.15rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.product-markdown-editor .pm-block-handle:active {
+  cursor: grabbing;
+}
+
+.product-markdown-editor .pm-block-handle[data-drop="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-brand-300) 70%, transparent);
+}
+
+@media (min-width: 640px) {
+  .product-markdown-editor .pm-block-handle {
+    left: clamp(0.35rem, calc(5vw - 2rem), 2.5rem);
+  }
+}
+
 .rich-markdown-shell .milkdown .ProseMirror h1:first-of-type {
   display: none;
 }

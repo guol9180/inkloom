@@ -37,6 +37,28 @@ for (const viewport of viewports) {
         path: resolve(reviewDirectory, `empty-notes-${size}.png`)
       });
 
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "新建随记" })
+        .click();
+      await page
+        .getByRole("dialog")
+        .getByLabel("文档标题")
+        .fill("编辑体验");
+      await page.getByRole("button", { name: "创建" }).click();
+      const editor = page.getByLabel("Markdown 正文");
+      await expect(editor).toBeVisible();
+      await editor.click();
+      await page.keyboard.type("清晰的内容");
+      await page.getByRole("button", { name: "一级标题" }).click();
+      await page.keyboard.press("Control+End");
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("在同一区域继续编辑，格式与内容始终可见。");
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({
+        path: resolve(reviewDirectory, `editor-${size}.png`)
+      });
+
       if (viewport.width < 1024) {
         await page.getByRole("button", { name: "打开导航" }).click();
         await page.waitForFunction(() => {

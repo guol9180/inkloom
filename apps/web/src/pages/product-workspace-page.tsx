@@ -4,7 +4,8 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type ReactNode
+  type ReactNode,
+  type RefObject
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -45,6 +46,10 @@ import { Button, IconButton } from "../components/ui/button";
 import { FieldLabel, TextInput } from "../components/ui/field";
 import { Skeleton, WorkspaceSkeleton } from "../components/ui/skeleton";
 import { cloudClient } from "../cloud-workspace";
+import {
+  ProductMarkdownEditor,
+  type ProductMarkdownEditorHandle
+} from "../features/editor/product-markdown-editor";
 import { workspacesQuery } from "../queries";
 import { useToastStore } from "../stores/toast-store";
 
@@ -72,6 +77,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const [dialogError, setDialogError] = useState("");
   const importMarkdownRef = useRef<HTMLInputElement>(null);
   const importFolderRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const notes = useQuery({
     queryKey: ["notes", workspaceId],
@@ -163,6 +169,22 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     }
   }, [knowledgeBaseId, knowledgeBases.data, mode, navigate, workspaceId]);
 
+  useEffect(() => {
+    function focusDocumentSearch(event: KeyboardEvent) {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== "j"
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setSidebarOpen(true);
+      window.setTimeout(() => searchRef.current?.focus(), 30);
+    }
+    window.addEventListener("keydown", focusDocumentSearch);
+    return () => window.removeEventListener("keydown", focusDocumentSearch);
+  }, []);
+
   if (workspaces.isPending) return <WorkspaceSkeleton />;
   if (workspaces.isError) {
     return (
@@ -217,7 +239,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     } else {
       await createNote.mutateAsync({
         title: name,
-        markdown: name === "未命名文档" ? "" : `# ${name}\n`
+        markdown: ""
       });
     }
   }
@@ -400,6 +422,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           onImportMarkdown={() => importMarkdownRef.current?.click()}
           onImportFolder={() => importFolderRef.current?.click()}
           onClose={() => setSidebarOpen(false)}
+          searchRef={searchRef}
         />
 
         <main className="min-w-0 flex-1 overflow-hidden">
@@ -420,6 +443,10 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
               <DocumentSurface
                 document={document.data}
                 mode={mode}
+                onFocusSearch={() => {
+                  setSidebarOpen(true);
+                  window.setTimeout(() => searchRef.current?.focus(), 30);
+                }}
                 onSaved={async () => {
                   await Promise.all([
                     queryClient.invalidateQueries({
@@ -560,7 +587,8 @@ function WorkspaceSidebar({
   onCreateKnowledgeBase,
   onImportMarkdown,
   onImportFolder,
-  onClose
+  onClose,
+  searchRef
 }: {
   mode: WorkspaceMode;
   workspaceId: string;
@@ -579,6 +607,7 @@ function WorkspaceSidebar({
   onImportMarkdown: () => void;
   onImportFolder: () => void;
   onClose: () => void;
+  searchRef: RefObject<HTMLInputElement | null>;
 }) {
   const navigate = useNavigate();
   const normalizedQuery = query.trim().toLowerCase();
@@ -628,6 +657,7 @@ function WorkspaceSidebar({
         <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line-soft bg-[#fafbf9] px-3 text-ink-400 transition focus-within:border-brand-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-100/70">
           <Search size={15} />
           <input
+            ref={searchRef}
             className="min-w-0 flex-1 border-0 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-300"
             value={query}
             onChange={(event) => onQuery(event.target.value)}
@@ -954,10 +984,12 @@ function EmptyWorkspaceState({
 function DocumentSurface({
   document,
   mode,
+  onFocusSearch,
   onSaved
 }: {
   document: DocumentSnapshot;
   mode: WorkspaceMode;
+  onFocusSearch: () => void;
   onSaved: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(mode === "notes");
@@ -965,6 +997,7 @@ function DocumentSurface({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(document.meta.revision);
+  const productEditorRef = useRef<ProductMarkdownEditorHandle>(null);
 
   useEffect(() => {
     setMarkdown(document.markdown);
@@ -976,12 +1009,15 @@ function DocumentSurface({
     setSaving(true);
     setError("");
     try {
+      const currentMarkdown =
+        productEditorRef.current?.getMarkdown() ?? markdown;
+      setMarkdown(currentMarkdown);
       const saved = await cloudClient
         .workspace(document.meta.workspaceId)
         .writeDocument({
           documentId: document.meta.id,
           baseRevision: revision,
-          markdown,
+          markdown: currentMarkdown,
           title: document.meta.title,
           tags: document.meta.tags
         });
@@ -1034,12 +1070,12 @@ function DocumentSurface({
           </p>
         )}
         {editing ? (
-          <textarea
-            className="min-h-[calc(100dvh-8rem)] w-full resize-none border-0 bg-transparent px-[clamp(1.25rem,5vw,4.5rem)] py-10 font-mono text-[0.92rem] leading-7 text-ink-800 outline-none"
+          <ProductMarkdownEditor
+            ref={productEditorRef}
             value={markdown}
-            onChange={(event) => setMarkdown(event.target.value)}
-            aria-label="Markdown 正文"
-            spellCheck={false}
+            title={document.meta.title}
+            onChange={setMarkdown}
+            onFocusSearch={onFocusSearch}
           />
         ) : (
           <div className="whitespace-pre-wrap px-[clamp(1.25rem,5vw,4.5rem)] py-10 font-reading text-[1.02rem] leading-8 text-ink-800">

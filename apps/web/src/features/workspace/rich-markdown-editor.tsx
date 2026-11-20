@@ -34,6 +34,7 @@ import {
   toggleStrikethroughCommand
 } from "@milkdown/kit/preset/gfm";
 import { redo, undo } from "@milkdown/kit/prose/history";
+import { Fragment, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
@@ -48,6 +49,10 @@ export type RichMarkdownEditorHandle = {
   setLink: (href: string) => void;
   insertBlock: (kind: "mermaid" | "canvas") => void;
   getMarkdown: () => string;
+  isCurrentBlockEmpty: () => boolean;
+  moveTopLevelBlock: (fromIndex: number, toIndex: number) => void;
+  duplicateTopLevelBlock: (index: number) => void;
+  deleteTopLevelBlock: (index: number) => void;
 };
 
 export type RichToolbarAction =
@@ -210,6 +215,84 @@ export const RichMarkdownEditor = forwardRef<
       },
       getMarkdown() {
         return crepeRef.current?.getMarkdown() ?? lastValueRef.current;
+      },
+      isCurrentBlockEmpty() {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return false;
+        let empty = false;
+        crepe.editor.action((ctx) => {
+          const selection = ctx.get(editorViewCtx).state.selection;
+          empty =
+            selection.empty &&
+            selection.$from.depth > 0 &&
+            selection.$from.parent.content.size === 0;
+        });
+        return empty;
+      },
+      moveTopLevelBlock(fromIndex, toIndex) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const nodes: ProseNode[] = [];
+          view.state.doc.forEach((node) => nodes.push(node));
+          if (
+            fromIndex < 0 ||
+            fromIndex >= nodes.length ||
+            toIndex < 0 ||
+            toIndex >= nodes.length ||
+            fromIndex === toIndex
+          ) {
+            return;
+          }
+          const [moved] = nodes.splice(fromIndex, 1);
+          nodes.splice(toIndex, 0, moved);
+          const transaction = view.state.tr.replaceWith(
+            0,
+            view.state.doc.content.size,
+            Fragment.fromArray(nodes)
+          );
+          view.dispatch(transaction.scrollIntoView());
+          view.focus();
+        });
+      },
+      duplicateTopLevelBlock(index) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const nodes: ProseNode[] = [];
+          view.state.doc.forEach((node) => nodes.push(node));
+          const node = nodes[index];
+          if (!node) return;
+          const position = topLevelBoundary(view.state.doc, index + 1);
+          view.dispatch(view.state.tr.insert(position, node).scrollIntoView());
+          view.focus();
+        });
+      },
+      deleteTopLevelBlock(index) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const nodes: ProseNode[] = [];
+          view.state.doc.forEach((node) => nodes.push(node));
+          if (index < 0 || index >= nodes.length) return;
+          if (nodes.length === 1) {
+            const paragraph = paragraphSchema.type(ctx).create();
+            view.dispatch(
+              view.state.tr
+                .replaceWith(0, view.state.doc.content.size, paragraph)
+                .scrollIntoView()
+            );
+            view.focus();
+            return;
+          }
+          const start = topLevelBoundary(view.state.doc, index);
+          const end = topLevelBoundary(view.state.doc, index + 1);
+          view.dispatch(view.state.tr.delete(start, end).scrollIntoView());
+          view.focus();
+        });
       }
     }),
     []
@@ -339,6 +422,18 @@ function blockTypeFromNode(node: {
   return node.type.name === "heading"
     ? (`heading-${String(node.attrs.level)}` as MarkdownBlockType)
     : "paragraph";
+}
+
+function topLevelBoundary(
+  doc: { childCount: number; child(index: number): ProseNode },
+  boundaryIndex: number
+): number {
+  let position = 0;
+  const count = Math.min(boundaryIndex, doc.childCount);
+  for (let index = 0; index < count; index += 1) {
+    position += doc.child(index).nodeSize;
+  }
+  return position;
 }
 
 function insertDiagramBlock(
