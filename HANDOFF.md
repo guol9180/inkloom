@@ -53,13 +53,12 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T37 now that T25–T36 are completed:
+Start with T38 now that T25–T37 are completed:
 
-- Complete flat knowledge-base management and archive behavior.
-- Keep documents directly flat inside each knowledge base with no nested
-  folders.
-- Finish moving documents back, deleting a knowledge base without deleting
-  documents, and revision-aware ordering.
+- Make knowledge-base documents preview-first and read-only by default.
+- Add explicit Edit and Done transitions without reloading, jumping scroll or
+  changing reading layout.
+- Keep failed saves in editing state and preserve local drafts.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

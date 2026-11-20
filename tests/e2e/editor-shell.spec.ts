@@ -184,6 +184,87 @@ test("archives a saved scratch note into a flat knowledge base", async ({
   ).toBeVisible();
 });
 
+test("renames and revision-safely reorders flat knowledge bases", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await createKnowledgeBaseFromMenu(page, "项目知识");
+  await createKnowledgeBaseFromMenu(page, "资料库");
+
+  await page.getByRole("button", { name: "项目知识 操作" }).click();
+  await page.getByRole("menuitem", { name: "下移" }).click();
+  await expect
+    .poll(async () => {
+      const text = await page.locator("aside").innerText();
+      return text.indexOf("资料库") < text.indexOf("项目知识");
+    })
+    .toBe(true);
+
+  await page.getByRole("button", { name: "项目知识 操作" }).click();
+  await page.getByRole("menuitem", { name: "重命名" }).click();
+  const renameDialog = page.getByRole("dialog", { name: "重命名知识库" });
+  await renameDialog.getByLabel("知识库名称").fill("产品知识");
+  await renameDialog.getByRole("button", { name: "保存名称" }).click();
+  await expect(
+    page.getByRole("button", { name: "产品知识 操作" })
+  ).toBeVisible();
+});
+
+test("moves a knowledge document back and preserves it when deleting the base", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("知识库往返文档");
+  await createKnowledgeBaseFromMenu(page, "往返知识库");
+  await page.getByRole("button", { name: "随记", exact: true }).click();
+  const noteRow = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "知识库往返文档" });
+  await expect(noteRow).toBeVisible();
+  await noteRow.click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "归档到知识库" }).click();
+  await page
+    .getByRole("dialog", { name: "归档到知识库" })
+    .getByRole("button", { name: "确认归档" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("button", { name: "往返知识库", exact: true }).click();
+  const knowledgeDoc = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "知识库往返文档" });
+  await expect(knowledgeDoc).toBeVisible();
+  await knowledgeDoc.click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "移回随记" }).click();
+  await expect(page).toHaveURL(/\/notes\/[^/]+$/);
+
+  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("button", { name: "往返知识库", exact: true }).click();
+  await page.getByRole("button", { name: "往返知识库 操作" }).click();
+  await page.getByRole("menuitem", { name: "删除知识库" }).click();
+  await page
+    .getByRole("dialog", { name: "删除知识库" })
+    .getByRole("button", { name: "删除并移回文档" })
+    .click();
+  await expect(page.getByRole("button", { name: /往返知识库/ })).toHaveCount(
+    0
+  );
+
+  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await expect(
+    page
+      .locator("aside")
+      .getByRole("button")
+      .filter({ hasText: "知识库往返文档" })
+  ).toBeVisible();
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {
@@ -973,4 +1054,13 @@ async function drawExcalidrawRectangle(page: Page) {
   await page.mouse.move(startX + 180, startY + 110, { steps: 8 });
   await page.mouse.up();
   await page.waitForTimeout(250);
+}
+
+async function createKnowledgeBaseFromMenu(page: Page, name: string) {
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await page.getByRole("menuitem", { name: "新建知识库" }).click();
+  const dialog = page.getByRole("dialog", { name: "新建知识库" });
+  await dialog.getByLabel("知识库名称").fill(name);
+  await dialog.getByRole("button", { name: "创建" }).click();
+  await expect(page).toHaveURL(/\/knowledge\/[^/]+$/);
 }

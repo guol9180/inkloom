@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -91,6 +92,13 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   );
   const [draftName, setDraftName] = useState("");
   const [dialogError, setDialogError] = useState("");
+  const [knowledgeDialog, setKnowledgeDialog] = useState<
+    { mode: "rename"; knowledgeBase: CloudKnowledgeBase } |
+    { mode: "delete"; knowledgeBase: CloudKnowledgeBase } |
+    null
+  >(null);
+  const [knowledgeNameDraft, setKnowledgeNameDraft] = useState("");
+  const [knowledgeActionPending, setKnowledgeActionPending] = useState(false);
   const importMarkdownRef = useRef<HTMLInputElement>(null);
   const importFolderRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -173,6 +181,109 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
       setSidebarOpen(false);
     }
   });
+
+  async function renameKnowledgeBase() {
+    if (knowledgeDialog?.mode !== "rename") return;
+    const name = knowledgeNameDraft.trim();
+    if (!name) return;
+    setKnowledgeActionPending(true);
+    try {
+      await cloudClient.renameKnowledgeBase(
+        workspaceId as WorkspaceId,
+        knowledgeDialog.knowledgeBase.id,
+        {
+          name,
+          baseRevision: knowledgeDialog.knowledgeBase.revision
+        }
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["knowledge-bases", workspaceId]
+      });
+      setKnowledgeDialog(null);
+      showToast("知识库名称已更新");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "重命名失败，请重试。");
+    } finally {
+      setKnowledgeActionPending(false);
+    }
+  }
+
+  async function deleteKnowledgeBase() {
+    if (knowledgeDialog?.mode !== "delete") return;
+    setKnowledgeActionPending(true);
+    try {
+      await cloudClient.deleteKnowledgeBase(
+        workspaceId as WorkspaceId,
+        knowledgeDialog.knowledgeBase.id,
+        knowledgeDialog.knowledgeBase.revision
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["knowledge-bases", workspaceId]
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["knowledge-documents", workspaceId]
+        }),
+        queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["notes", workspaceId, "recent"]
+        })
+      ]);
+      const deletedId = knowledgeDialog.knowledgeBase.id;
+      setKnowledgeDialog(null);
+      showToast("知识库已删除，文档已移回随记");
+      if (knowledgeBaseId === deletedId) {
+        navigate(`/workspaces/${encodeURIComponent(workspaceId)}/notes`);
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "删除失败，请重试。");
+    } finally {
+      setKnowledgeActionPending(false);
+    }
+  }
+
+  async function moveKnowledgeBase(
+    knowledgeBase: CloudKnowledgeBase,
+    direction: "up" | "down"
+  ) {
+    const ordered = knowledgeBases.data ?? [];
+    const index = ordered.findIndex((item) => item.id === knowledgeBase.id);
+    const target = ordered[direction === "up" ? index - 1 : index + 1];
+    if (index < 0 || !target) return;
+    setKnowledgeActionPending(true);
+    try {
+      await cloudClient.renameKnowledgeBase(
+        workspaceId as WorkspaceId,
+        knowledgeBase.id,
+        {
+          name: knowledgeBase.name,
+          baseRevision: knowledgeBase.revision,
+          sortOrder: target.sortOrder
+        }
+      );
+      await cloudClient.renameKnowledgeBase(
+        workspaceId as WorkspaceId,
+        target.id,
+        {
+          name: target.name,
+          baseRevision: target.revision,
+          sortOrder: knowledgeBase.sortOrder
+        }
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["knowledge-bases", workspaceId]
+      });
+    } catch (error) {
+      await queryClient.invalidateQueries({
+        queryKey: ["knowledge-bases", workspaceId]
+      });
+      showToast(
+        error instanceof Error ? error.message : "知识库排序失败，请重试。"
+      );
+    } finally {
+      setKnowledgeActionPending(false);
+    }
+  }
 
   useEffect(() => {
     if (mode === "knowledge" && !knowledgeBaseId && knowledgeBases.data?.length === 1) {
@@ -440,6 +551,17 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
             setDialogError("");
             setCreateDialog("knowledge");
           }}
+          onRenameKnowledgeBase={(knowledgeBase) => {
+            setKnowledgeNameDraft(knowledgeBase.name);
+            setKnowledgeDialog({ mode: "rename", knowledgeBase });
+          }}
+          onDeleteKnowledgeBase={(knowledgeBase) =>
+            setKnowledgeDialog({ mode: "delete", knowledgeBase })
+          }
+          onMoveKnowledgeBase={(knowledgeBase, direction) =>
+            void moveKnowledgeBase(knowledgeBase, direction)
+          }
+          knowledgeActionPending={knowledgeActionPending}
           onImportMarkdown={() => importMarkdownRef.current?.click()}
           onImportFolder={() => importFolderRef.current?.click()}
           onClose={() => setSidebarOpen(false)}
@@ -581,6 +703,83 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           )}
         </form>
       </AppDialog>
+
+      <AppDialog
+        open={knowledgeDialog?.mode === "rename"}
+        title="重命名知识库"
+        description="知识库名称更新会携带 revision，如果其他页面已修改会提示冲突。"
+        onClose={() => setKnowledgeDialog(null)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setKnowledgeDialog(null)}
+              disabled={knowledgeActionPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="knowledge-rename-form"
+              disabled={knowledgeActionPending}
+            >
+              {knowledgeActionPending ? "正在保存…" : "保存名称"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="knowledge-rename-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void renameKnowledgeBase();
+          }}
+        >
+          <FieldLabel>
+            知识库名称
+            <TextInput
+              autoFocus
+              maxLength={80}
+              value={knowledgeNameDraft}
+              onChange={(event) => setKnowledgeNameDraft(event.target.value)}
+            />
+          </FieldLabel>
+        </form>
+      </AppDialog>
+
+      <AppDialog
+        open={knowledgeDialog?.mode === "delete"}
+        title="删除知识库"
+        description={
+          knowledgeDialog?.mode === "delete"
+            ? `“${knowledgeDialog.knowledgeBase.name}”中的文档会移回随记，不会删除正文和版本历史。`
+            : ""
+        }
+        onClose={() => setKnowledgeDialog(null)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setKnowledgeDialog(null)}
+              disabled={knowledgeActionPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void deleteKnowledgeBase()}
+              disabled={knowledgeActionPending}
+            >
+              {knowledgeActionPending ? "正在删除…" : "删除并移回文档"}
+            </Button>
+          </>
+        }
+      >
+        <p className="rounded-xl bg-sun-50 px-3 py-2 text-xs leading-5 text-sun-700">
+          删除只移除知识库容器，文档会保留并平铺回到随记。
+        </p>
+      </AppDialog>
     </div>
   );
 }
@@ -602,6 +801,10 @@ function WorkspaceSidebar({
   selectedKnowledgeBase,
   onCreateNote,
   onCreateKnowledgeBase,
+  onRenameKnowledgeBase,
+  onDeleteKnowledgeBase,
+  onMoveKnowledgeBase,
+  knowledgeActionPending,
   onImportMarkdown,
   onImportFolder,
   onClose,
@@ -623,6 +826,13 @@ function WorkspaceSidebar({
   selectedKnowledgeBase?: CloudKnowledgeBase;
   onCreateNote: () => void;
   onCreateKnowledgeBase: () => void;
+  onRenameKnowledgeBase: (knowledgeBase: CloudKnowledgeBase) => void;
+  onDeleteKnowledgeBase: (knowledgeBase: CloudKnowledgeBase) => void;
+  onMoveKnowledgeBase: (
+    knowledgeBase: CloudKnowledgeBase,
+    direction: "up" | "down"
+  ) => void;
+  knowledgeActionPending: boolean;
   onImportMarkdown: () => void;
   onImportFolder: () => void;
   onClose: () => void;
@@ -804,26 +1014,77 @@ function WorkspaceSidebar({
           <>
             <SidebarGroup icon={<BookOpen size={13} />} title="知识库">
               {knowledgeBases.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs font-semibold transition ${
+                  className={`group flex min-h-10 w-full items-center rounded-xl pr-1 transition ${
                     item.id === knowledgeBaseId
                       ? "bg-[#f1f5f2] text-brand-800"
                       : "text-ink-600 hover:bg-[#f7f8f6] hover:text-ink-900"
                   }`}
-                  onClick={() =>
-                    navigate(
-                      `/workspaces/${encodeURIComponent(
-                        workspaceId
-                      )}/knowledge/${encodeURIComponent(item.id)}`
-                    )
-                  }
                 >
-                  <BookOpen size={14} className="text-brand-600" />
-                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  <ChevronDown size={13} className="-rotate-90 text-ink-300" />
-                </button>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-left text-xs font-semibold"
+                    onClick={() =>
+                      navigate(
+                        `/workspaces/${encodeURIComponent(
+                          workspaceId
+                        )}/knowledge/${encodeURIComponent(item.id)}`
+                      )
+                    }
+                  >
+                    <BookOpen size={14} className="text-brand-600" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.name}
+                    </span>
+                  </button>
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        className="grid size-7 place-items-center rounded-lg text-ink-300 opacity-100 transition hover:bg-white hover:text-ink-700 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                        aria-label={`${item.name} 操作`}
+                        disabled={knowledgeActionPending}
+                      >
+                        <MoreHorizontal size={14} />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        align="end"
+                        sideOffset={6}
+                        className="z-50 w-40 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+                      >
+                        <SidebarMenuItem
+                          icon={<Pencil size={14} />}
+                          onSelect={() => onRenameKnowledgeBase(item)}
+                        >
+                          重命名
+                        </SidebarMenuItem>
+                        <SidebarMenuItem
+                          icon={<ChevronDown size={14} className="-rotate-90" />}
+                          onSelect={() => onMoveKnowledgeBase(item, "up")}
+                        >
+                          上移
+                        </SidebarMenuItem>
+                        <SidebarMenuItem
+                          icon={<ChevronDown size={14} className="rotate-90" />}
+                          onSelect={() => onMoveKnowledgeBase(item, "down")}
+                        >
+                          下移
+                        </SidebarMenuItem>
+                        <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                        <DropdownMenu.Item
+                          className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+                          onSelect={() => onDeleteKnowledgeBase(item)}
+                        >
+                          <Trash2 size={14} />
+                          删除知识库
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                </div>
               ))}
               {knowledgeBases.length === 0 && (
                 <p className="px-3 py-5 text-center text-xs leading-5 text-ink-400">
@@ -1186,6 +1447,45 @@ function DocumentSurface({
     }
   }
 
+  async function restoreCurrentDocumentToNotes() {
+    setDocumentActionPending(true);
+    try {
+      if (!(await autosave.flush(true))) {
+        throw new Error("当前修改尚未保存，已保留在知识库和本地草稿中。");
+      }
+      const adapter = cloudClient.workspace(
+        document.meta.workspaceId as WorkspaceId
+      );
+      const latest = await adapter.readDocument(document.meta.id);
+      await cloudClient.restoreDocumentToNotes(
+        document.meta.workspaceId as WorkspaceId,
+        document.meta.id,
+        latest.meta.revision
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["knowledge-documents", document.meta.workspaceId]
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["notes", document.meta.workspaceId]
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["notes", document.meta.workspaceId, "recent"]
+        })
+      ]);
+      showToast("文档已移回随记");
+      navigate(
+        `/workspaces/${encodeURIComponent(
+          document.meta.workspaceId
+        )}/notes/${encodeURIComponent(document.meta.id)}`
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "移回随记失败，请重试。");
+    } finally {
+      setDocumentActionPending(false);
+    }
+  }
+
   const showEditor = editorActive;
 
   return (
@@ -1271,6 +1571,15 @@ function DocumentSurface({
                   >
                     <Archive size={14} />
                     归档到知识库
+                  </DropdownMenu.Item>
+                )}
+                {mode === "knowledge" && (
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                    onSelect={() => void restoreCurrentDocumentToNotes()}
+                  >
+                    <FileText size={14} />
+                    移回随记
                   </DropdownMenu.Item>
                 )}
                 <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
