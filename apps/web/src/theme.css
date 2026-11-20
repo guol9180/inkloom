@@ -1,28 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Aptos", "Segoe UI Variable", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-sans: "Geist Sans", "Aptos", "Segoe UI Variable", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-display: "Iowan Old Style", "Baskerville", "Noto Serif SC", "Songti SC", serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-reading: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --font-mono: "Geist Mono", "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
-  --color-paper: #fffefa;
-  --color-paper-warm: #f9f6ed;
-  --color-canvas: #f2f5ef;
-  --color-line: #dce4dc;
-  --color-line-soft: #e9eee8;
-  --color-line-strong: #c5d3c8;
+  --color-paper: #ffffff;
+  --color-paper-warm: #fafbf9;
+  --color-canvas: #f7f8f6;
+  --color-line: #e5e9e4;
+  --color-line-soft: #eef1ed;
+  --color-line-strong: #d4dbd4;
 
-  --color-ink-50: #f6f8f7;
-  --color-ink-100: #edf1ee;
-  --color-ink-200: #dce4de;
-  --color-ink-300: #b9c6bd;
-  --color-ink-400: #829589;
-  --color-ink-500: #63776b;
-  --color-ink-600: #4b6054;
-  --color-ink-700: #394d42;
-  --color-ink-800: #2b3f35;
-  --color-ink-900: #20352c;
-  --color-ink-950: #13271f;
+  --color-ink-50: #f8f9f8;
+  --color-ink-100: #f0f2f0;
+  --color-ink-200: #e0e5e1;
+  --color-ink-300: #bdc6bf;
+  --color-ink-400: #87928a;
+  --color-ink-500: #68746c;
+  --color-ink-600: #4f5c54;
+  --color-ink-700: #39463e;
+  --color-ink-800: #29342d;
+  --color-ink-900: #1d2721;
+  --color-ink-950: #121a15;
 
   --color-brand-50: #f0f7f3;
   --color-brand-100: #dcefe6;
@@ -109,6 +110,28 @@
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
   border: 0 !important;
+}
+
+.skeleton-shimmer {
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer,
+  .auth-orbit,
+  .app-dialog-overlay[data-state="open"],
+  .app-dialog[data-state="open"] {
+    animation: none;
+  }
 }
 
 .auth-orbit {

@@ -4,6 +4,7 @@ import {
   type DeleteNodeInput,
   type DocumentExtensions,
   type DocumentId,
+  type DocumentMeta,
   type DocumentSnapshot,
   type MoveNodeInput,
   type StorageCapabilities,
@@ -31,6 +32,22 @@ export type CloudDocumentRevision = DocumentSnapshot & {
   revisionId: string;
   recordedAt: string;
 };
+
+export type CloudDocumentSummary = DocumentMeta & {
+  excerpt: string;
+};
+
+export type CloudKnowledgeBase = {
+  id: string;
+  workspaceId: WorkspaceId;
+  name: string;
+  sortOrder: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CloudDocumentSort = "updated" | "created" | "title";
 
 export type CloudFetchResponse = {
   readonly ok: boolean;
@@ -164,6 +181,133 @@ export class CloudClient {
       )}/revisions`
     );
     return response.revisions;
+  }
+
+  async listNotes(
+    workspaceId: WorkspaceId,
+    sort: CloudDocumentSort = "updated"
+  ): Promise<CloudDocumentSummary[]> {
+    const response = await this.request<{ documents: CloudDocumentSummary[] }>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/notes?sort=${sort}`
+    );
+    return response.documents;
+  }
+
+  async listRecentDocuments(
+    workspaceId: WorkspaceId
+  ): Promise<CloudDocumentSummary[]> {
+    const response = await this.request<{ documents: CloudDocumentSummary[] }>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/notes/recent`
+    );
+    return response.documents;
+  }
+
+  async listKnowledgeBases(
+    workspaceId: WorkspaceId
+  ): Promise<CloudKnowledgeBase[]> {
+    const response = await this.request<{
+      knowledgeBases: CloudKnowledgeBase[];
+    }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/knowledge-bases`);
+    return response.knowledgeBases;
+  }
+
+  async createKnowledgeBase(
+    workspaceId: WorkspaceId,
+    name: string
+  ): Promise<CloudKnowledgeBase> {
+    const response = await this.request<{ knowledgeBase: CloudKnowledgeBase }>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/knowledge-bases`,
+      { method: "POST", body: { name } }
+    );
+    return response.knowledgeBase;
+  }
+
+  async renameKnowledgeBase(
+    workspaceId: WorkspaceId,
+    knowledgeBaseId: string,
+    input: { name: string; baseRevision: number; sortOrder?: number }
+  ): Promise<CloudKnowledgeBase> {
+    const response = await this.request<{ knowledgeBase: CloudKnowledgeBase }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}`,
+      { method: "PATCH", body: input }
+    );
+    return response.knowledgeBase;
+  }
+
+  async deleteKnowledgeBase(
+    workspaceId: WorkspaceId,
+    knowledgeBaseId: string,
+    baseRevision: number
+  ): Promise<DocumentSnapshot[]> {
+    const response = await this.request<{
+      knowledgeBaseId: string;
+      documents: DocumentSnapshot[];
+    }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}`,
+      { method: "DELETE", body: { baseRevision } }
+    );
+    return response.documents;
+  }
+
+  async listKnowledgeBaseDocuments(
+    workspaceId: WorkspaceId,
+    knowledgeBaseId: string,
+    sort: CloudDocumentSort = "updated"
+  ): Promise<CloudDocumentSummary[]> {
+    const response = await this.request<{ documents: CloudDocumentSummary[] }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/knowledge-bases/${encodeURIComponent(
+        knowledgeBaseId
+      )}/documents?sort=${sort}`
+    );
+    return response.documents;
+  }
+
+  async archiveDocument(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId,
+    input: { knowledgeBaseId: string; baseRevision: number }
+  ): Promise<DocumentSnapshot> {
+    const response = await this.request<{ document: DocumentSnapshot }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/archive`,
+      { method: "POST", body: input }
+    );
+    return response.document;
+  }
+
+  async restoreDocumentToNotes(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId,
+    baseRevision: number
+  ): Promise<DocumentSnapshot> {
+    const response = await this.request<{ document: DocumentSnapshot }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/restore-to-notes`,
+      { method: "POST", body: { baseRevision } }
+    );
+    return response.document;
+  }
+
+  async markDocumentOpened(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId,
+    baseRevision: number
+  ): Promise<DocumentSnapshot> {
+    const response = await this.request<{ document: DocumentSnapshot }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/open`,
+      { method: "POST", body: { baseRevision } }
+    );
+    return response.document;
   }
 
   async restoreRevision(
