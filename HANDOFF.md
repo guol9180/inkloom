@@ -53,12 +53,13 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T36 now that T25–T35 are completed:
+Start with T37 now that T25–T36 are completed:
 
-- Complete the flat Scratch note workflow.
-- Keep all creation entry points in the `+` menu to the right of search.
-- Finish tag filtering, recent documents, delete, export and archive behavior
-  without introducing user-managed folders.
+- Complete flat knowledge-base management and archive behavior.
+- Keep documents directly flat inside each knowledge base with no nested
+  folders.
+- Finish moving documents back, deleting a knowledge base without deleting
+  documents, and revision-aware ordering.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

@@ -65,6 +65,125 @@ test("shows selection tools and opens the link command with Ctrl+K", async ({
   ).toContainText("选择这段文字");
 });
 
+test("creates flat scratch notes with tags, filtering, export and delete", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("产品随记内容");
+
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "管理标签" }).click();
+  const tagDialog = page.getByRole("dialog", { name: "管理标签" });
+  await tagDialog.getByLabel("标签").fill("产品, 灵感");
+  const tagSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    const tags = (request.postDataJSON() as { tags?: unknown }).tags;
+    return Array.isArray(tags) && tags.includes("产品");
+  });
+  await tagDialog.getByRole("button", { name: "保存标签" }).click();
+  await tagSave;
+  await expect(page.getByRole("button", { name: "#产品" }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "#产品" }).first()).toBeVisible();
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "产品随记内容"
+  );
+
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await page.getByRole("menuitem", { name: "新建随记" }).click();
+  await expect(page).toHaveURL(/\/notes\/[^/]+$/);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("第二篇随记内容");
+  await expect
+    .poll(() => page.locator("aside").innerText())
+    .toContain("第二篇随记内容");
+
+  await page.locator("aside").getByRole("button", { name: "#产品" }).click();
+  const taggedNote = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "产品随记内容" });
+  await expect(taggedNote).toBeVisible();
+  await expect(
+    page
+      .locator("aside")
+      .getByRole("button")
+      .filter({ hasText: "第二篇随记内容" })
+  ).toHaveCount(0);
+
+  await taggedNote.click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("未命名文档.zip");
+
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "删除文档" }).click();
+  await page
+    .getByRole("dialog", { name: "删除文档" })
+    .getByRole("button", { name: "确认删除" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(
+    page
+      .locator("aside")
+      .getByRole("button")
+      .filter({ hasText: "产品随记内容" })
+  ).toHaveCount(0);
+});
+
+test("archives a saved scratch note into a flat knowledge base", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("等待归档的产品说明");
+
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await page.getByRole("menuitem", { name: "新建知识库" }).click();
+  const knowledgeDialog = page.getByRole("dialog", { name: "新建知识库" });
+  await knowledgeDialog.getByLabel("知识库名称").fill("产品知识");
+  await knowledgeDialog.getByRole("button", { name: "创建" }).click();
+  await expect(page).toHaveURL(/\/knowledge\/[^/]+$/);
+
+  await page.getByRole("button", { name: "随记", exact: true }).click();
+  const noteRow = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "等待归档的产品说明" });
+  await expect(noteRow).toBeVisible();
+  await noteRow.click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "归档到知识库" }).click();
+  const archiveDialog = page.getByRole("dialog", { name: "归档到知识库" });
+  await expect(
+    archiveDialog.getByRole("button", { name: /产品知识/ })
+  ).toBeVisible();
+  await archiveDialog
+    .getByRole("button", { name: "确认归档" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("button", { name: /产品知识/ }).first().click();
+  await expect(
+    page
+      .locator("aside")
+      .getByRole("button")
+      .filter({ hasText: "等待归档的产品说明" })
+  ).toBeVisible();
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {
@@ -670,9 +789,9 @@ test("uploads images and attachments and exports a portable zip", async ({
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出" }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("编辑器验收.zip");
+  expect(download.suggestedFilename()).toBe("未命名文档.zip");
   const archive = readFileSync(await download.path());
-  expect(archive.includes(Buffer.from("编辑器验收.md"))).toBe(true);
+  expect(archive.includes(Buffer.from("未命名文档.md"))).toBe(true);
   expect(archive.includes(Buffer.from("assets/"))).toBe(true);
   expect(archive.includes(Buffer.from("inkloom:file"))).toBe(true);
 
@@ -834,8 +953,6 @@ async function openScratchNote(page: Page): Promise<string> {
     .getByRole("main")
     .getByRole("button", { name: "新建随记" })
     .click();
-  await page.getByRole("dialog").getByLabel("文档标题").fill("编辑器验收");
-  await page.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
   return page.url();
 }

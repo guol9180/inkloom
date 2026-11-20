@@ -41,11 +41,6 @@ for (const viewport of viewports) {
         .getByRole("main")
         .getByRole("button", { name: "新建随记" })
         .click();
-      await page
-        .getByRole("dialog")
-        .getByLabel("文档标题")
-        .fill("编辑体验");
-      await page.getByRole("button", { name: "创建" }).click();
       const editor = page.getByLabel("Markdown 正文");
       await expect(editor).toBeVisible();
       await editor.click();

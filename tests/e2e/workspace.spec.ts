@@ -14,11 +14,6 @@ test("creates a scratch note, saves it, refreshes and protects routes", async ({
     .getByRole("main")
     .getByRole("button", { name: "新建随记" })
     .click();
-  await page
-    .getByRole("dialog")
-    .getByLabel("文档标题")
-    .fill("真实保存验收");
-  await page.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
 
   const editor = page.getByLabel("Markdown 正文");
@@ -102,7 +97,7 @@ test("recovers an IndexedDB draft after a failed autosave", async ({
   page
 }) => {
   await registerUser(page);
-  await createScratchNote(page, "离线草稿验收");
+  await createScratchNote(page);
   const editor = page.getByLabel("Markdown 正文");
   const routePattern = /\/api\/workspaces\/[^/]+\/documents\/[^/]+$/;
   let failedAutosaves = 0;
@@ -145,7 +140,7 @@ test("preserves a local conflict copy and reloads the cloud version", async ({
   page
 }) => {
   await registerUser(page);
-  await createScratchNote(page, "冲突验收");
+  await createScratchNote(page);
   const workspaceId = workspaceIdFromUrl(page);
   const documentId = documentIdFromUrl(page);
   const editor = page.getByLabel("Markdown 正文");
@@ -178,7 +173,7 @@ test("preserves a local conflict copy and reloads the cloud version", async ({
 
 test("allows only one tab to edit the same document", async ({ page }) => {
   await registerUser(page);
-  await createScratchNote(page, "单编辑所有者");
+  await createScratchNote(page);
   const secondPage = await page.context().newPage();
   await secondPage.goto(page.url());
   await expect(
@@ -198,7 +193,7 @@ test("skips autosave when content returns to the persisted hash", async ({
   page
 }) => {
   await registerUser(page);
-  await createScratchNote(page, "内容哈希跳过");
+  await createScratchNote(page);
   let writes = 0;
   page.on("request", (request) => {
     if (
@@ -276,13 +271,11 @@ async function registerUser(page: Page) {
   }, email);
 }
 
-async function createScratchNote(page: Page, title: string) {
+async function createScratchNote(page: Page) {
   await page
     .getByRole("main")
     .getByRole("button", { name: "新建随记" })
     .click();
-  await page.getByRole("dialog").getByLabel("文档标题").fill(title);
-  await page.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
 }
 

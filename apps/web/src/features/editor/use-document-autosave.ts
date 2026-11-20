@@ -48,6 +48,7 @@ export function useDocumentAutosave({
   onConflictCopy: (snapshot: DocumentSnapshot) => void;
 }) {
   const [markdown, setMarkdownState] = useState(document.markdown);
+  const [tags, setTagsState] = useState<readonly string[]>(document.meta.tags);
   const [status, setStatus] = useState<AutosaveStatus>("saved");
   const [error, setError] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState<string | undefined>(undefined);
@@ -56,9 +57,11 @@ export function useDocumentAutosave({
     undefined
   );
   const markdownRef = useRef(document.markdown);
+  const tagsRef = useRef<readonly string[]>(document.meta.tags);
   const currentHashRef = useRef(String(document.meta.contentHash));
   const revisionRef = useRef(document.meta.revision);
   const lastPersistedHashRef = useRef(String(document.meta.contentHash));
+  const persistedTagsRef = useRef<readonly string[]>(document.meta.tags);
   const activeRef = useRef(active);
   const mountedRef = useRef(true);
   const pendingRef = useRef<PendingSave | undefined>(undefined);
@@ -105,7 +108,7 @@ export function useDocumentAutosave({
         ...scope,
         title: document.meta.title,
         markdown: value,
-        tags: document.meta.tags,
+        tags: [...tagsRef.current],
         baseRevision: revisionRef.current,
         contentHash: hash,
         extensions: document.extensions,
@@ -115,7 +118,6 @@ export function useDocumentAutosave({
     },
     [
       document.meta.id,
-      document.meta.tags,
       document.meta.title,
       document.extensions,
       scope.documentId,
@@ -141,7 +143,7 @@ export function useDocumentAutosave({
         path: workspacePath(path),
         title,
         markdown: localMarkdown,
-        tags: [...document.meta.tags, "冲突副本"],
+        tags: [...tagsRef.current, "冲突副本"],
         extensions: document.extensions
       });
       onConflictCopyRef.current(copy);
@@ -152,8 +154,11 @@ export function useDocumentAutosave({
       const serverHash = await hashMarkdown(server.markdown);
       currentHashRef.current = serverHash;
       markdownRef.current = server.markdown;
+      tagsRef.current = server.meta.tags;
+      persistedTagsRef.current = server.meta.tags;
       if (mountedRef.current) {
         setMarkdownState(server.markdown);
+        setTagsState(server.meta.tags);
         setConflictCopy({ id: copy.meta.id, title: copy.meta.title });
         setStatus("conflict");
         setError("云端已有更新。当前文档已载入最新版本，你的修改已保存为冲突副本。");
@@ -165,7 +170,6 @@ export function useDocumentAutosave({
     [
       document.extensions,
       document.meta.id,
-      document.meta.tags,
       document.meta.title,
       scope
     ]
@@ -186,7 +190,15 @@ export function useDocumentAutosave({
           }
           const value = markdownRef.current;
           const hash = await hashMarkdown(value);
-          if (!pending.checkpoint && hash === lastPersistedHashRef.current) {
+          const tagsChanged = !tagsEqual(
+            tagsRef.current,
+            persistedTagsRef.current
+          );
+          if (
+            !pending.checkpoint &&
+            hash === lastPersistedHashRef.current &&
+            !tagsChanged
+          ) {
             await draftStore.remove(scope);
             if (mountedRef.current) {
               setStatus("saved");
@@ -207,18 +219,27 @@ export function useDocumentAutosave({
                 checkpoint: pending.checkpoint,
                 markdown: value,
                 title: document.meta.title,
-                tags: document.meta.tags,
+                tags: [...tagsRef.current],
                 extensions: document.extensions
               });
             revisionRef.current = saved.meta.revision;
             lastPersistedHashRef.current = String(saved.meta.contentHash);
+            persistedTagsRef.current = saved.meta.tags;
+            tagsRef.current = saved.meta.tags;
             const latestHash = await hashMarkdown(markdownRef.current);
-            if (latestHash === lastPersistedHashRef.current) {
+            if (
+              latestHash === lastPersistedHashRef.current &&
+              tagsEqual(tagsRef.current, persistedTagsRef.current)
+            ) {
               await draftStore.remove(scope);
             }
             if (mountedRef.current) {
+              setTagsState(saved.meta.tags);
               setStatus(
-                latestHash === lastPersistedHashRef.current ? "saved" : "draft"
+                latestHash === lastPersistedHashRef.current &&
+                  tagsEqual(tagsRef.current, persistedTagsRef.current)
+                  ? "saved"
+                  : "draft"
               );
               setLastSavedAt(saved.meta.updatedAt);
               setError("");
@@ -263,7 +284,6 @@ export function useDocumentAutosave({
     return drainPromiseRef.current;
   }, [
     document.meta.id,
-    document.meta.tags,
     document.meta.title,
     document.meta.workspaceId,
     document.extensions,
@@ -315,9 +335,12 @@ export function useDocumentAutosave({
     pendingRef.current = undefined;
     revisionRef.current = document.meta.revision;
     lastPersistedHashRef.current = String(document.meta.contentHash);
+    persistedTagsRef.current = document.meta.tags;
     markdownRef.current = document.markdown;
+    tagsRef.current = document.meta.tags;
     currentHashRef.current = String(document.meta.contentHash);
     setMarkdownState(document.markdown);
+    setTagsState(document.meta.tags);
     setStatus("saved");
     setError("");
     setDraftRecovered(false);
@@ -329,12 +352,21 @@ export function useDocumentAutosave({
     void (async () => {
       await migrateLegacyDraft(document, userId);
       const draft = await draftStore.get(scope).catch(() => undefined);
-      if (cancelled || !draft || draft.markdown === document.markdown) return;
+      if (
+        cancelled ||
+        !draft ||
+        (draft.markdown === document.markdown &&
+          tagsEqual(draft.tags, document.meta.tags))
+      ) {
+        return;
+      }
       markdownRef.current = draft.markdown;
+      tagsRef.current = draft.tags;
       currentHashRef.current = draft.contentHash;
       revisionRef.current = document.meta.revision;
       if (!mountedRef.current) return;
       setMarkdownState(draft.markdown);
+      setTagsState(draft.tags);
       setDraftRecovered(true);
       setStatus("draft");
       scheduleAutosave();
@@ -342,9 +374,15 @@ export function useDocumentAutosave({
     return () => {
       cancelled = true;
       clearTimers();
-      if (markdownRef.current !== document.markdown) {
+      if (
+        markdownRef.current !== document.markdown ||
+        !tagsEqual(tagsRef.current, document.meta.tags)
+      ) {
         void persistDraft(markdownRef.current);
-        if (currentHashRef.current !== lastPersistedHashRef.current) {
+        if (
+          currentHashRef.current !== lastPersistedHashRef.current ||
+          !tagsEqual(tagsRef.current, persistedTagsRef.current)
+        ) {
           void flush(true);
         }
       }
@@ -412,9 +450,27 @@ export function useDocumentAutosave({
     scheduleAutosave();
   }
 
+  function changeTags(next: readonly string[]) {
+    const normalized = uniqueTags(next);
+    tagsRef.current = normalized;
+    setTagsState(normalized);
+    if (!activeRef.current) return;
+    setStatus("draft");
+    setError("");
+    void persistDraft().catch(() => {
+      if (mountedRef.current) {
+        setStatus("error");
+        setError("本地草稿写入失败，请检查浏览器存储空间。");
+      }
+    });
+    scheduleAutosave();
+  }
+
   return {
     markdown,
     changeMarkdown,
+    tags,
+    changeTags,
     status,
     error,
     lastSavedAt,
@@ -423,6 +479,29 @@ export function useDocumentAutosave({
     flush,
     retry: () => flush(true)
   };
+}
+
+function tagsEqual(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((tag, index) => tag === right[index])
+  );
+}
+
+function uniqueTags(tags: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  return tags
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (!tag || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 30);
 }
 
 async function hashMarkdown(value: string) {

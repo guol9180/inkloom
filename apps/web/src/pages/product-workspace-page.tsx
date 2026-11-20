@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type FormEvent,
   type ReactNode,
   type RefObject
 } from "react";
@@ -23,11 +24,14 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Search,
   Settings,
   Sparkles,
+  Tag,
+  Trash2,
   X
 } from "lucide-react";
 import {
@@ -80,6 +84,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     (item) => item.id === workspaceId
   );
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [createDialog, setCreateDialog] = useState<"note" | "knowledge" | null>(
     null
@@ -230,29 +235,36 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSummaries = currentSummaries.filter(
     (item) =>
-      !normalizedQuery ||
-      item.title.toLowerCase().includes(normalizedQuery) ||
-      item.excerpt.toLowerCase().includes(normalizedQuery) ||
-      item.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+      (mode !== "notes" ||
+        !tagFilter ||
+        item.tags.some(
+          (tag) => tag.toLowerCase() === tagFilter.toLowerCase()
+        )) &&
+      (!normalizedQuery ||
+        item.title.toLowerCase().includes(normalizedQuery) ||
+        item.excerpt.toLowerCase().includes(normalizedQuery) ||
+        item.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery)))
   );
 
   async function submitCreate() {
     const name = draftName.trim();
     if (!name) {
-      setDialogError(
-        createDialog === "knowledge" ? "知识库名称不能为空。" : "文档标题不能为空。"
-      );
+      setDialogError("知识库名称不能为空。");
       return;
     }
     setDialogError("");
-    if (createDialog === "knowledge") {
-      await createKnowledgeBase.mutateAsync(name);
-    } else {
-      await createNote.mutateAsync({
-        title: name,
-        markdown: ""
+    await createKnowledgeBase.mutateAsync(name);
+  }
+
+  function createBlankNote() {
+    setDialogError("");
+    void createNote
+      .mutateAsync({ title: "未命名文档", markdown: "" })
+      .catch((error: unknown) => {
+        showToast(
+          error instanceof Error ? error.message : "随记创建失败，请重试。"
+        );
       });
-    }
   }
 
   async function importFiles(
@@ -415,16 +427,14 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           open={sidebarOpen}
           query={query}
           onQuery={setQuery}
+          tagFilter={tagFilter}
+          onTagFilter={setTagFilter}
           notes={notes.data ?? []}
           recent={recent.data ?? []}
           knowledgeBases={knowledgeBases.data ?? []}
           knowledgeDocuments={visibleSummaries}
           selectedKnowledgeBase={selectedKnowledgeBase}
-          onCreateNote={() => {
-            setDraftName("未命名文档");
-            setDialogError("");
-            setCreateDialog("note");
-          }}
+          onCreateNote={createBlankNote}
           onCreateKnowledgeBase={() => {
             setDraftName("");
             setDialogError("");
@@ -455,6 +465,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                 document={document.data}
                 userId={session.data?.id ?? ""}
                 mode={mode}
+                knowledgeBases={knowledgeBases.data ?? []}
                 onFocusSearch={() => {
                   setSidebarOpen(true);
                   window.setTimeout(() => searchRef.current?.focus(), 30);
@@ -469,6 +480,9 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                       queryKey: ["notes", workspaceId]
                     }),
                     queryClient.invalidateQueries({
+                      queryKey: ["notes", workspaceId, "recent"]
+                    }),
+                    queryClient.invalidateQueries({
                       queryKey: ["knowledge-documents", workspaceId]
                     })
                   ]);
@@ -479,11 +493,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
             <EmptyWorkspaceState
               mode={mode}
               selectedKnowledgeBase={selectedKnowledgeBase}
-              onCreateNote={() => {
-                setDraftName("未命名文档");
-                setDialogError("");
-                setCreateDialog("note");
-              }}
+              onCreateNote={createBlankNote}
               onCreateKnowledgeBase={() => {
                 setDraftName("");
                 setDialogError("");
@@ -522,20 +532,16 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
       />
 
       <AppDialog
-        open={createDialog !== null}
-        title={createDialog === "knowledge" ? "新建知识库" : "新建随记"}
-        description={
-          createDialog === "knowledge"
-            ? "知识库是平铺文档的顶层容器。"
-            : "创建后会直接进入编辑。"
-        }
+        open={createDialog === "knowledge"}
+        title="新建知识库"
+        description="知识库是平铺文档的顶层容器。"
         onClose={() => setCreateDialog(null)}
         footer={
           <>
             <Button
               variant="secondary"
               onClick={() => setCreateDialog(null)}
-              disabled={createNote.isPending || createKnowledgeBase.isPending}
+              disabled={createKnowledgeBase.isPending}
             >
               取消
             </Button>
@@ -543,11 +549,9 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
               variant="primary"
               type="submit"
               form="product-create-form"
-              disabled={createNote.isPending || createKnowledgeBase.isPending}
+              disabled={createKnowledgeBase.isPending}
             >
-              {createNote.isPending || createKnowledgeBase.isPending
-                ? "正在创建…"
-                : "创建"}
+              {createKnowledgeBase.isPending ? "正在创建…" : "创建"}
             </Button>
           </>
         }
@@ -561,15 +565,13 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           }}
         >
           <FieldLabel>
-            {createDialog === "knowledge" ? "知识库名称" : "文档标题"}
+            知识库名称
             <TextInput
               autoFocus
               maxLength={80}
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
-              placeholder={
-                createDialog === "knowledge" ? "例如：产品知识" : "未命名文档"
-              }
+              placeholder="例如：产品知识"
             />
           </FieldLabel>
           {dialogError && (
@@ -591,6 +593,8 @@ function WorkspaceSidebar({
   open,
   query,
   onQuery,
+  tagFilter,
+  onTagFilter,
   notes,
   recent,
   knowledgeBases,
@@ -610,6 +614,8 @@ function WorkspaceSidebar({
   open: boolean;
   query: string;
   onQuery: (value: string) => void;
+  tagFilter: string;
+  onTagFilter: (value: string) => void;
   notes: CloudDocumentSummary[];
   recent: CloudDocumentSummary[];
   knowledgeBases: CloudKnowledgeBase[];
@@ -626,10 +632,18 @@ function WorkspaceSidebar({
   const normalizedQuery = query.trim().toLowerCase();
   const filteredNotes = notes.filter(
     (item) =>
-      !normalizedQuery ||
-      item.title.toLowerCase().includes(normalizedQuery) ||
-      item.excerpt.toLowerCase().includes(normalizedQuery) ||
-      item.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+      (!tagFilter ||
+        item.tags.some(
+          (tag) => tag.toLowerCase() === tagFilter.toLowerCase()
+        )) &&
+      (!normalizedQuery ||
+        item.title.toLowerCase().includes(normalizedQuery) ||
+        item.excerpt.toLowerCase().includes(normalizedQuery) ||
+        item.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery)))
+  );
+  const availableTags = [...new Set(notes.flatMap((item) => item.tags))].slice(
+    0,
+    10
   );
 
   return (
@@ -712,6 +726,36 @@ function WorkspaceSidebar({
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
       </div>
+
+      {mode === "notes" && availableTags.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto px-3 pb-3">
+          <button
+            type="button"
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[0.62rem] font-semibold transition ${
+              tagFilter
+                ? "bg-[#f4f6f3] text-ink-500 hover:text-ink-800"
+                : "bg-brand-50 text-brand-800"
+            }`}
+            onClick={() => onTagFilter("")}
+          >
+            全部
+          </button>
+          {availableTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[0.62rem] font-semibold transition ${
+                tagFilter === tag
+                  ? "bg-brand-50 text-brand-800"
+                  : "bg-[#f4f6f3] text-ink-500 hover:text-ink-800"
+              }`}
+              onClick={() => onTagFilter(tagFilter === tag ? "" : tag)}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {mode === "notes" ? (
@@ -998,19 +1042,28 @@ function DocumentSurface({
   document,
   userId,
   mode,
+  knowledgeBases,
   onFocusSearch,
   onSaved
 }: {
   document: DocumentSnapshot;
   userId: string;
   mode: WorkspaceMode;
+  knowledgeBases: CloudKnowledgeBase[];
   onFocusSearch: () => void;
   onSaved: (snapshot: DocumentSnapshot) => Promise<void>;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const showToast = useToastStore((state) => state.show);
   const [editing, setEditing] = useState(mode === "notes");
   const [exporting, setExporting] = useState(false);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveKnowledgeBaseId, setArchiveKnowledgeBaseId] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [documentActionPending, setDocumentActionPending] = useState(false);
   const ownership = useEditorOwnership(
     userId
       ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
@@ -1052,6 +1105,87 @@ function DocumentSurface({
     }
   }
 
+  async function saveTags(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    autosave.changeTags(tagDraft.split(/[,，]/));
+    setTagDialogOpen(false);
+  }
+
+  async function archiveCurrentDocument() {
+    if (!archiveKnowledgeBaseId) return;
+    setDocumentActionPending(true);
+    try {
+      if (!(await autosave.flush(true))) {
+        throw new Error("当前修改尚未保存，已保留在随记和本地草稿中。");
+      }
+      const adapter = cloudClient.workspace(
+        document.meta.workspaceId as WorkspaceId
+      );
+      const latest = await adapter.readDocument(document.meta.id);
+      await cloudClient.archiveDocument(
+        document.meta.workspaceId as WorkspaceId,
+        document.meta.id,
+        {
+          knowledgeBaseId: archiveKnowledgeBaseId,
+          baseRevision: latest.meta.revision
+        }
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes", document.meta.workspaceId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["knowledge-documents", document.meta.workspaceId]
+        })
+      ]);
+      setArchiveOpen(false);
+      showToast("已归档到知识库");
+      navigate(
+        `/workspaces/${encodeURIComponent(document.meta.workspaceId)}/notes`
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "归档失败，请重试。");
+    } finally {
+      setDocumentActionPending(false);
+    }
+  }
+
+  async function deleteCurrentDocument() {
+    setDocumentActionPending(true);
+    try {
+      if (!(await autosave.flush(true))) {
+        throw new Error("当前修改尚未保存，暂不能删除。");
+      }
+      const adapter = cloudClient.workspace(
+        document.meta.workspaceId as WorkspaceId
+      );
+      const latest = await adapter.readDocument(document.meta.id);
+      await adapter.deleteNode({
+        nodeId: document.meta.id,
+        baseRevision: latest.meta.revision
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["notes", document.meta.workspaceId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["knowledge-documents", document.meta.workspaceId]
+        })
+      ]);
+      setDeleteOpen(false);
+      showToast("文档已删除");
+      navigate(
+        `/workspaces/${encodeURIComponent(document.meta.workspaceId)}/${
+          mode === "knowledge" && document.meta.knowledgeBaseId
+            ? `knowledge/${encodeURIComponent(
+                document.meta.knowledgeBaseId
+              )}`
+            : "notes"
+        }`
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "删除失败，请重试。");
+    } finally {
+      setDocumentActionPending(false);
+    }
+  }
+
   const showEditor = editorActive;
 
   return (
@@ -1067,6 +1201,23 @@ function DocumentSurface({
                 ? "知识库 · 预览优先"
                 : "随记 · Markdown"}
             </p>
+            {autosave.tags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {autosave.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className="rounded-full bg-[#f4f6f3] px-2 py-0.5 text-[0.6rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
+                    onClick={() => {
+                      setTagDraft(autosave.tags.join(", "));
+                      setTagDialogOpen(true);
+                    }}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {editorActive && (
             <AutosaveIndicator
@@ -1085,6 +1236,54 @@ function DocumentSurface({
               {exporting ? "导出中…" : "导出"}
             </span>
           </Button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <IconButton aria-label="文档操作">
+                <MoreHorizontal size={16} />
+              </IconButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={8}
+                className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-[0_18px_50px_rgb(20_36_28_/_0.14)]"
+              >
+                <DropdownMenu.Item
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3]"
+                  onSelect={() => {
+                    setTagDraft(autosave.tags.join(", "));
+                    setTagDialogOpen(true);
+                  }}
+                >
+                  <Tag size={14} />
+                  管理标签
+                </DropdownMenu.Item>
+                {mode === "notes" && (
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f6f3] data-[disabled]:opacity-40"
+                    disabled={knowledgeBases.length === 0}
+                    onSelect={() => {
+                      setArchiveKnowledgeBaseId(
+                        knowledgeBases[0]?.id ?? ""
+                      );
+                      setArchiveOpen(true);
+                    }}
+                  >
+                    <Archive size={14} />
+                    归档到知识库
+                  </DropdownMenu.Item>
+                )}
+                <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                <DropdownMenu.Item
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+                  onSelect={() => setDeleteOpen(true)}
+                >
+                  <Trash2 size={14} />
+                  删除文档
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
           {mode === "knowledge" && !editing && ownsEditor && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               编辑
@@ -1180,6 +1379,125 @@ function DocumentSurface({
           </div>
         )}
       </article>
+      <AppDialog
+        open={tagDialogOpen}
+        title="管理标签"
+        description="标签会随文档一起自动保存，并可用于随记筛选。"
+        onClose={() => setTagDialogOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setTagDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="document-tags-form"
+            >
+              保存标签
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="document-tags-form"
+          className="grid gap-3"
+          onSubmit={(event) => void saveTags(event)}
+        >
+          <FieldLabel>
+            标签
+            <TextInput
+              autoFocus
+              value={tagDraft}
+              onChange={(event) => setTagDraft(event.target.value)}
+              placeholder="产品, 灵感, 待整理"
+            />
+          </FieldLabel>
+          <p className="text-xs leading-5 text-ink-400">
+            使用逗号分隔，留空会清除全部标签。
+          </p>
+        </form>
+      </AppDialog>
+
+      <AppDialog
+        open={archiveOpen}
+        title="归档到知识库"
+        description="归档后文档会从随记移入所选知识库，正文和版本历史保持不变。"
+        onClose={() => setArchiveOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setArchiveOpen(false)}
+              disabled={documentActionPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => void archiveCurrentDocument()}
+              disabled={!archiveKnowledgeBaseId || documentActionPending}
+            >
+              {documentActionPending ? "正在归档…" : "确认归档"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-2">
+          {knowledgeBases.map((knowledgeBase) => (
+            <button
+              key={knowledgeBase.id}
+              type="button"
+              className={`flex min-h-11 items-center gap-2.5 rounded-xl border px-3 text-left text-sm font-medium transition ${
+                archiveKnowledgeBaseId === knowledgeBase.id
+                  ? "border-brand-300 bg-brand-50 text-brand-800"
+                  : "border-line-soft text-ink-600 hover:border-line hover:bg-[#fafbf9]"
+              }`}
+              onClick={() => setArchiveKnowledgeBaseId(knowledgeBase.id)}
+            >
+              <BookOpen size={15} />
+              <span className="min-w-0 flex-1 truncate">
+                {knowledgeBase.name}
+              </span>
+              {archiveKnowledgeBaseId === knowledgeBase.id && (
+                <Check size={14} />
+              )}
+            </button>
+          ))}
+        </div>
+      </AppDialog>
+
+      <AppDialog
+        open={deleteOpen}
+        title="删除文档"
+        description={`“${document.meta.title}”将从当前工作区删除，此操作不能直接撤销。`}
+        onClose={() => setDeleteOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteOpen(false)}
+              disabled={documentActionPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void deleteCurrentDocument()}
+              disabled={documentActionPending}
+            >
+              {documentActionPending ? "正在删除…" : "确认删除"}
+            </Button>
+          </>
+        }
+      >
+        <p className="rounded-xl bg-danger-50 px-3 py-2 text-xs leading-5 text-danger-700">
+          删除前会先确认当前内容已保存；如果保存失败，文档不会被删除。
+        </p>
+      </AppDialog>
     </div>
   );
 }
