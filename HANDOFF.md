@@ -53,12 +53,13 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T39 now that T25–T38 are completed:
+Start with T40 now that T25–T39 are completed:
 
-- Replace whole-workspace client search with server-side SQLite FTS5.
-- Index title, body, tags, path and filename with a Chinese-friendly query
-  strategy, result snippets, lifecycle filtering and pagination.
-- Keep search failures isolated to the search surface.
+- Add an AST-position-driven outline with accurate heading navigation.
+- Build true backlinks from the server-side link index, including hit snippets
+  and broken-link state.
+- Add a document information surface for assets, tags, recent revisions and
+  advanced properties without blocking the content column.
 
 T44 production migration and deployment still require explicit user
 authorization. Back up and verify the production SQLite database before release.

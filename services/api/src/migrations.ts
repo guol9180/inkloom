@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { filenameFromPath, searchIndexTerms } from "./search";
 
 type Migration = {
   version: number;
@@ -178,6 +179,68 @@ const MIGRATIONS: readonly Migration[] = [
           ON knowledge_bases(workspace_id, sort_order, created_at);
       `);
     }
+  },
+  {
+    version: 4,
+    name: "sqlite-fts5-document-search",
+    up(database) {
+      database.exec(`
+        CREATE VIRTUAL TABLE document_search USING fts5(
+          document_id UNINDEXED,
+          workspace_id UNINDEXED,
+          lifecycle UNINDEXED,
+          knowledge_base_id UNINDEXED,
+          title,
+          markdown,
+          tags,
+          path,
+          filename,
+          search_terms,
+          tokenize = 'unicode61 remove_diacritics 2'
+        );
+      `);
+      const rows = database
+        .prepare(
+          `SELECT id, workspace_id, lifecycle, knowledge_base_id, title,
+                  tags_json, markdown, path
+           FROM documents
+           WHERE deleted_at IS NULL`
+        )
+        .all() as Array<{
+        id: string;
+        workspace_id: string;
+        lifecycle: string;
+        knowledge_base_id: string | null;
+        title: string;
+        tags_json: string;
+        markdown: string;
+        path: string;
+      }>;
+      const insert = database.prepare(
+        `INSERT INTO document_search
+          (document_id, workspace_id, lifecycle, knowledge_base_id, title,
+           markdown, tags, path, filename, search_terms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const row of rows) {
+        const tags = parseStringArray(row.tags_json).join(" ");
+        const filename = filenameFromPath(row.path);
+        insert.run(
+          row.id,
+          row.workspace_id,
+          row.lifecycle,
+          row.knowledge_base_id,
+          row.title,
+          row.markdown,
+          tags,
+          row.path,
+          filename,
+          searchIndexTerms(
+            `${row.title}\n${row.markdown}\n${tags}\n${row.path}`
+          ).join(" ")
+        );
+      }
+    }
   }
 ];
 
@@ -254,6 +317,18 @@ function flattenLegacyDocumentPaths(
     const migratedPath = allocateFlatPath(row.path, workspacePaths);
     updateDocument.run(migratedPath, row.id);
     recordPath.run(row.id, row.workspace_id, row.path, migratedPath, migratedAt);
+  }
+}
+
+function parseStringArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) &&
+      parsed.every((item) => typeof item === "string")
+      ? parsed
+      : [];
+  } catch {
+    return [];
   }
 }
 

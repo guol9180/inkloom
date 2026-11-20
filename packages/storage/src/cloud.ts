@@ -37,6 +37,17 @@ export type CloudDocumentSummary = DocumentMeta & {
   excerpt: string;
 };
 
+export type CloudSearchResult = CloudDocumentSummary & {
+  snippet: string;
+};
+
+export type CloudSearchPage = {
+  results: CloudSearchResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type CloudKnowledgeBase = {
   id: string;
   workspaceId: WorkspaceId;
@@ -215,6 +226,20 @@ export class CloudClient {
       `/api/workspaces/${encodeURIComponent(workspaceId)}/notes/recent`
     );
     return response.documents;
+  }
+
+  async searchDocuments(
+    workspaceId: WorkspaceId,
+    input: { query: string; page?: number; pageSize?: number }
+  ): Promise<CloudSearchPage> {
+    const search = new URLSearchParams({
+      q: input.query,
+      page: String(input.page ?? 1),
+      pageSize: String(input.pageSize ?? 20)
+    });
+    return this.request<CloudSearchPage>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/search?${search}`
+    );
   }
 
   async listKnowledgeBases(

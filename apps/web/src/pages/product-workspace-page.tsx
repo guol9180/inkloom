@@ -8,7 +8,12 @@ import {
   type ReactNode,
   type RefObject
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Archive,
@@ -47,6 +52,7 @@ import {
 import type {
   CloudDocumentSummary,
   CloudKnowledgeBase,
+  CloudSearchResult,
   CloudWorkspace
 } from "@inkloom/storage";
 import type { CanvasScene } from "@inkloom/diagrams";
@@ -85,6 +91,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     (item) => item.id === workspaceId
   );
   const [query, setQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [createDialog, setCreateDialog] = useState<"note" | "knowledge" | null>(
@@ -112,6 +119,27 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     queryKey: ["notes", workspaceId, "recent"],
     queryFn: () => cloudClient.listRecentDocuments(workspaceId as WorkspaceId),
     enabled: Boolean(workspace)
+  });
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchTerm(query.trim());
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const search = useInfiniteQuery({
+    queryKey: ["search", workspaceId, searchTerm],
+    queryFn: ({ pageParam }) =>
+      cloudClient.searchDocuments(workspaceId as WorkspaceId, {
+        query: searchTerm,
+        page: pageParam,
+        pageSize: 20
+      }),
+    enabled: Boolean(workspace && searchTerm),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.page * lastPage.pageSize < lastPage.total
+        ? lastPage.page + 1
+        : undefined
   });
   const knowledgeBases = useQuery({
     queryKey: ["knowledge-bases", workspaceId],
@@ -356,6 +384,8 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
         item.excerpt.toLowerCase().includes(normalizedQuery) ||
         item.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery)))
   );
+  const searchResults =
+    search.data?.pages.flatMap((page) => page.results) ?? [];
 
   async function submitCreate() {
     const name = draftName.trim();
@@ -542,6 +572,14 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           onTagFilter={setTagFilter}
           notes={notes.data ?? []}
           recent={recent.data ?? []}
+          searchResults={searchResults}
+          searchPending={
+            Boolean(query.trim()) &&
+            (query.trim() !== searchTerm || search.isPending)
+          }
+          searchError={search.isError}
+          searchHasMore={search.hasNextPage}
+          onLoadMoreSearch={() => void search.fetchNextPage()}
           knowledgeBases={knowledgeBases.data ?? []}
           knowledgeDocuments={visibleSummaries}
           selectedKnowledgeBase={selectedKnowledgeBase}
@@ -796,6 +834,11 @@ function WorkspaceSidebar({
   onTagFilter,
   notes,
   recent,
+  searchResults,
+  searchPending,
+  searchError,
+  searchHasMore,
+  onLoadMoreSearch,
   knowledgeBases,
   knowledgeDocuments,
   selectedKnowledgeBase,
@@ -821,6 +864,11 @@ function WorkspaceSidebar({
   onTagFilter: (value: string) => void;
   notes: CloudDocumentSummary[];
   recent: CloudDocumentSummary[];
+  searchResults: CloudSearchResult[];
+  searchPending: boolean;
+  searchError: boolean;
+  searchHasMore: boolean;
+  onLoadMoreSearch: () => void;
   knowledgeBases: CloudKnowledgeBase[];
   knowledgeDocuments: CloudDocumentSummary[];
   selectedKnowledgeBase?: CloudKnowledgeBase;
@@ -968,7 +1016,51 @@ function WorkspaceSidebar({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-        {mode === "notes" ? (
+        {normalizedQuery ? (
+          searchError ? (
+            <div className="mx-1 rounded-xl border border-danger-200 bg-danger-50 px-3 py-3 text-xs leading-5 text-danger-700">
+              搜索暂时不可用，文档内容没有受到影响。
+            </div>
+          ) : searchPending ? (
+            <div className="grid gap-2 px-1 py-3">
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton key={index} className="h-11 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : searchResults.length === 0 ? (
+            <p className="px-3 py-8 text-center text-xs leading-5 text-ink-400">
+              没有找到匹配内容。
+            </p>
+          ) : (
+            <>
+              <SearchResultGroup
+                title="随记"
+                results={searchResults.filter(
+                  (item) => item.lifecycle === "scratch"
+                )}
+                workspaceId={workspaceId}
+                activeDocumentId={documentId}
+              />
+              <SearchResultGroup
+                title="知识库"
+                results={searchResults.filter(
+                  (item) => item.lifecycle === "knowledge"
+                )}
+                workspaceId={workspaceId}
+                activeDocumentId={documentId}
+              />
+              {searchHasMore && (
+                <button
+                  type="button"
+                  className="mx-1 mt-2 min-h-9 w-[calc(100%-0.5rem)] rounded-lg border border-line-soft text-xs font-semibold text-ink-500 transition hover:bg-[#f7f8f6] hover:text-ink-900"
+                  onClick={onLoadMoreSearch}
+                >
+                  加载更多
+                </button>
+              )}
+            </>
+          )
+        ) : mode === "notes" ? (
           <>
             {recent.length > 0 && !normalizedQuery && (
               <SidebarGroup icon={<Clock3 size={13} />} title="最近">
@@ -1180,6 +1272,99 @@ function SidebarGroup({
       <div className="grid gap-0.5">{children}</div>
     </section>
   );
+}
+
+function SearchResultGroup({
+  title,
+  results,
+  workspaceId,
+  activeDocumentId
+}: {
+  title: string;
+  results: CloudSearchResult[];
+  workspaceId: string;
+  activeDocumentId?: string;
+}) {
+  const navigate = useNavigate();
+  if (results.length === 0) return null;
+  return (
+    <SidebarGroup
+      icon={title === "随记" ? <FileText size={13} /> : <BookOpen size={13} />}
+      title={`${title} · ${results.length}`}
+    >
+      {results.map((item) => {
+        const route =
+          item.lifecycle === "knowledge" && item.knowledgeBaseId
+            ? `/workspaces/${encodeURIComponent(
+                workspaceId
+              )}/knowledge/${encodeURIComponent(
+                item.knowledgeBaseId
+              )}/${encodeURIComponent(item.id)}`
+            : `/workspaces/${encodeURIComponent(
+                workspaceId
+              )}/notes/${encodeURIComponent(item.id)}`;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className={`flex min-h-11 w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left transition ${
+              item.id === activeDocumentId
+                ? "bg-[#eef3ef] text-ink-950 ring-1 ring-brand-200/60"
+                : "text-ink-600 hover:bg-[#f7f8f6] hover:text-ink-900"
+            }`}
+            onClick={() => navigate(route)}
+          >
+            <FileText size={14} className="mt-0.5 shrink-0 text-ink-300" />
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-xs font-semibold">
+                {item.title}
+              </strong>
+              <small className="mt-0.5 line-clamp-2 block text-[0.62rem] leading-4 text-ink-400">
+                <HighlightedSearchText value={item.snippet || item.excerpt} />
+              </small>
+              {item.tags.length > 0 && (
+                <span className="mt-1 flex flex-wrap gap-1">
+                  {item.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-[#f4f6f3] px-1.5 py-0.5 text-[0.55rem] font-medium text-ink-400"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </SidebarGroup>
+  );
+}
+
+function HighlightedSearchText({ value }: { value: string }) {
+  const parts = value.split(/(<mark>|<\/mark>)/i);
+  let highlighted = false;
+  return parts.map((part, index) => {
+    if (/^<mark>$/i.test(part)) {
+      highlighted = true;
+      return null;
+    }
+    if (/^<\/mark>$/i.test(part)) {
+      highlighted = false;
+      return null;
+    }
+    return highlighted ? (
+      <mark
+        key={`${index}-${part}`}
+        className="rounded bg-sun-100 px-0.5 text-ink-800"
+      >
+        {part}
+      </mark>
+    ) : (
+      part
+    );
+  });
 }
 
 function DocumentRow({

@@ -859,6 +859,116 @@ describe("InkLoom API", () => {
     );
     expect(forbidden.status).toBe(404);
   });
+
+  it("searches Chinese text, tags, filenames and archived documents with pagination", async () => {
+    const fixture = await startServer();
+    const writer = await register(fixture, "search@example.com", "secret-123");
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: writer.cookie }
+    );
+    const workspaceId = workspaces.workspaces[0].id;
+    const create = (input: {
+      title: string;
+      path: string;
+      markdown: string;
+      tags: string[];
+    }) =>
+      json<{ document: { meta: { id: string; revision: number } } }>(
+        fixture,
+        `/api/workspaces/${workspaceId}/documents`,
+        {
+          method: "POST",
+          cookie: writer.cookie,
+          body: input
+        }
+      );
+
+    const databaseDocument = await create({
+      title: "数据库设计",
+      path: "产品/数据库设计.md",
+      markdown: "# 数据库设计\n\n索引与事务方案包含中文检索。",
+      tags: ["产品", "架构"]
+    });
+    await create({
+      title: "API 指南",
+      path: "产品/API 指南.md",
+      markdown: "# API 指南\n\nInkLoom service endpoints.",
+      tags: ["产品", "engineering"]
+    });
+    await create({
+      title: "无关文档",
+      path: "无关文档.md",
+      markdown: "只有普通内容。",
+      tags: []
+    });
+
+    const knowledgeBase = await json<{
+      knowledgeBase: { id: string };
+    }>(fixture, `/api/workspaces/${workspaceId}/knowledge-bases`, {
+      method: "POST",
+      cookie: writer.cookie,
+      body: { name: "产品知识" }
+    });
+    await json(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${databaseDocument.document.meta.id}/archive`,
+      {
+        method: "POST",
+        cookie: writer.cookie,
+        body: {
+          knowledgeBaseId: knowledgeBase.knowledgeBase.id,
+          baseRevision: databaseDocument.document.meta.revision
+        }
+      }
+    );
+
+    const chinese = await json<{
+      results: Array<{
+        id: string;
+        lifecycle: string;
+        snippet: string;
+        knowledgeBaseId?: string;
+      }>;
+      total: number;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/search?q=${encodeURIComponent("索引")}`,
+      { cookie: writer.cookie }
+    );
+    expect(chinese.total).toBe(1);
+    expect(chinese.results[0]).toMatchObject({
+      id: databaseDocument.document.meta.id,
+      lifecycle: "knowledge",
+      knowledgeBaseId: knowledgeBase.knowledgeBase.id
+    });
+    expect(chinese.results[0].snippet).toContain("<mark>");
+
+    const english = await json<{
+      results: Array<{ title: string }>;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/search?q=${encodeURIComponent("API")}`,
+      { cookie: writer.cookie }
+    );
+    expect(english.results[0].title).toBe("API 指南");
+
+    const firstPage = await json<{
+      results: Array<{ title: string }>;
+      total: number;
+      page: number;
+      pageSize: number;
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/search?q=${encodeURIComponent(
+        "产品"
+      )}&page=1&pageSize=1`,
+      { cookie: writer.cookie }
+    );
+    expect(firstPage).toMatchObject({ total: 2, page: 1, pageSize: 1 });
+    expect(firstPage.results).toHaveLength(1);
+  });
 });
 
 async function startServer(): Promise<TestServer> {

@@ -358,6 +358,87 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   ).toBeVisible();
 });
 
+test("searches scratch and knowledge documents through the server index", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("跨库全文搜索关键词");
+  await createKnowledgeBaseFromMenu(page, "搜索知识库");
+  await page.getByRole("button", { name: "随记", exact: true }).click();
+  const archivedCandidate = page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "跨库全文搜索关键词" });
+  await expect(archivedCandidate).toBeVisible();
+  await archivedCandidate.click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "归档到知识库" }).click();
+  await page
+    .getByRole("dialog", { name: "归档到知识库" })
+    .getByRole("button", { name: "确认归档" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "新建随记" })
+    .click();
+  await page.getByLabel("Markdown 正文").click();
+  const secondSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    ).includes("普通随记全文搜索关键词");
+  });
+  await page.keyboard.type("普通随记全文搜索关键词");
+  await secondSave;
+
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      /\/api\/workspaces\/[^/]+\/search$/.test(url.pathname) &&
+      url.searchParams.get("q") === "全文搜索"
+    );
+  });
+  await page.getByPlaceholder("搜索").fill("全文搜索");
+  const response = await searchResponse;
+  expect(response.ok()).toBe(true);
+  const payload = (await response.json()) as {
+    results: Array<{
+      lifecycle: string;
+      snippet: string;
+    }>;
+    total: number;
+  };
+  expect(payload.total).toBe(2);
+  expect(payload.results.some((item) => item.lifecycle === "knowledge")).toBe(
+    true
+  );
+  await expect(page.getByText("随记 · 1")).toBeVisible();
+  await expect(page.getByText("知识库 · 1")).toBeVisible();
+  await expect(page.locator("mark").first()).toBeVisible();
+
+  await page
+    .locator("aside")
+    .getByRole("button")
+    .filter({ hasText: "跨库全文搜索关键词" })
+    .click();
+  await expect(page).toHaveURL(/\/knowledge\/[^/]+\/[^/]+$/);
+  await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "true"
+  );
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {

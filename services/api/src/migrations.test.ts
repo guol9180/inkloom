@@ -121,14 +121,19 @@ describe("data model migrations", () => {
       ).toEqual([
         { version: 1, name: "legacy-document-baseline" },
         { version: 2, name: "scratch-knowledge-assets" },
-        { version: 3, name: "knowledge-base-revisions" }
+        { version: 3, name: "knowledge-base-revisions" },
+        { version: 4, name: "sqlite-fts5-document-search" }
       ]);
+      expect(
+        database.db.prepare("SELECT COUNT(*) AS count FROM document_search").get()
+      ).toEqual({ count: 3 });
 
       for (const table of [
         "knowledge_bases",
         "assets",
         "document_asset_refs",
         "document_links",
+        "document_search",
         "schema_migrations"
       ]) {
         expect(
@@ -165,7 +170,7 @@ describe("data model migrations", () => {
       ).toEqual({ count: 4 });
       expect(
         reopened.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
-      ).toEqual({ count: 3 });
+      ).toEqual({ count: 4 });
       expect(
         reopened.db
           .prepare("SELECT COUNT(*) AS count FROM document_path_migrations")
@@ -202,7 +207,7 @@ describe("data model migrations", () => {
       });
       expect(
         restored.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
-      ).toEqual({ count: 3 });
+      ).toEqual({ count: 4 });
     } finally {
       restored.close();
     }

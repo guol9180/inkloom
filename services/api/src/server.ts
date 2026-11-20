@@ -263,6 +263,27 @@ async function route({
   if (segments[0] === "api" && segments[1] === "workspaces" && segments[2]) {
     const workspaceId = segments[2];
 
+    if (method === "GET" && segments[3] === "search") {
+      const query = (url.searchParams.get("q") ?? "").trim();
+      if (query.length > 200) {
+        throw new ApiHttpError(413, "QUERY_TOO_LONG", "搜索词不能超过 200 个字符。");
+      }
+      const page = parsePositiveInteger(url.searchParams.get("page") ?? undefined);
+      const pageSize = parsePositiveInteger(
+        url.searchParams.get("pageSize") ?? undefined
+      );
+      sendJson(
+        response,
+        200,
+        database.searchDocuments(user.id, workspaceId, {
+          query,
+          page,
+          pageSize
+        })
+      );
+      return;
+    }
+
     if (segments[3] === "assets") {
       if (!database.getWorkspace(user.id, workspaceId)) {
         throw new ApiHttpError(404, "WORKSPACE_NOT_FOUND", "找不到工作区。");

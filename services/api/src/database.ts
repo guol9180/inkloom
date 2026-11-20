@@ -19,6 +19,12 @@ import {
 } from "@inkloom/core";
 import { hashSessionToken } from "./auth";
 import { runMigrations } from "./migrations";
+import {
+  buildFtsQuery,
+  filenameFromPath,
+  highlightSearchSnippet,
+  searchIndexTerms
+} from "./search";
 
 export type ApiUser = {
   id: string;
@@ -53,6 +59,17 @@ export type DocumentSort = "updated" | "created" | "title";
 
 export type ApiDocumentSummary = DocumentMeta & {
   excerpt: string;
+};
+
+export type ApiSearchResult = ApiDocumentSummary & {
+  snippet: string;
+};
+
+export type ApiSearchPage = {
+  results: ApiSearchResult[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 export type AssetKind = "image" | "attachment" | "excalidraw" | "svg";
@@ -135,6 +152,11 @@ type AssetRow = {
   kind: AssetKind;
   storage_key: string;
   created_at: string;
+};
+
+type SearchRow = DocumentRow & {
+  snippet: string;
+  rank: number;
 };
 
 export type WorkspaceDocumentRevision = DocumentSnapshot & {
@@ -234,6 +256,7 @@ export class DocumentDatabase {
           timestamp
         );
     });
+    this.syncDocumentSearch(workspaceId, documentId);
 
     return { id: userId, email, displayName, createdAt: timestamp };
   }
@@ -509,6 +532,9 @@ export class DocumentDatabase {
         .run(knowledgeBaseId, workspaceId);
       this.touchWorkspace(workspaceId, timestamp);
     });
+    for (const row of documents) {
+      this.syncDocumentSearch(workspaceId, row.id);
+    }
 
     return documents.map((row) =>
       this.readDocument(userId, workspaceId, row.id)
@@ -558,6 +584,71 @@ export class DocumentDatabase {
     );
   }
 
+  searchDocuments(
+    userId: string,
+    workspaceId: string,
+    input: { query: string; page?: number; pageSize?: number }
+  ): ApiSearchPage {
+    this.requireWorkspace(userId, workspaceId);
+    const query = buildFtsQuery(input.query);
+    const page = Math.max(1, Math.floor(input.page ?? 1));
+    const pageSize = Math.min(50, Math.max(1, Math.floor(input.pageSize ?? 20)));
+    if (!query) return { results: [], total: 0, page, pageSize };
+    const offset = (page - 1) * pageSize;
+    const rows = this.db
+      .prepare(
+        `SELECT d.*,
+                snippet(document_search, 5, '<mark>', '</mark>', '…', 36)
+                  AS snippet,
+                bm25(
+                  document_search,
+                  0.0, 0.0, 0.0, 0.0,
+                  8.0, 2.5, 4.0, 4.5, 5.0, 0.5
+                )
+                  AS rank
+         FROM document_search
+         JOIN documents d ON d.id = document_search.document_id
+         WHERE document_search MATCH ?
+           AND d.workspace_id = ?
+           AND d.deleted_at IS NULL
+         ORDER BY rank ASC, d.updated_at DESC, d.id ASC
+         LIMIT ? OFFSET ?`
+      )
+      .all(query, workspaceId, pageSize, offset) as SearchRow[];
+    const total = (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM document_search
+           JOIN documents d ON d.id = document_search.document_id
+           WHERE document_search MATCH ?
+             AND d.workspace_id = ?
+             AND d.deleted_at IS NULL`
+        )
+        .get(query, workspaceId) as { count: number }
+    ).count;
+    return {
+      results: rows.map((row) => {
+        const document = documentFromRow(row);
+        const highlighted = highlightSearchSnippet(
+          document.markdown,
+          input.query
+        );
+        return {
+          ...document.meta,
+          excerpt: markdownExcerpt(document.markdown),
+          snippet:
+            highlighted ||
+            row.snippet ||
+            markdownExcerpt(document.markdown)
+        };
+      }),
+      total,
+      page,
+      pageSize
+    };
+  }
+
   archiveDocument(
     userId: string,
     workspaceId: string,
@@ -601,6 +692,7 @@ export class DocumentDatabase {
         );
       this.touchWorkspace(workspaceId, timestamp);
     });
+    this.syncDocumentSearch(workspaceId, documentId);
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -639,6 +731,7 @@ export class DocumentDatabase {
         .run(nextPath, timestamp, documentId, workspaceId);
       this.touchWorkspace(workspaceId, timestamp);
     });
+    this.syncDocumentSearch(workspaceId, documentId);
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -745,6 +838,7 @@ export class DocumentDatabase {
       markdown,
       timestamp
     );
+    this.syncDocumentSearch(workspaceId, snapshot.meta.id);
     this.touchWorkspace(workspace.id, timestamp);
     return snapshot;
   }
@@ -806,6 +900,7 @@ export class DocumentDatabase {
       this.touchWorkspace(workspaceId, timestamp);
     });
 
+    this.syncDocumentSearch(workspaceId, documentId);
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -834,6 +929,7 @@ export class DocumentDatabase {
       )
       .run(path, timestamp, documentId, workspaceId);
     this.touchWorkspace(workspaceId, timestamp);
+    this.syncDocumentSearch(workspaceId, documentId);
     const snapshot = documentFromRow(this.requireDocument(workspaceId, documentId));
     return {
       kind: "document",
@@ -862,6 +958,7 @@ export class DocumentDatabase {
       )
       .run(timestamp, timestamp, documentId, workspaceId);
     this.touchWorkspace(workspaceId, timestamp);
+    this.syncDocumentSearch(workspaceId, documentId);
   }
 
   listRevisions(
@@ -1221,6 +1318,45 @@ export class DocumentDatabase {
     for (const hash of hashes) {
       insert.run(documentId, timestamp, workspaceId, hash);
     }
+  }
+
+  private syncDocumentSearch(workspaceId: string, documentId: string): void {
+    this.db
+      .prepare(
+        "DELETE FROM document_search WHERE document_id = ? AND workspace_id = ?"
+      )
+      .run(documentId, workspaceId);
+    const row = this.db
+      .prepare(
+        `SELECT * FROM documents
+         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`
+      )
+      .get(documentId, workspaceId) as DocumentRow | undefined;
+    if (!row) return;
+    const tags = parseTags(row.tags_json);
+    const tagText = tags.join(" ");
+    const filename = filenameFromPath(row.path);
+    this.db
+      .prepare(
+        `INSERT INTO document_search
+          (document_id, workspace_id, lifecycle, knowledge_base_id, title,
+           markdown, tags, path, filename, search_terms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        row.id,
+        row.workspace_id,
+        row.lifecycle,
+        row.knowledge_base_id,
+        row.title,
+        row.markdown,
+        tagText,
+        row.path,
+        filename,
+        searchIndexTerms(
+          `${row.title}\n${row.markdown}\n${tagText}\n${row.path}`
+        ).join(" ")
+      );
   }
 
   private touchWorkspace(workspaceId: string, timestamp: string): void {
