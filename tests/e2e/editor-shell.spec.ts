@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZbS8AAAAASUVORK5CYII=",
@@ -426,6 +426,7 @@ test("searches scratch and knowledge documents through the server index", async 
   await expect(page.getByText("随记 · 1")).toBeVisible();
   await expect(page.getByText("知识库 · 1")).toBeVisible();
   await expect(page.locator("mark").first()).toBeVisible();
+  await captureUiReview(page, "t39-search-1440x960.png");
 
   await page
     .locator("aside")
@@ -501,6 +502,7 @@ test("shows AST outline, real backlinks and broken-link context", async ({
   await expect(panel.getByText("缺失文档").first()).toBeVisible();
   await expect(panel.getByText("断链").first()).toBeVisible();
   await expect(panel.getByText("上下文来源.md").first()).toBeVisible();
+  await captureUiReview(page, "t40-context-1440x960.png");
 
   const scroller = page
     .getByLabel("Markdown 正文")
@@ -604,6 +606,10 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
   await expect(drawer.getByLabel("Markdown 正文")).not.toContainText(
     "版本二内容"
   );
+  await expect(
+    drawer.locator(".inkloom-mermaid-svg svg").first()
+  ).toBeVisible({ timeout: 15_000 });
+  await captureUiReview(page, "t41-history-1440x960.png");
 
   await drawer.getByRole("button", { name: "块差异" }).click();
   await expect(drawer.getByText("新增").first()).toBeVisible();
@@ -938,6 +944,7 @@ test("edits Mermaid source beside a live preview and restores it", async ({
   await expect(
     restored.locator(".inkloom-mermaid-svg svg").first()
   ).toBeVisible({ timeout: 15_000 });
+  await captureUiReview(page, "t34-mermaid-1440x960.png");
 
   await page.setViewportSize({ width: 320, height: 720 });
   await page.waitForTimeout(250);
@@ -953,6 +960,7 @@ test("edits Mermaid source beside a live preview and restores it", async ({
     content: document.documentElement.scrollWidth
   }));
   expect(overflow.content).toBeLessThanOrEqual(overflow.viewport);
+  await captureUiReview(page, "t34-mermaid-320x720.png");
 });
 
 test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
@@ -1041,7 +1049,13 @@ test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
   const restored = page.locator(".inkloom-canvas-view").last();
   await expect(restored).toBeVisible();
   await expect(restored.locator("img")).toBeVisible({ timeout: 15_000 });
+  await expect(restored.locator(".inkloom-canvas-preview")).toHaveAttribute(
+    "data-state",
+    "ready",
+    { timeout: 15_000 }
+  );
   await expect(page.locator(".excalidraw")).toHaveCount(0);
+  await captureUiReview(page, "t35-canvas-1440x960.png");
 
   await page.setViewportSize({ width: 320, height: 720 });
   await page.waitForTimeout(250);
@@ -1050,6 +1064,7 @@ test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
     content: document.documentElement.scrollWidth
   }));
   expect(overflow.content).toBeLessThanOrEqual(overflow.viewport);
+  await captureUiReview(page, "t35-canvas-320x720.png");
 });
 
 test("migrates legacy canvas extensions without deleting the source data", async ({
@@ -1433,4 +1448,11 @@ async function createKnowledgeBaseFromMenu(page: Page, name: string) {
   await dialog.getByLabel("知识库名称").fill(name);
   await dialog.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/knowledge\/[^/]+$/);
+}
+
+async function captureUiReview(page: Page, filename: string) {
+  mkdirSync("test-results/ui-review", { recursive: true });
+  await page.screenshot({
+    path: `test-results/ui-review/${filename}`
+  });
 }

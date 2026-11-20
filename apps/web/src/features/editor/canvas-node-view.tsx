@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { CanvasBlockAttrs } from "@inkloom/editor";
 import { cloudClient } from "../../cloud-workspace";
@@ -128,6 +128,7 @@ function CanvasBlock({
   const [state, setState] = useState<"loading" | "ready" | "missing">(
     "loading"
   );
+  const imageRef = useRef<HTMLImageElement>(null);
   const source =
     workspaceId && canvas.previewHash
       ? cloudClient.assetUrl(workspaceId as WorkspaceId, canvas.previewHash)
@@ -135,6 +136,10 @@ function CanvasBlock({
 
   useEffect(() => {
     setState(source ? "loading" : "missing");
+    const image = imageRef.current;
+    if (source && image?.complete) {
+      setState(image.naturalWidth > 0 ? "ready" : "missing");
+    }
   }, [source]);
 
   return (
@@ -182,6 +187,7 @@ function CanvasBlock({
         )}
         {source && (
           <img
+            ref={imageRef}
             src={source}
             alt={`${canvas.title}预览`}
             onLoad={() => setState("ready")}
