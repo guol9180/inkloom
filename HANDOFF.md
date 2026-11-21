@@ -18,7 +18,7 @@
 - API: `https://api.inkloom.imhgl.com`.
 - Repository: `https://github.com/guol9180/inkloom`, branch `main`.
 - Production application release:
-  `27a4a4115717ae9eacf242ceede0b221c661701a`.
+  `cc67f89aa7c751d044944595f257d5e36b6dad9f`.
 - Current production is the completed M1.1 product-grade editor and knowledge
   workflow.
 - The current release update preserved the existing production data and did not
@@ -32,9 +32,7 @@ the milestone state and verification evidence are recorded in
 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 T49 adds real workspace settings, resilient blank-canvas saving, and the clean
-empty-document layout. Its source and local verification are complete, but the
-production release above still has to be replaced by a deployment containing
-this task.
+empty-document layout. It is deployed in the production release above.
 
 ## Locked Product Decisions
 
@@ -86,4 +84,6 @@ Final container and data checks:
 - `inkloom-api`, `inkloom-web` and `platform-edge` are healthy.
 - `inkloom-api` and `inkloom-web` are running the release SHA above.
 - The existing SQLite data volume was retained during this release.
-- No container restart or OOM was observed after release.
+- API health, asset-upload CORS preflight, CSP, HSTS and frame-denial headers
+  passed independent production checks after release.
+- No OOM was observed after release.
