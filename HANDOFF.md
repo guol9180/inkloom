@@ -17,15 +17,18 @@
 - Web: `https://inkloom.imhgl.com`.
 - API: `https://api.inkloom.imhgl.com`.
 - Repository: `https://github.com/guol9180/inkloom`, branch `main`.
-- Production application release remains
-  `68578214d526c132c0b8ee9af4d744b2004ea45d`.
-- Current production is the completed M1 Web cloud workspace.
+- Production application release:
+  `2e1e3173374d6e0b0c78ccc8282b8e8822e45dff`.
+- Current production is the completed M1.1 product-grade editor and knowledge
+  workflow.
+- Production was intentionally initialized without migrating old data. A
+  temporary API smoke test was removed afterward; the final database has zero
+  users, workspaces, documents, knowledge bases and assets.
 - The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
   and must not enter the Web release image.
 
-M1.1 has been re-planned as **product-grade editor and knowledge workflow**.
-The product and UX decisions are documented; implementation is tracked from
-T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+M1.1 is complete and released. T25–T44 are closed; the milestone state and
+verification evidence are recorded in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Locked Product Decisions
 
@@ -53,15 +56,8 @@ T24 in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Next Work
 
-Start with T44 after explicit user authorization; T25–T43 are completed:
-
-- Do not deploy until the user explicitly instructs it.
-- Back up and verify the production SQLite database and asset volume first.
-- Record the current production release SHA, rollback material and post-deploy
-  verification evidence.
-
-T44 production migration and deployment still require explicit user
-authorization. Back up and verify the production SQLite database before release.
+There is no active product-development task after M1.1. The next milestone must
+be explicitly selected in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 Do not resume desktop, M2 synchronization, real-time collaboration or mobile
 work without explicit user confirmation.
@@ -79,5 +75,10 @@ The last production check returned:
 }
 ```
 
-The documentation reset itself must be verified in the T24 progress entry before
-this handoff is considered current.
+Final container and data checks:
+
+- `inkloom-api`, `inkloom-web` and `platform-edge` are healthy.
+- `inkloom-api` and `inkloom-web` are running the release SHA above.
+- The data volume contains only the initialized SQLite database, WAL and SHM
+  files; all business-table row counts are zero.
+- No container restart or OOM was observed after release.

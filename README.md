@@ -13,22 +13,20 @@ The production Web MVP is available at:
 - Web: `https://inkloom.imhgl.com`
 - API: `https://api.inkloom.imhgl.com`
 
-The current production release supports:
+The current production release is **M1.1: product-grade editor and knowledge
+workflow**, and supports:
 
 - Email registration, login, logout and HttpOnly sessions.
 - User-isolated cloud workspaces.
-- Markdown documents, tags, revisions, history and conflict copies.
-- Single-area Milkdown editing and responsive Web UI.
-- Mermaid and Excalidraw editing.
+- Flat scratch notes and user-created knowledge bases.
+- Markdown documents, tags, revisions, history, search and conflict copies.
+- Product-level Milkdown editing, preview-first knowledge documents and a
+  responsive Web UI.
+- Content-addressed assets, Mermaid and Excalidraw editing.
 
-InkLoom is now preparing the next Web release, **M1.1: product-grade editor and
-knowledge workflow**. M1.1 changes the navigation model to scratch notes and
-flat knowledge bases, rebuilds the product-level editor shell, adds
-content-addressed assets and introduces preview-first knowledge-base reading.
-
-The implementation is not complete until its task cards in
-[DEVELOP_PLAN.md](./DEVELOP_PLAN.md) are closed. Production continues to run the
-previous M1 release until a later approved deployment.
+The M1.1 release is complete. Further desktop, synchronization, collaboration
+and mobile milestones remain paused until explicitly approved in
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Product Model
 
