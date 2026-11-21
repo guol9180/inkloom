@@ -223,6 +223,61 @@ test("skips autosave when content returns to the persisted hash", async ({
   expect(writes).toBe(0);
 });
 
+test("keeps edits made while a successful autosave is in flight", async ({
+  page
+}) => {
+  await registerUser(page);
+  await createScratchNote(page);
+
+  const routePattern = /\/api\/workspaces\/[^/]+\/documents\/[^/]+$/;
+  let putCount = 0;
+  let signalFirstResponseFetched = () => {};
+  let releaseFirstResponse = () => {};
+  const firstResponseFetched = new Promise<void>((resolve) => {
+    signalFirstResponseFetched = resolve;
+  });
+  const firstResponseGate = new Promise<void>((resolve) => {
+    releaseFirstResponse = resolve;
+  });
+  await page.route(routePattern, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    putCount += 1;
+    if (putCount > 1) {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    signalFirstResponseFetched();
+    await firstResponseGate;
+    await route.fulfill({ response });
+  });
+
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("第一次自动保存");
+  await firstResponseFetched;
+
+  await page.keyboard.type("，保存期间继续输入");
+  const secondSave = page.waitForRequest(
+    (request) =>
+      request.method() === "PUT" &&
+      routePattern.test(new URL(request.url()).pathname)
+  );
+  releaseFirstResponse();
+  await secondSave;
+  await expect(page.getByText(/已保存/).first()).toBeVisible({
+    timeout: 15_000
+  });
+
+  await page.reload();
+  await expect(page.getByLabel("Markdown 正文")).toContainText(
+    "第一次自动保存，保存期间继续输入"
+  );
+});
+
 test("creates and refreshes a flat knowledge base route", async ({ page }) => {
   await registerUser(page);
   await page.getByRole("button", { name: "知识库", exact: true }).click();

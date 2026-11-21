@@ -56,6 +56,7 @@ export function useDocumentAutosave({
   const [conflictCopy, setConflictCopy] = useState<ConflictCopy | undefined>(
     undefined
   );
+  const documentRef = useRef(document);
   const markdownRef = useRef(document.markdown);
   const tagsRef = useRef<readonly string[]>(document.meta.tags);
   const currentHashRef = useRef(String(document.meta.contentHash));
@@ -76,6 +77,7 @@ export function useDocumentAutosave({
   activeRef.current = active;
   onSavedRef.current = onSaved;
   onConflictCopyRef.current = onConflictCopy;
+  documentRef.current = document;
 
   const scope = useMemo(
     () => ({
@@ -102,24 +104,25 @@ export function useDocumentAutosave({
   const persistDraft = useCallback(
     async (value = markdownRef.current) => {
       if (!userId) return;
+      const currentDocument =
+        documentRef.current.meta.id === scope.documentId
+          ? documentRef.current
+          : document;
       const hash = await hashMarkdown(value);
       const draft: IndexedDbDocumentDraft = {
         key: `${scope.userId}:${scope.workspaceId}:${scope.documentId}`,
         ...scope,
-        title: document.meta.title,
+        title: currentDocument.meta.title,
         markdown: value,
         tags: [...tagsRef.current],
         baseRevision: revisionRef.current,
         contentHash: hash,
-        extensions: document.extensions,
+        extensions: currentDocument.extensions,
         savedAt: new Date().toISOString()
       };
       await draftStore.put(draft);
     },
     [
-      document.meta.id,
-      document.meta.title,
-      document.extensions,
       scope.documentId,
       scope.userId,
       scope.workspaceId,
@@ -129,26 +132,30 @@ export function useDocumentAutosave({
 
   const preserveConflictCopy = useCallback(
     async (localMarkdown: string) => {
+      const currentDocument =
+        documentRef.current.meta.id === scope.documentId
+          ? documentRef.current
+          : document;
       const adapter = cloudClient.workspace(
-        document.meta.workspaceId as WorkspaceId
+        scope.workspaceId as WorkspaceId
       );
       const notes = await cloudClient.listNotes(
-        document.meta.workspaceId as WorkspaceId
+        scope.workspaceId as WorkspaceId
       );
       const usedPaths = new Set(notes.map((note) => note.path.toLowerCase()));
-      const title = conflictTitle(document.meta.title);
+      const title = conflictTitle(currentDocument.meta.title);
       let path = uniqueConflictPath(title, usedPaths);
       const copy = await adapter.createDocument({
-        workspaceId: document.meta.workspaceId as WorkspaceId,
+        workspaceId: scope.workspaceId as WorkspaceId,
         path: workspacePath(path),
         title,
         markdown: localMarkdown,
         tags: [...tagsRef.current, "冲突副本"],
-        extensions: document.extensions
+        extensions: currentDocument.extensions
       });
       onConflictCopyRef.current(copy);
 
-      const server = await adapter.readDocument(document.meta.id);
+      const server = await adapter.readDocument(scope.documentId);
       revisionRef.current = server.meta.revision;
       lastPersistedHashRef.current = String(server.meta.contentHash);
       const serverHash = await hashMarkdown(server.markdown);
@@ -167,12 +174,7 @@ export function useDocumentAutosave({
       onSavedRef.current(server);
       return copy;
     },
-    [
-      document.extensions,
-      document.meta.id,
-      document.meta.title,
-      scope
-    ]
+    [scope]
   );
 
   const drainSaves = useCallback(async (): Promise<boolean> => {
@@ -211,16 +213,20 @@ export function useDocumentAutosave({
             setError("");
           }
           try {
+            const currentDocument =
+              documentRef.current.meta.id === scope.documentId
+                ? documentRef.current
+                : document;
             const saved = await cloudClient
-              .workspace(document.meta.workspaceId as WorkspaceId)
+              .workspace(scope.workspaceId as WorkspaceId)
               .writeDocument({
-                documentId: document.meta.id,
+                documentId: scope.documentId,
                 baseRevision: revisionRef.current,
                 checkpoint: pending.checkpoint,
                 markdown: value,
-                title: document.meta.title,
+                title: currentDocument.meta.title,
                 tags: [...tagsRef.current],
-                extensions: document.extensions
+                extensions: currentDocument.extensions
               });
             revisionRef.current = saved.meta.revision;
             lastPersistedHashRef.current = String(saved.meta.contentHash);
@@ -282,15 +288,7 @@ export function useDocumentAutosave({
       return successful;
     })();
     return drainPromiseRef.current;
-  }, [
-    document.meta.id,
-    document.meta.title,
-    document.meta.workspaceId,
-    document.extensions,
-    persistDraft,
-    preserveConflictCopy,
-    scope
-  ]);
+  }, [persistDraft, preserveConflictCopy, scope]);
 
   const flush = useCallback(
     (checkpoint: boolean) => {
@@ -390,9 +388,6 @@ export function useDocumentAutosave({
   }, [
     active,
     clearTimers,
-    flush,
-    persistDraft,
-    scheduleAutosave,
     scope.documentId,
     scope.userId,
     scope.workspaceId,
