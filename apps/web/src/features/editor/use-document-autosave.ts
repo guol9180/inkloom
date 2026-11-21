@@ -47,6 +47,7 @@ export function useDocumentAutosave({
   onSaved: (snapshot: DocumentSnapshot) => void;
   onConflictCopy: (snapshot: DocumentSnapshot) => void;
 }) {
+  const [title, setTitleState] = useState(document.meta.title);
   const [markdown, setMarkdownState] = useState(document.markdown);
   const [tags, setTagsState] = useState<readonly string[]>(document.meta.tags);
   const [status, setStatus] = useState<AutosaveStatus>("saved");
@@ -57,11 +58,13 @@ export function useDocumentAutosave({
     undefined
   );
   const documentRef = useRef(document);
+  const titleRef = useRef(document.meta.title);
   const markdownRef = useRef(document.markdown);
   const tagsRef = useRef<readonly string[]>(document.meta.tags);
   const currentHashRef = useRef(String(document.meta.contentHash));
   const revisionRef = useRef(document.meta.revision);
   const lastPersistedHashRef = useRef(String(document.meta.contentHash));
+  const persistedTitleRef = useRef(document.meta.title);
   const persistedTagsRef = useRef<readonly string[]>(document.meta.tags);
   const activeRef = useRef(active);
   const mountedRef = useRef(true);
@@ -112,7 +115,7 @@ export function useDocumentAutosave({
       const draft: IndexedDbDocumentDraft = {
         key: `${scope.userId}:${scope.workspaceId}:${scope.documentId}`,
         ...scope,
-        title: currentDocument.meta.title,
+        title: titleRef.current,
         markdown: value,
         tags: [...tagsRef.current],
         baseRevision: revisionRef.current,
@@ -143,7 +146,7 @@ export function useDocumentAutosave({
         scope.workspaceId as WorkspaceId
       );
       const usedPaths = new Set(notes.map((note) => note.path.toLowerCase()));
-      const title = conflictTitle(currentDocument.meta.title);
+      const title = conflictTitle(titleRef.current);
       let path = uniqueConflictPath(title, usedPaths);
       const copy = await adapter.createDocument({
         workspaceId: scope.workspaceId as WorkspaceId,
@@ -196,10 +199,12 @@ export function useDocumentAutosave({
             tagsRef.current,
             persistedTagsRef.current
           );
+          const titleChanged = titleRef.current !== persistedTitleRef.current;
           if (
             !pending.checkpoint &&
             hash === lastPersistedHashRef.current &&
-            !tagsChanged
+            !tagsChanged &&
+            !titleChanged
           ) {
             await draftStore.remove(scope);
             if (mountedRef.current) {
@@ -224,26 +229,31 @@ export function useDocumentAutosave({
                 baseRevision: revisionRef.current,
                 checkpoint: pending.checkpoint,
                 markdown: value,
-                title: currentDocument.meta.title,
+                title: titleRef.current,
                 tags: [...tagsRef.current],
                 extensions: currentDocument.extensions
               });
             revisionRef.current = saved.meta.revision;
             lastPersistedHashRef.current = String(saved.meta.contentHash);
+            persistedTitleRef.current = saved.meta.title;
             persistedTagsRef.current = saved.meta.tags;
             tagsRef.current = saved.meta.tags;
             const latestHash = await hashMarkdown(markdownRef.current);
+            const titleMatches = titleRef.current === saved.meta.title;
             if (
               latestHash === lastPersistedHashRef.current &&
-              tagsEqual(tagsRef.current, persistedTagsRef.current)
+              tagsEqual(tagsRef.current, persistedTagsRef.current) &&
+              titleMatches
             ) {
               await draftStore.remove(scope);
             }
             if (mountedRef.current) {
+              if (titleMatches) setTitleState(saved.meta.title);
               setTagsState(saved.meta.tags);
               setStatus(
                 latestHash === lastPersistedHashRef.current &&
-                  tagsEqual(tagsRef.current, persistedTagsRef.current)
+                  tagsEqual(tagsRef.current, persistedTagsRef.current) &&
+                  titleMatches
                   ? "saved"
                   : "draft"
               );
@@ -333,10 +343,13 @@ export function useDocumentAutosave({
     pendingRef.current = undefined;
     revisionRef.current = document.meta.revision;
     lastPersistedHashRef.current = String(document.meta.contentHash);
+    titleRef.current = document.meta.title;
+    persistedTitleRef.current = document.meta.title;
     persistedTagsRef.current = document.meta.tags;
     markdownRef.current = document.markdown;
     tagsRef.current = document.meta.tags;
     currentHashRef.current = String(document.meta.contentHash);
+    setTitleState(document.meta.title);
     setMarkdownState(document.markdown);
     setTagsState(document.meta.tags);
     setStatus("saved");
@@ -354,15 +367,18 @@ export function useDocumentAutosave({
         cancelled ||
         !draft ||
         (draft.markdown === document.markdown &&
-          tagsEqual(draft.tags, document.meta.tags))
+          tagsEqual(draft.tags, document.meta.tags) &&
+          draft.title === document.meta.title)
       ) {
         return;
       }
+      titleRef.current = draft.title;
       markdownRef.current = draft.markdown;
       tagsRef.current = draft.tags;
       currentHashRef.current = draft.contentHash;
       revisionRef.current = document.meta.revision;
       if (!mountedRef.current) return;
+      setTitleState(draft.title);
       setMarkdownState(draft.markdown);
       setTagsState(draft.tags);
       setDraftRecovered(true);
@@ -374,12 +390,14 @@ export function useDocumentAutosave({
       clearTimers();
       if (
         markdownRef.current !== document.markdown ||
-        !tagsEqual(tagsRef.current, document.meta.tags)
+        !tagsEqual(tagsRef.current, document.meta.tags) ||
+        titleRef.current !== document.meta.title
       ) {
         void persistDraft(markdownRef.current);
         if (
           currentHashRef.current !== lastPersistedHashRef.current ||
-          !tagsEqual(tagsRef.current, persistedTagsRef.current)
+          !tagsEqual(tagsRef.current, persistedTagsRef.current) ||
+          titleRef.current !== persistedTitleRef.current
         ) {
           void flush(true);
         }
@@ -405,7 +423,10 @@ export function useDocumentAutosave({
       }
     }
     function handleOnline() {
-      if (currentHashRef.current !== lastPersistedHashRef.current) {
+      if (
+        currentHashRef.current !== lastPersistedHashRef.current ||
+        titleRef.current !== persistedTitleRef.current
+      ) {
         void flush(true);
       }
     }
@@ -430,7 +451,10 @@ export function useDocumentAutosave({
     setError("");
     void hashMarkdown(next).then(async (hash) => {
       currentHashRef.current = hash;
-      if (hash === lastPersistedHashRef.current) {
+      if (
+        hash === lastPersistedHashRef.current &&
+        titleRef.current === persistedTitleRef.current
+      ) {
         await draftStore.remove(scope).catch(() => undefined);
         if (mountedRef.current) setStatus("saved");
         return;
@@ -461,16 +485,35 @@ export function useDocumentAutosave({
     scheduleAutosave();
   }
 
+  function changeTitle(next: string) {
+    const normalized = next.trim() || "未命名文档";
+    titleRef.current = normalized;
+    setTitleState(normalized);
+    if (!activeRef.current) return;
+    setStatus("draft");
+    setError("");
+    void persistDraft().catch(() => {
+      if (mountedRef.current) {
+        setStatus("error");
+        setError("本地草稿写入失败，请检查浏览器存储空间。");
+      }
+    });
+    scheduleAutosave();
+  }
+
   const replaceDocument = useCallback(
     (next: DocumentSnapshot) => {
       clearTimers();
       pendingRef.current = undefined;
       revisionRef.current = next.meta.revision;
       lastPersistedHashRef.current = String(next.meta.contentHash);
+      titleRef.current = next.meta.title;
+      persistedTitleRef.current = next.meta.title;
       persistedTagsRef.current = next.meta.tags;
       tagsRef.current = next.meta.tags;
       markdownRef.current = next.markdown;
       currentHashRef.current = String(next.meta.contentHash);
+      setTitleState(next.meta.title);
       setMarkdownState(next.markdown);
       setTagsState(next.meta.tags);
       setStatus("saved");
@@ -484,6 +527,8 @@ export function useDocumentAutosave({
   );
 
   return {
+    title,
+    changeTitle,
     markdown,
     changeMarkdown,
     tags,

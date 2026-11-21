@@ -81,6 +81,19 @@ import { sessionQuery, workspacesQuery } from "../queries";
 import { useToastStore } from "../stores/toast-store";
 
 export type WorkspaceMode = "notes" | "knowledge";
+type DocumentCommandAction = "rename" | "archive" | "delete";
+type DocumentCommand = {
+  requestId: number;
+  documentId: string;
+  action: DocumentCommandAction;
+};
+type DocumentRowAction = {
+  label: string;
+  icon: ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+};
 
 export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const {
@@ -112,6 +125,8 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   >(null);
   const [knowledgeNameDraft, setKnowledgeNameDraft] = useState("");
   const [knowledgeActionPending, setKnowledgeActionPending] = useState(false);
+  const [documentCommand, setDocumentCommand] = useState<DocumentCommand>();
+  const documentCommandIdRef = useRef(0);
   const importMarkdownRef = useRef<HTMLInputElement>(null);
   const importFolderRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -414,6 +429,30 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
       });
   }
 
+  function requestDocumentCommand(
+    document: CloudDocumentSummary,
+    action: DocumentCommandAction
+  ) {
+    documentCommandIdRef.current += 1;
+    setDocumentCommand({
+      requestId: documentCommandIdRef.current,
+      documentId: document.id,
+      action
+    });
+    if (document.id === documentId) return;
+    navigate(
+      document.lifecycle === "knowledge" && document.knowledgeBaseId
+        ? `/workspaces/${encodeURIComponent(
+            workspaceId
+          )}/knowledge/${encodeURIComponent(
+            document.knowledgeBaseId
+          )}/${encodeURIComponent(document.id)}`
+        : `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(
+            document.id
+          )}`
+    );
+  }
+
   async function importFiles(
     event: ChangeEvent<HTMLInputElement>,
     source: "file" | "folder"
@@ -605,6 +644,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           onMoveKnowledgeBase={(knowledgeBase, direction) =>
             void moveKnowledgeBase(knowledgeBase, direction)
           }
+          onDocumentCommand={requestDocumentCommand}
           knowledgeActionPending={knowledgeActionPending}
           onImportMarkdown={() => importMarkdownRef.current?.click()}
           onImportFolder={() => importFolderRef.current?.click()}
@@ -632,6 +672,16 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                 userId={session.data?.id ?? ""}
                 mode={mode}
                 knowledgeBases={knowledgeBases.data ?? []}
+                command={
+                  documentCommand?.documentId === document.data.meta.id
+                    ? documentCommand
+                    : undefined
+                }
+                onCommandHandled={(requestId) =>
+                  setDocumentCommand((current) =>
+                    current?.requestId === requestId ? undefined : current
+                  )
+                }
                 onFocusSearch={() => {
                   setSidebarOpen(true);
                   window.setTimeout(() => searchRef.current?.focus(), 30);
@@ -853,6 +903,7 @@ function WorkspaceSidebar({
   onRenameKnowledgeBase,
   onDeleteKnowledgeBase,
   onMoveKnowledgeBase,
+  onDocumentCommand,
   knowledgeActionPending,
   onImportMarkdown,
   onImportFolder,
@@ -886,6 +937,10 @@ function WorkspaceSidebar({
     knowledgeBase: CloudKnowledgeBase,
     direction: "up" | "down"
   ) => void;
+  onDocumentCommand: (
+    document: CloudDocumentSummary,
+    action: DocumentCommandAction
+  ) => void;
   knowledgeActionPending: boolean;
   onImportMarkdown: () => void;
   onImportFolder: () => void;
@@ -909,6 +964,40 @@ function WorkspaceSidebar({
     0,
     10
   );
+  const scratchActions = (item: CloudDocumentSummary): DocumentRowAction[] => [
+    {
+      label: "重命名",
+      icon: <Pencil size={14} />,
+      onSelect: () => onDocumentCommand(item, "rename")
+    },
+    {
+      label: "归档到知识库",
+      icon: <Archive size={14} />,
+      disabled: knowledgeBases.length === 0,
+      onSelect: () => onDocumentCommand(item, "archive")
+    },
+    {
+      label: "删除文档",
+      icon: <Trash2 size={14} />,
+      danger: true,
+      onSelect: () => onDocumentCommand(item, "delete")
+    }
+  ];
+  const knowledgeDocumentActions = (
+    item: CloudDocumentSummary
+  ): DocumentRowAction[] => [
+    {
+      label: "重命名",
+      icon: <Pencil size={14} />,
+      onSelect: () => onDocumentCommand(item, "rename")
+    },
+    {
+      label: "删除文档",
+      icon: <Trash2 size={14} />,
+      danger: true,
+      onSelect: () => onDocumentCommand(item, "delete")
+    }
+  ];
 
   return (
     <aside
@@ -1075,6 +1164,8 @@ function WorkspaceSidebar({
                     key={`recent-${item.id}`}
                     document={item}
                     active={item.id === documentId}
+                    actionLabel={`最近随记：${item.title}`}
+                    actions={scratchActions(item)}
                     onClick={() =>
                       navigate(
                         `/workspaces/${encodeURIComponent(
@@ -1092,6 +1183,8 @@ function WorkspaceSidebar({
                   key={item.id}
                   document={item}
                   active={item.id === documentId}
+                  actionLabel={`随记：${item.title}`}
+                  actions={scratchActions(item)}
                   onClick={() =>
                     navigate(
                       `/workspaces/${encodeURIComponent(
@@ -1197,6 +1290,8 @@ function WorkspaceSidebar({
                     key={item.id}
                     document={item}
                     active={item.id === documentId}
+                    actionLabel={`知识库文档：${item.title}`}
+                    actions={knowledgeDocumentActions(item)}
                     onClick={() =>
                       navigate(
                         `/workspaces/${encodeURIComponent(
@@ -1376,36 +1471,80 @@ function HighlightedSearchText({ value }: { value: string }) {
 function DocumentRow({
   document,
   active,
+  actionLabel,
+  actions = [],
   onClick
 }: {
   document: CloudDocumentSummary;
   active: boolean;
+  actionLabel?: string;
+  actions?: readonly DocumentRowAction[];
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-2.5 text-left transition ${
+    <div
+      className={`group flex min-h-11 w-full items-center rounded-xl pr-1 transition ${
         active
           ? "bg-surface-selected text-ink-950 ring-1 ring-brand-200/60"
           : "text-ink-600 hover:bg-canvas hover:text-ink-900"
       }`}
-      aria-current={active ? "page" : undefined}
-      onClick={onClick}
     >
-      <FileText
-        size={14}
-        className={active ? "text-brand-600" : "text-ink-300"}
-      />
-      <span className="min-w-0 flex-1">
-        <strong className="block truncate text-xs font-semibold">
-          {document.title}
-        </strong>
-        <small className="mt-0.5 block truncate text-[0.62rem] text-ink-400">
-          {document.excerpt || "空白文档"}
-        </small>
-      </span>
-    </button>
+      <button
+        type="button"
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2.5 text-left"
+        aria-current={active ? "page" : undefined}
+        onClick={onClick}
+      >
+        <FileText
+          size={14}
+          className={active ? "text-brand-600" : "text-ink-300"}
+        />
+        <span className="min-w-0 flex-1">
+          <strong className="block truncate text-xs font-semibold">
+            {document.title}
+          </strong>
+          <small className="mt-0.5 block truncate text-[0.62rem] text-ink-400">
+            {document.excerpt || "空白文档"}
+          </small>
+        </span>
+      </button>
+      {actions.length > 0 && (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="grid size-7 shrink-0 place-items-center rounded-lg text-ink-300 opacity-100 transition hover:bg-white hover:text-ink-700 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+              aria-label={`${actionLabel ?? document.title} 操作`}
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={6}
+              className="z-50 w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+            >
+              {actions.map((action) => (
+                <DropdownMenu.Item
+                  key={action.label}
+                  className={`flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 ${
+                    action.danger
+                      ? "text-danger-700 data-[highlighted]:bg-danger-50"
+                      : "text-ink-700 data-[highlighted]:bg-surface-subtle"
+                  }`}
+                  disabled={action.disabled}
+                  onSelect={action.onSelect}
+                >
+                  {action.icon}
+                  {action.label}
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      )}
+    </div>
   );
 }
 
@@ -1495,6 +1634,8 @@ function DocumentSurface({
   userId,
   mode,
   knowledgeBases,
+  command,
+  onCommandHandled,
   onFocusSearch,
   onSaved
 }: {
@@ -1502,6 +1643,8 @@ function DocumentSurface({
   userId: string;
   mode: WorkspaceMode;
   knowledgeBases: CloudKnowledgeBase[];
+  command?: DocumentCommand;
+  onCommandHandled: (requestId: number) => void;
   onFocusSearch: () => void;
   onSaved: (snapshot: DocumentSnapshot) => Promise<void>;
 }) {
@@ -1515,6 +1658,8 @@ function DocumentSurface({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveKnowledgeBaseId, setArchiveKnowledgeBaseId] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(document.meta.title);
   const [documentActionPending, setDocumentActionPending] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1572,6 +1717,38 @@ function DocumentSurface({
     };
   }, [editing]);
 
+  useEffect(() => {
+    if (!command || command.documentId !== document.meta.id) return;
+    if (command.action === "rename") {
+      setRenameDraft(autosave.title);
+      setRenameOpen(true);
+    } else if (command.action === "archive") {
+      setArchiveKnowledgeBaseId(knowledgeBases[0]?.id ?? "");
+      setArchiveOpen(true);
+    } else {
+      setDeleteOpen(true);
+    }
+  }, [command?.requestId, document.meta.id]);
+
+  function completeDocumentCommand() {
+    if (command) onCommandHandled(command.requestId);
+  }
+
+  function closeRenameDialog() {
+    setRenameOpen(false);
+    completeDocumentCommand();
+  }
+
+  function closeArchiveDialog() {
+    setArchiveOpen(false);
+    completeDocumentCommand();
+  }
+
+  function closeDeleteDialog() {
+    setDeleteOpen(false);
+    completeDocumentCommand();
+  }
+
   async function finishEditing() {
     const saved = await autosave.flush(true);
     if (saved) {
@@ -1622,6 +1799,12 @@ function DocumentSurface({
     setTagDialogOpen(false);
   }
 
+  function renameCurrentDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    autosave.changeTitle(renameDraft);
+    closeRenameDialog();
+  }
+
   async function archiveCurrentDocument() {
     if (!archiveKnowledgeBaseId) return;
     setDocumentActionPending(true);
@@ -1647,7 +1830,7 @@ function DocumentSurface({
           queryKey: ["knowledge-documents", document.meta.workspaceId]
         })
       ]);
-      setArchiveOpen(false);
+      closeArchiveDialog();
       showToast("已归档到知识库");
       navigate(
         `/workspaces/${encodeURIComponent(document.meta.workspaceId)}/notes`
@@ -1679,7 +1862,7 @@ function DocumentSurface({
           queryKey: ["knowledge-documents", document.meta.workspaceId]
         })
       ]);
-      setDeleteOpen(false);
+      closeDeleteDialog();
       showToast("文档已删除");
       navigate(
         `/workspaces/${encodeURIComponent(document.meta.workspaceId)}/${
@@ -1748,7 +1931,7 @@ function DocumentSurface({
         <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-ink-900">
-              {document.meta.title}
+              {autosave.title}
             </h1>
             <p className="mt-0.5 text-[0.62rem] font-medium text-ink-400">
               {document.meta.lifecycle === "knowledge"
@@ -1802,6 +1985,16 @@ function DocumentSurface({
                 sideOffset={8}
                 className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
               >
+                <DropdownMenu.Item
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                  onSelect={() => {
+                    setRenameDraft(autosave.title);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <Pencil size={14} />
+                  重命名文档
+                </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() => setHistoryOpen(true)}
@@ -1947,7 +2140,7 @@ function DocumentSurface({
         )}
         <ProductMarkdownEditor
           value={autosave.markdown}
-          title={document.meta.title}
+          title={autosave.title}
           documentId={document.meta.id}
           workspaceId={document.meta.workspaceId}
           readOnly={!showEditor}
@@ -1990,6 +2183,44 @@ function DocumentSurface({
         onClose={() => setHistoryOpen(false)}
         onRestore={restoreHistoricalVersion}
       />
+      <AppDialog
+        open={renameOpen}
+        title="重命名文档"
+        description="标题会与正文、标签一起进入自动保存队列。"
+        onClose={closeRenameDialog}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeRenameDialog}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="document-rename-form"
+            >
+              保存名称
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="document-rename-form"
+          className="grid gap-3"
+          onSubmit={renameCurrentDocument}
+        >
+          <FieldLabel>
+            文档名称
+            <TextInput
+              autoFocus
+              maxLength={120}
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              placeholder="未命名文档"
+            />
+          </FieldLabel>
+        </form>
+      </AppDialog>
+
       <AppDialog
         open={tagDialogOpen}
         title="管理标签"
@@ -2037,12 +2268,12 @@ function DocumentSurface({
         open={archiveOpen}
         title="归档到知识库"
         description="归档后文档会从随记移入所选知识库，正文和版本历史保持不变。"
-        onClose={() => setArchiveOpen(false)}
+        onClose={closeArchiveDialog}
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setArchiveOpen(false)}
+              onClick={closeArchiveDialog}
               disabled={documentActionPending}
             >
               取消
@@ -2084,13 +2315,13 @@ function DocumentSurface({
       <AppDialog
         open={deleteOpen}
         title="删除文档"
-        description={`“${document.meta.title}”将从当前工作区删除，此操作不能直接撤销。`}
-        onClose={() => setDeleteOpen(false)}
+        description={`“${autosave.title}”将从当前工作区删除，此操作不能直接撤销。`}
+        onClose={closeDeleteDialog}
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setDeleteOpen(false)}
+              onClick={closeDeleteDialog}
               disabled={documentActionPending}
             >
               取消

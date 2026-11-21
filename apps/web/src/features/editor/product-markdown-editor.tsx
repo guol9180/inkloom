@@ -995,92 +995,106 @@ export const ProductMarkdownEditor = forwardRef<
                   sideOffset={4}
                   className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                 >
-                  <BlockMenuItem
-                    icon={<Pilcrow size={14} />}
-                    label="转为正文"
-                    onSelect={() => editorRef.current?.setHeading(null)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading1 size={14} />}
-                    label="转为一级标题"
-                    onSelect={() => editorRef.current?.setHeading(1)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading2 size={14} />}
-                    label="转为二级标题"
-                    onSelect={() => editorRef.current?.setHeading(2)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading3 size={14} />}
-                    label="转为三级标题"
-                    onSelect={() => editorRef.current?.setHeading(3)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading4 size={14} />}
-                    label="转为四级标题"
-                    onSelect={() => editorRef.current?.setHeading(4)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading5 size={14} />}
-                    label="转为五级标题"
-                    onSelect={() => editorRef.current?.setHeading(5)}
-                  />
-                  <BlockMenuItem
-                    icon={<Heading6 size={14} />}
-                    label="转为六级标题"
-                    onSelect={() => editorRef.current?.setHeading(6)}
-                  />
-                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                  <BlockMenuItem
-                    icon={<Network size={14} />}
-                    label="插入 Mermaid 图表"
-                    onSelect={() =>
-                      editorRef.current?.insertBlockAt(handle.index, "mermaid")
-                    }
-                  />
-                  <BlockMenuItem
-                    icon={<Shapes size={14} />}
-                    label="插入 Excalidraw 画布"
-                    onSelect={() =>
-                      void openCanvasEditor(
-                        {
-                          id: newCanvasId(),
-                          title: "自由画布",
-                          sceneHash: "",
-                          previewHash: ""
-                        },
-                        handle.index
-                      )
-                    }
-                  />
                   <DropdownMenu.Sub>
                     <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                      <MessageSquareText size={14} />
-                      <span className="flex-1">提示块类型</span>
+                      <Pilcrow size={14} />
+                      <span className="flex-1">转化为</span>
                       <span className="text-ink-300">›</span>
                     </DropdownMenu.SubTrigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.SubContent
                         sideOffset={6}
-                        className="z-[80] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                        className="z-[80] w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                       >
-                        {CALLOUT_KINDS.map((kind) => (
+                        <BlockMenuItem
+                          icon={<Pilcrow size={14} />}
+                          label="正文"
+                          onSelect={() => editorRef.current?.setHeading(null)}
+                        />
+                        {[1, 2, 3, 4, 5, 6].map((level) => (
                           <BlockMenuItem
-                            key={kind}
-                            icon={
-                              <span
-                                className={`size-1.5 rounded-full callout-dot-${kind}`}
-                              />
-                            }
-                            label={CALLOUT_LABELS[kind]}
+                            key={level}
+                            icon={headingIcon(level)}
+                            label={`${level} 级标题`}
                             onSelect={() =>
-                              editorRef.current?.setCalloutKind(
-                                handle.index,
-                                kind
+                              editorRef.current?.setHeading(
+                                level as 1 | 2 | 3 | 4 | 5 | 6
                               )
                             }
                           />
                         ))}
+                        <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                        <DropdownMenu.Sub>
+                          <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                            <MessageSquareText size={14} />
+                            <span className="flex-1">提示块</span>
+                            <span className="text-ink-300">›</span>
+                          </DropdownMenu.SubTrigger>
+                          <DropdownMenu.Portal>
+                            <DropdownMenu.SubContent
+                              sideOffset={6}
+                              className="z-[90] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                            >
+                              {CALLOUT_KINDS.map((kind) => (
+                                <BlockMenuItem
+                                  key={kind}
+                                  icon={
+                                    <span
+                                      className={`size-1.5 rounded-full callout-dot-${kind}`}
+                                    />
+                                  }
+                                  label={CALLOUT_LABELS[kind]}
+                                  onSelect={() =>
+                                    editorRef.current?.setCalloutKind(
+                                      handle.index,
+                                      kind
+                                    )
+                                  }
+                                />
+                              ))}
+                            </DropdownMenu.SubContent>
+                          </DropdownMenu.Portal>
+                        </DropdownMenu.Sub>
+                      </DropdownMenu.SubContent>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Sub>
+                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  <DropdownMenu.Sub>
+                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                      <Network size={14} />
+                      <span className="flex-1">图表类型</span>
+                      <span className="text-ink-300">›</span>
+                    </DropdownMenu.SubTrigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.SubContent
+                        sideOffset={6}
+                        className="z-[80] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                      >
+                        <BlockMenuItem
+                          icon={<Network size={14} />}
+                          label="Mermaid 图表"
+                          onSelect={() =>
+                            editorRef.current?.insertBlockAt(
+                              handle.index,
+                              "mermaid"
+                            )
+                          }
+                        />
+                        <BlockMenuItem
+                          icon={<Shapes size={14} />}
+                          label="Excalidraw 画布"
+                          onSelect={() =>
+                            void openCanvasEditor(
+                              {
+                                id: newCanvasId(),
+                                title: "自由画布",
+                                sceneHash: "",
+                                previewHash: ""
+                              },
+                              handle.index
+                            )
+                          }
+                        />
                       </DropdownMenu.SubContent>
                     </DropdownMenu.Portal>
                   </DropdownMenu.Sub>
@@ -1587,6 +1601,15 @@ function CommandIcon({ command }: { command: EditorCommandDefinition }) {
     case "table":
       return <Table2 size={15} />;
   }
+}
+
+function headingIcon(level: number) {
+  if (level === 1) return <Heading1 size={14} />;
+  if (level === 2) return <Heading2 size={14} />;
+  if (level === 3) return <Heading3 size={14} />;
+  if (level === 4) return <Heading4 size={14} />;
+  if (level === 5) return <Heading5 size={14} />;
+  return <Heading6 size={14} />;
 }
 
 function SelectionCommandIcon({

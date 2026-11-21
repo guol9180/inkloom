@@ -143,6 +143,63 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
   ).toHaveCount(0);
 });
 
+test("renames a scratch note from its row action menu", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("行操作菜单中的随记");
+  await expect
+    .poll(() => page.locator("aside").innerText())
+    .toContain("行操作菜单中的随记");
+
+  const rowAction = page
+    .locator("aside")
+    .locator("div.group")
+    .filter({ hasText: "行操作菜单中的随记" })
+    .getByRole("button", { name: /操作$/ });
+  await rowAction.hover();
+  await rowAction.click();
+  await expect(page.getByRole("menuitem", { name: "重命名" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "归档到知识库" })
+  ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "删除文档" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "重命名" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "重命名文档" });
+  await dialog.getByLabel("文档名称").fill("重命名后的随记");
+  const renameRequest = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return (
+      (request.postDataJSON() as { title?: unknown }).title ===
+      "重命名后的随记"
+    );
+  });
+  await dialog.getByRole("button", { name: "保存名称" }).click();
+  await renameRequest;
+  await expect(
+    page.getByRole("heading", { name: "重命名后的随记" })
+  ).toBeVisible();
+  await expect
+    .poll(() => page.locator("aside").innerText())
+    .toContain("重命名后的随记");
+
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "重命名后的随记" })
+  ).toBeVisible();
+  await expect
+    .poll(() => page.locator("aside").innerText())
+    .toContain("重命名后的随记");
+});
+
 test("archives a saved scratch note into a flat knowledge base", async ({
   page
 }) => {
@@ -183,6 +240,13 @@ test("archives a saved scratch note into a flat knowledge base", async ({
       .getByRole("button")
       .filter({ hasText: "等待归档的产品说明" })
   ).toBeVisible();
+  const archivedRow = page
+    .locator("aside")
+    .locator("div.group")
+    .filter({ hasText: "等待归档的产品说明" });
+  await archivedRow.getByRole("button", { name: /操作$/ }).click();
+  await expect(page.getByRole("menuitem", { name: "重命名" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "删除文档" })).toBeVisible();
 });
 
 test("renames and revision-safely reorders flat knowledge bases", async ({
@@ -770,10 +834,14 @@ test("inserts Mermaid and canvas from a block action menu as previews", async ({
   const firstHandle = page.locator('[aria-label^="块 "]').first();
   await expect(firstHandle).toBeVisible();
   await firstHandle.click();
-  await expect(
-    page.getByRole("menuitem", { name: "插入 Mermaid 图表" })
-  ).toBeVisible();
-  await page.getByRole("menuitem", { name: "插入 Mermaid 图表" }).click();
+  await page.getByRole("menuitem", { name: "转化为" }).click();
+  await expect(page.getByRole("menuitem", { name: "正文" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "1 级标题" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "提示块" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await firstHandle.click();
+  await page.getByRole("menuitem", { name: "图表类型" }).click();
+  await page.getByRole("menuitem", { name: "Mermaid 图表" }).click();
   const mermaid = page.locator(".inkloom-mermaid-view").last();
   await expect(mermaid).toBeVisible();
   await expect(mermaid.locator(".inkloom-mermaid-svg svg")).toBeVisible({
@@ -781,8 +849,9 @@ test("inserts Mermaid and canvas from a block action menu as previews", async ({
   });
 
   await firstHandle.click();
+  await page.getByRole("menuitem", { name: "图表类型" }).click();
   await page
-    .getByRole("menuitem", { name: "插入 Excalidraw 画布" })
+    .getByRole("menuitem", { name: "Excalidraw 画布" })
     .click();
   const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
   await expect(dialog.locator(".excalidraw")).toBeVisible({ timeout: 20_000 });
