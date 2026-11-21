@@ -99,9 +99,10 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
     "产品随记内容"
   );
 
+  const previousUrl = page.url();
   await page.getByRole("button", { name: "新建", exact: true }).click();
   await page.getByRole("menuitem", { name: "新建随记" }).click();
-  await expect(page).toHaveURL(/\/notes\/[^/]+$/);
+  await expect(page).not.toHaveURL(previousUrl);
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("第二篇随记内容");
   await expect
