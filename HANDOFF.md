@@ -21,9 +21,9 @@
   `2e1e3173374d6e0b0c78ccc8282b8e8822e45dff`.
 - Current production is the completed M1.1 product-grade editor and knowledge
   workflow.
-- Production was intentionally initialized without migrating old data. A
-  temporary API smoke test was removed afterward; the final database has zero
-  users, workspaces, documents, knowledge bases and assets.
+- Production was intentionally initialized without migrating old data.
+  Temporary API and browser smoke tests were removed afterward; the final
+  database has zero users, workspaces, documents, knowledge bases and assets.
 - The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
   and must not enter the Web release image.
 
