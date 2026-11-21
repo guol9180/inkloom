@@ -562,9 +562,9 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
   ).toBeVisible({ timeout: 15_000 });
   await firstCheckpoint;
 
-  await editor.click();
-  await page.keyboard.press("Control+End");
-  await page.keyboard.press("Enter");
+  const trailingParagraph = editor.locator("p").last();
+  await expect(trailingParagraph).toBeVisible();
+  await trailingParagraph.click();
   const secondCheckpoint = page.waitForRequest((request) => {
     if (
       request.method() !== "PUT" ||
@@ -583,7 +583,8 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
       String(body.markdown ?? "").includes("版本二内容")
     );
   });
-  await page.keyboard.type("版本二内容");
+  await page.keyboard.insertText("版本二内容");
+  await expect(editor).toContainText("版本二内容");
   await secondCheckpoint;
 
   await page.getByRole("button", { name: "文档操作" }).click();
