@@ -18,17 +18,17 @@
 - API: `https://api.inkloom.imhgl.com`.
 - Repository: `https://github.com/guol9180/inkloom`, branch `main`.
 - Production application release:
-  `2e1e3173374d6e0b0c78ccc8282b8e8822e45dff`.
+  `27a4a4115717ae9eacf242ceede0b221c661701a`.
 - Current production is the completed M1.1 product-grade editor and knowledge
   workflow.
-- Production was intentionally initialized without migrating old data.
-  Temporary API and browser smoke tests were removed afterward; the final
-  database has zero users, workspaces, documents, knowledge bases and assets.
+- The current release update preserved the existing production data and did not
+  perform a migration or reset.
 - The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
   and must not enter the Web release image.
 
-M1.1 is complete and released. T25–T44 are closed; the milestone state and
-verification evidence are recorded in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+M1.1 and the post-release editor refinements are complete. T25–T48 are closed;
+the milestone state and verification evidence are recorded in
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 ## Locked Product Decisions
 
@@ -79,6 +79,5 @@ Final container and data checks:
 
 - `inkloom-api`, `inkloom-web` and `platform-edge` are healthy.
 - `inkloom-api` and `inkloom-web` are running the release SHA above.
-- The data volume contains only the initialized SQLite database, WAL and SHM
-  files; all business-table row counts are zero.
+- The existing SQLite data volume was retained during this release.
 - No container restart or OOM was observed after release.
