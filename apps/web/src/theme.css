@@ -306,11 +306,26 @@
 
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror {
   min-height: calc(100dvh - 10.5rem);
-  padding: 1.5rem clamp(1rem, 2vw, 2rem) 7rem
-    clamp(2.5rem, 3vw, 3.5rem);
+  padding: 1.5rem clamp(2rem, 4vw, 3.5rem) 7rem;
   font-family: var(--font-reading);
   font-size: clamp(0.98rem, 0.2vw + 0.92rem, 1.08rem);
   line-height: 1.9;
+}
+
+.product-markdown-editor[data-reading-scale="compact"]
+  .rich-markdown-shell
+  .milkdown
+  .ProseMirror {
+  font-size: clamp(0.92rem, 0.12vw + 0.88rem, 1rem);
+  line-height: 1.78;
+}
+
+.product-markdown-editor[data-reading-scale="large"]
+  .rich-markdown-shell
+  .milkdown
+  .ProseMirror {
+  font-size: clamp(1.06rem, 0.26vw + 0.99rem, 1.16rem);
+  line-height: 1.98;
 }
 
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1,

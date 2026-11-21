@@ -135,24 +135,25 @@ export async function exportCanvasAssets(
   const elements = data.elements as never;
   const appState = data.appState as never;
   const files = data.files as never;
-  const sceneJson = module.serializeAsJSON(
-    elements,
-    appState,
-    files,
-    "local"
-  );
-  const svgElement = await module.exportToSvg({
-    elements: (data.elements as Array<Record<string, unknown>>).filter(
-      (element) => !element.isDeleted
-    ) as never,
-    appState: {
-      ...data.appState,
-      exportBackground: true,
-      viewBackgroundColor: "#fafbf9"
-    } as never,
-    files
-  });
-  const serialized = new XMLSerializer().serializeToString(svgElement);
+  const sceneJson = serializeSceneJson(module, data);
+  let serialized: string;
+  try {
+    const svgElement = await module.exportToSvg({
+      elements: (data.elements as Array<Record<string, unknown>>).filter(
+        (element) => !element.isDeleted
+      ) as never,
+      appState: {
+        ...data.appState,
+        exportBackground: true,
+        viewBackgroundColor: "#fafbf9"
+      } as never,
+      files
+    });
+    serialized = new XMLSerializer().serializeToString(svgElement);
+  } catch {
+    // Saving the scene must not depend on Excalidraw's browser SVG exporter.
+    serialized = fallbackCanvasPreviewSvg(data);
+  }
   return {
     sceneJson,
     svg: DOMPurify.sanitize(serialized, {
@@ -169,12 +170,107 @@ export async function serializeCanvasEditorData(
 ): Promise<string> {
   const module = await loadExcalidrawModule();
   const data = canvasEditorData(scene);
-  return module.serializeAsJSON(
-    data.elements as never,
-    data.appState as never,
-    data.files as never,
-    "local"
+  return serializeSceneJson(module, data);
+}
+
+function serializeSceneJson(
+  module: ExcalidrawModule,
+  data: ReturnType<typeof canvasEditorData>
+): string {
+  try {
+    return module.serializeAsJSON(
+      data.elements as never,
+      data.appState as never,
+      data.files as never,
+      "local"
+    );
+  } catch {
+    return JSON.stringify({
+      type: "excalidraw",
+      version: 2,
+      source: "inkloom",
+      elements: data.elements,
+      appState: data.appState,
+      files: data.files
+    });
+  }
+}
+
+export function fallbackCanvasPreviewSvg(
+  data: ReturnType<typeof canvasEditorData>
+): string {
+  const elements = data.elements.filter((element) => !element.isDeleted);
+  const content =
+    elements.length === 0
+      ? `
+        <path d="M 120 250 C 260 80, 420 300, 580 155 S 900 95, 1080 230"
+          fill="none" stroke="#98aaa5" stroke-width="3" stroke-dasharray="9 10"/>
+        <circle cx="580" cy="155" r="7" fill="#a56827"/>
+        <text x="600" y="205" text-anchor="middle" fill="#61706d"
+          font-family="sans-serif" font-size="24">Excalidraw 空白画布</text>`
+      : elements.map(renderFallbackElement).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-label="Excalidraw 画布">
+    <rect width="1200" height="720" fill="#fafbf9"/>
+    ${content}
+  </svg>`;
+}
+
+function renderFallbackElement(
+  element: Record<string, unknown>,
+  index: number
+): string {
+  const x = finiteNumber(element.x, 40 + index * 18);
+  const y = finiteNumber(element.y, 40 + index * 18);
+  const width = Math.max(1, finiteNumber(element.width, 140));
+  const height = Math.max(1, finiteNumber(element.height, 90));
+  const stroke = escapeXmlAttribute(
+    String(element.strokeColor ?? "#26332d")
   );
+  const fill = escapeXmlAttribute(
+    String(element.backgroundColor ?? "transparent")
+  );
+  const type = String(element.type ?? "rectangle");
+  if (type === "ellipse") {
+    return `<ellipse cx="${x + width / 2}" cy="${y + height / 2}" rx="${width / 2}" ry="${height / 2}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  }
+  if (type === "diamond") {
+    return `<polygon points="${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  }
+  if (type === "text") {
+    return `<text x="${x}" y="${y + Math.max(24, height / 2)}" fill="${escapeXmlAttribute(String(element.strokeColor ?? "#26332d"))}" font-family="sans-serif" font-size="${Math.max(12, finiteNumber(element.fontSize, 20))}">${escapeXmlText(String(element.text ?? ""))}</text>`;
+  }
+  if (type === "arrow" || type === "line") {
+    const points = Array.isArray(element.points) ? element.points : [];
+    const end = points.at(-1);
+    const endX =
+      Array.isArray(end) && Number.isFinite(Number(end[0]))
+        ? x + Number(end[0])
+        : x + width;
+    const endY =
+      Array.isArray(end) && Number.isFinite(Number(end[1]))
+        ? y + Number(end[1])
+        : y + height;
+    return `<line x1="${x}" y1="${y}" x2="${endX}" y2="${endY}" stroke="${stroke}" stroke-width="2"/>`;
+  }
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function escapeXmlText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeXmlAttribute(value: string): string {
+  return escapeXmlText(value)
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 export function parseCanvasSceneFile(value: string): CanvasEditorData {

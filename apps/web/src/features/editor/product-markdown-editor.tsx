@@ -103,6 +103,7 @@ type BlockHandle = {
   height: number;
   lineHeight: number;
   kind: MarkdownBlockType;
+  empty: boolean;
   calloutKind?: CalloutKind;
   toggleOpen?: boolean;
 };
@@ -137,6 +138,7 @@ export const ProductMarkdownEditor = forwardRef<
     documentId: string;
     workspaceId: string;
     readOnly?: boolean;
+    readingScale?: "compact" | "comfortable" | "large";
     legacyCanvas?: CanvasScene;
     onChange: (value: string) => void;
     onFocusSearch: () => void;
@@ -148,6 +150,7 @@ export const ProductMarkdownEditor = forwardRef<
     documentId,
     workspaceId,
     readOnly = false,
+    readingScale = "comfortable",
     legacyCanvas,
     onChange,
     onFocusSearch
@@ -192,6 +195,7 @@ export const ProductMarkdownEditor = forwardRef<
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const uploadControllersRef = useRef(new Map<string, AbortController>());
   const legacyCanvasMigrationRef = useRef("");
+  const hasDocumentContent = handles.some((handle) => !handle.empty);
 
   useImperativeHandle(
     ref,
@@ -236,6 +240,7 @@ export const ProductMarkdownEditor = forwardRef<
           : blockElement.querySelector<HTMLDetailsElement>(
               "details[data-inkloom-toggle]"
             );
+      const kind = blockKindFromElement(blockElement);
       return {
         index,
         top: lineRect.top - layerRect.top,
@@ -244,7 +249,10 @@ export const ProductMarkdownEditor = forwardRef<
           Number.isFinite(parsedLineHeight) && parsedLineHeight > 0
             ? parsedLineHeight
             : Math.min(lineRect.height, 32),
-        kind: blockKindFromElement(blockElement),
+        kind,
+        empty:
+          kind === "paragraph" &&
+          (blockElement.textContent?.trim().length ?? 0) === 0,
         calloutKind: calloutElement?.dataset.callout as
           | CalloutKind
           | undefined,
@@ -788,6 +796,7 @@ export const ProductMarkdownEditor = forwardRef<
     <div
       ref={rootRef}
       className="product-markdown-editor relative min-h-0"
+      data-reading-scale={readingScale}
       onKeyDownCapture={readOnly ? undefined : handleKeyDown}
       onPaste={(event) => {
         if (readOnly) return;
@@ -917,7 +926,7 @@ export const ProductMarkdownEditor = forwardRef<
       )}
 
       <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-10.5rem)]">
-        {!readOnly && (
+        {!readOnly && hasDocumentContent && (
           <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
           {handles.map((handle) => (
             <DropdownMenu.Root

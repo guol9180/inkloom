@@ -75,6 +75,12 @@ import { useEditorOwnership } from "../features/editor/use-editor-ownership";
 import { DocumentContextPanel } from "../features/workspace/document-context-panel";
 import { RevisionHistoryDrawer } from "../features/workspace/revision-history-drawer";
 import {
+  matchesSearchShortcut,
+  saveWorkspacePreferences,
+  useWorkspacePreferences,
+  type WorkspacePreferences
+} from "../features/workspace/workspace-preferences";
+import {
   ProductMarkdownEditor
 } from "../features/editor/product-markdown-editor";
 import { sessionQuery, workspacesQuery } from "../queries";
@@ -116,6 +122,14 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const [createDialog, setCreateDialog] = useState<"note" | "knowledge" | null>(
     null
   );
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+  const [workspaceSettingsPending, setWorkspaceSettingsPending] =
+    useState(false);
+  const [workspaceSettingsError, setWorkspaceSettingsError] = useState("");
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
+  const [preferences, setPreferences] = useWorkspacePreferences(workspaceId);
+  const [preferencesDraft, setPreferencesDraft] =
+    useState<WorkspacePreferences>(preferences);
   const [draftName, setDraftName] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [knowledgeDialog, setKnowledgeDialog] = useState<
@@ -347,10 +361,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
 
   useEffect(() => {
     function focusDocumentSearch(event: KeyboardEvent) {
-      if (
-        !(event.ctrlKey || event.metaKey) ||
-        event.key.toLowerCase() !== "j"
-      ) {
+      if (!matchesSearchShortcut(event, preferences.searchShortcut)) {
         return;
       }
       event.preventDefault();
@@ -359,7 +370,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     }
     window.addEventListener("keydown", focusDocumentSearch);
     return () => window.removeEventListener("keydown", focusDocumentSearch);
-  }, []);
+  }, [preferences.searchShortcut]);
 
   if (session.isPending || workspaces.isPending) return <WorkspaceSkeleton />;
   if (workspaces.isError) {
@@ -510,6 +521,60 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     }
   }
 
+  function openWorkspaceSettings() {
+    if (!workspace) return;
+    setWorkspaceNameDraft(workspace.name);
+    setPreferencesDraft(preferences);
+    setWorkspaceSettingsError("");
+    setWorkspaceSettingsOpen(true);
+  }
+
+  async function saveWorkspaceSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspace) return;
+    const name = workspaceNameDraft.trim();
+    if (!name) {
+      setWorkspaceSettingsError("工作区名称不能为空。");
+      return;
+    }
+    setWorkspaceSettingsPending(true);
+    setWorkspaceSettingsError("");
+    try {
+      if (name !== workspace.name) {
+        const renamed = await cloudClient.renameWorkspace(
+          workspace.id as WorkspaceId,
+          name
+        );
+        queryClient.setQueryData<{
+          workspaces: CloudWorkspace[];
+          activeWorkspace: CloudWorkspace;
+        }>(workspacesQuery.queryKey, (current) =>
+          current
+            ? {
+                workspaces: current.workspaces.map((item) =>
+                  item.id === renamed.id ? renamed : item
+                ),
+                activeWorkspace:
+                  current.activeWorkspace.id === renamed.id
+                    ? renamed
+                    : current.activeWorkspace
+              }
+            : current
+        );
+      }
+      saveWorkspacePreferences(workspaceId, preferencesDraft);
+      setPreferences(preferencesDraft);
+      setWorkspaceSettingsOpen(false);
+      showToast("工作区设置已保存");
+    } catch (error) {
+      setWorkspaceSettingsError(
+        error instanceof Error ? error.message : "工作区设置保存失败。"
+      );
+    } finally {
+      setWorkspaceSettingsPending(false);
+    }
+  }
+
   return (
     <div className="app-product-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-paper-warm text-ink-900">
       <header className="flex h-16 shrink-0 items-center border-b border-line-soft bg-white/95 px-3 backdrop-blur-xl sm:px-4">
@@ -648,6 +713,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
           knowledgeActionPending={knowledgeActionPending}
           onImportMarkdown={() => importMarkdownRef.current?.click()}
           onImportFolder={() => importFolderRef.current?.click()}
+          onOpenSettings={openWorkspaceSettings}
           onClose={() => setSidebarOpen(false)}
           searchRef={searchRef}
         />
@@ -703,6 +769,8 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                     })
                   ]);
                 }}
+                defaultInfoOpen={preferences.openDocumentInfoByDefault}
+                readingScale={preferences.readingScale}
               />
             )
           ) : (
@@ -746,6 +814,134 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
         multiple
         onChange={(event) => void importFiles(event, "folder")}
       />
+
+      <AppDialog
+        open={workspaceSettingsOpen}
+        title="工作区设置"
+        description="这些偏好保存在当前浏览器，并只影响当前工作区的编辑体验。"
+        onClose={() => {
+          if (!workspaceSettingsPending) setWorkspaceSettingsOpen(false);
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setWorkspaceSettingsOpen(false)}
+              disabled={workspaceSettingsPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="workspace-settings-form"
+              disabled={workspaceSettingsPending}
+            >
+              {workspaceSettingsPending ? "正在保存…" : "保存设置"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="workspace-settings-form"
+          className="grid gap-5"
+          onSubmit={(event) => void saveWorkspaceSettings(event)}
+        >
+          <FieldLabel>
+            工作区名称
+            <TextInput
+              autoFocus
+              maxLength={80}
+              value={workspaceNameDraft}
+              onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+            />
+          </FieldLabel>
+
+          <FieldLabel>
+            文档搜索快捷键
+            <select
+              className="h-11 w-full rounded-xl border border-line bg-white px-3.5 text-sm text-ink-950 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-200/55"
+              value={preferencesDraft.searchShortcut}
+              onChange={(event) =>
+                setPreferencesDraft((current) => ({
+                  ...current,
+                  searchShortcut: event.target.value as
+                    | "ctrl-j"
+                    | "ctrl-shift-f"
+                }))
+              }
+            >
+              <option value="ctrl-j">Ctrl / Cmd + J</option>
+              <option value="ctrl-shift-f">Ctrl / Cmd + Shift + F</option>
+            </select>
+          </FieldLabel>
+
+          <label className="flex items-start gap-3 rounded-xl border border-line-soft bg-paper-warm px-3.5 py-3">
+            <input
+              type="checkbox"
+              className="mt-1 size-4 accent-brand-700"
+              checked={preferencesDraft.openDocumentInfoByDefault}
+              onChange={(event) =>
+                setPreferencesDraft((current) => ({
+                  ...current,
+                  openDocumentInfoByDefault: event.target.checked
+                }))
+              }
+            />
+            <span>
+              <strong className="block text-sm font-semibold text-ink-800">
+                新文档默认打开信息栏
+              </strong>
+              <small className="mt-0.5 block text-xs leading-5 text-ink-400">
+                切换文档或新建文档时显示大纲、链接与资产信息。
+              </small>
+            </span>
+          </label>
+
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-semibold text-ink-700">
+              正文阅读字号
+            </legend>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  ["compact", "紧凑正文"],
+                  ["comfortable", "标准正文"],
+                  ["large", "大号正文"]
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={preferencesDraft.readingScale === value}
+                  className={`min-h-10 rounded-xl border px-2 text-xs font-semibold transition ${
+                    preferencesDraft.readingScale === value
+                      ? "border-brand-300 bg-brand-50 text-brand-800"
+                      : "border-line-soft bg-white text-ink-500 hover:border-line hover:text-ink-800"
+                  }`}
+                  onClick={() =>
+                    setPreferencesDraft((current) => ({
+                      ...current,
+                      readingScale: value
+                    }))
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {workspaceSettingsError && (
+            <p
+              role="alert"
+              className="rounded-xl bg-danger-50 px-3 py-2 text-xs text-danger-700"
+            >
+              {workspaceSettingsError}
+            </p>
+          )}
+        </form>
+      </AppDialog>
 
       <AppDialog
         open={createDialog === "knowledge"}
@@ -907,6 +1103,7 @@ function WorkspaceSidebar({
   knowledgeActionPending,
   onImportMarkdown,
   onImportFolder,
+  onOpenSettings,
   onClose,
   searchRef
 }: {
@@ -944,6 +1141,7 @@ function WorkspaceSidebar({
   knowledgeActionPending: boolean;
   onImportMarkdown: () => void;
   onImportFolder: () => void;
+  onOpenSettings: () => void;
   onClose: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
 }) {
@@ -1318,7 +1516,7 @@ function WorkspaceSidebar({
         <button
           type="button"
           className="flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-xs font-medium text-ink-500 transition hover:bg-canvas hover:text-ink-900"
-          onClick={() => onCreateKnowledgeBase()}
+          onClick={onOpenSettings}
         >
           <Settings size={14} />
           工作区设置
@@ -1637,7 +1835,9 @@ function DocumentSurface({
   command,
   onCommandHandled,
   onFocusSearch,
-  onSaved
+  onSaved,
+  defaultInfoOpen,
+  readingScale
 }: {
   document: DocumentSnapshot;
   userId: string;
@@ -1647,6 +1847,8 @@ function DocumentSurface({
   onCommandHandled: (requestId: number) => void;
   onFocusSearch: () => void;
   onSaved: (snapshot: DocumentSnapshot) => Promise<void>;
+  defaultInfoOpen: boolean;
+  readingScale: WorkspacePreferences["readingScale"];
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -1661,7 +1863,7 @@ function DocumentSurface({
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState(document.meta.title);
   const [documentActionPending, setDocumentActionPending] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(defaultInfoOpen);
   const [historyOpen, setHistoryOpen] = useState(false);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const pendingReaderScrollRef = useRef<number | undefined>(undefined);
@@ -1690,6 +1892,10 @@ function DocumentSurface({
   useEffect(() => {
     setEditing(mode === "notes");
   }, [document.meta.id, mode]);
+
+  useEffect(() => {
+    setInfoOpen(defaultInfoOpen);
+  }, [defaultInfoOpen, document.meta.id]);
 
   useLayoutEffect(() => {
     scrollViewportRef.current?.scrollTo({ top: 0, left: 0 });
@@ -2144,6 +2350,7 @@ function DocumentSurface({
           documentId={document.meta.id}
           workspaceId={document.meta.workspaceId}
           readOnly={!showEditor}
+          readingScale={readingScale}
           legacyCanvas={
             document.extensions?.canvas as unknown as
               | CanvasScene

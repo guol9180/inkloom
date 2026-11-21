@@ -707,6 +707,62 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
   ).toBeVisible();
 });
 
+test("opens real workspace settings and applies persisted editor preferences", async ({
+  page
+}) => {
+  await openScratchNote(page);
+
+  await page.getByRole("button", { name: "工作区设置" }).click();
+  const settings = page.getByRole("dialog", { name: "工作区设置" });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByLabel("工作区名称")).toBeVisible();
+  await captureUiReview(page, "t49-workspace-settings.png");
+  await expect(
+    page.getByRole("dialog", { name: "新建知识库" })
+  ).toBeHidden();
+
+  const renamedWorkspace = `验收工作区 ${Date.now()}`;
+  await settings.getByLabel("工作区名称").fill(renamedWorkspace);
+  await settings
+    .getByLabel("文档搜索快捷键")
+    .selectOption("ctrl-shift-f");
+  await settings.getByLabel("新文档默认打开信息栏").check();
+  await settings.getByRole("button", { name: "大号正文" }).click();
+  await settings.getByRole("button", { name: "保存设置" }).click();
+  await expect(settings).toBeHidden();
+
+  await page.keyboard.press("Control+Shift+F");
+  await expect(page.getByPlaceholder("搜索")).toBeFocused();
+
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await page.getByRole("menuitem", { name: "新建随记" }).click();
+  await expect(page).toHaveURL(/\/notes\/[^/]+$/);
+  await expect(page.locator('[aria-label="文档信息栏"]')).toHaveAttribute(
+    "data-state",
+    "open"
+  );
+  await expect
+    .poll(() =>
+      page
+        .locator(".product-markdown-editor")
+        .getAttribute("data-reading-scale")
+    )
+    .toBe("large");
+
+  await page.reload();
+  await page.getByRole("button", { name: "工作区设置" }).click();
+  await expect(page.getByLabel("工作区名称")).toHaveValue(renamedWorkspace);
+  await expect(
+    page.getByLabel("文档搜索快捷键")
+  ).toHaveValue("ctrl-shift-f");
+  await expect(
+    page.getByLabel("新文档默认打开信息栏")
+  ).toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "大号正文" })
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 test("reorders blocks from the single-character gutter handle", async ({
   page
 }) => {
@@ -823,6 +879,37 @@ test("fills the editor width, animates document info and resets new-note scroll"
   );
 });
 
+test("keeps an empty document clean below the toolbar", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await expect(editor).toBeVisible();
+  await expect(page.locator('[aria-label^="块 "]')).toHaveCount(0);
+
+  const metrics = await editor.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const firstParagraph = element.querySelector("p")?.getBoundingClientRect();
+    const toolbar = document
+      .querySelector('[role="toolbar"][aria-label="文档格式"]')
+      ?.getBoundingClientRect();
+    return {
+      paddingLeft: Number.parseFloat(style.paddingLeft),
+      paddingRight: Number.parseFloat(style.paddingRight),
+      paragraphTop: firstParagraph?.top ?? 0,
+      paragraphLeft: firstParagraph?.left ?? 0,
+      editorLeft: rect.left,
+      toolbarBottom: toolbar ? toolbar.top + toolbar.height : 0
+    };
+  });
+
+  expect(
+    Math.abs(metrics.paddingLeft - metrics.paddingRight)
+  ).toBeLessThanOrEqual(1);
+  expect(metrics.paragraphLeft).toBeGreaterThan(metrics.editorLeft);
+  expect(metrics.paragraphTop).toBeGreaterThanOrEqual(metrics.toolbarBottom);
+  await captureUiReview(page, "t49-empty-document.png");
+});
+
 test("inserts Mermaid and canvas from a block action menu as previews", async ({
   page
 }) => {
@@ -881,6 +968,36 @@ test("inserts Mermaid and canvas from a block action menu as previews", async ({
   await page.reload();
   await expect(page.locator(".inkloom-mermaid-view")).toBeVisible();
   await expect(page.locator(".inkloom-canvas-view")).toBeVisible();
+});
+
+test("saves a blank Excalidraw canvas and keeps its preview", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  await page.getByRole("button", { name: "Excalidraw 画布" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
+  await expect(dialog.locator(".excalidraw")).toBeVisible({ timeout: 20_000 });
+  const canvasSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    ).includes("<!-- inkloom:canvas");
+  });
+  await dialog.getByRole("button", { name: "保存并关闭" }).click();
+  await expect(dialog).toBeHidden();
+  await canvasSave;
+
+  const canvas = page.locator(".inkloom-canvas-view").last();
+  await expect(canvas).toBeVisible();
+  await expect(canvas.locator("img")).toBeVisible({ timeout: 15_000 });
 });
 
 test("edits structured blocks and restores them after saving", async ({

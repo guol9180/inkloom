@@ -26,9 +26,15 @@
 - The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
   and must not enter the Web release image.
 
-M1.1 and the post-release editor refinements are complete. T25–T48 are closed;
+M1.1 and the post-release editor refinements are complete. T25–T49 are closed
+in the source tree;
 the milestone state and verification evidence are recorded in
 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+
+T49 adds real workspace settings, resilient blank-canvas saving, and the clean
+empty-document layout. Its source and local verification are complete, but the
+production release above still has to be replaced by a deployment containing
+this task.
 
 ## Locked Product Decisions
 
