@@ -121,6 +121,7 @@ type CanvasEditorState = {
   scene?: CanvasEditorData;
   loading: boolean;
   notice?: string;
+  insertAfterIndex?: number;
 };
 
 export type ProductMarkdownEditorHandle = {
@@ -191,17 +192,6 @@ export const ProductMarkdownEditor = forwardRef<
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const uploadControllersRef = useRef(new Map<string, AbortController>());
   const legacyCanvasMigrationRef = useRef("");
-  const previousReadOnlyRef = useRef(readOnly);
-
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    if (previousReadOnlyRef.current === readOnly || !root) return;
-    const scroller = root.closest<HTMLElement>(".overflow-y-auto");
-    if (scroller) {
-      scroller.scrollTop += readOnly ? -48 : 48;
-    }
-    previousReadOnlyRef.current = readOnly;
-  }, [readOnly]);
 
   useImperativeHandle(
     ref,
@@ -407,12 +397,16 @@ export const ProductMarkdownEditor = forwardRef<
     return nearest.index;
   }
 
-  async function openCanvasEditor(canvas: CanvasBlockAttrs) {
+  async function openCanvasEditor(
+    canvas: CanvasBlockAttrs,
+    insertAfterIndex?: number
+  ) {
     const snapshotKey = canvasDraftKey(workspaceId, documentId, canvas.id);
     setCanvasEditor({
       canvas,
       loading: true,
-      notice: "正在加载画布场景…"
+      notice: "正在加载画布场景…",
+      insertAfterIndex
     });
     let scene: CanvasEditorData | undefined;
     let notice = "每 2 秒保存临时快照";
@@ -440,7 +434,8 @@ export const ProductMarkdownEditor = forwardRef<
       canvas,
       scene,
       loading: false,
-      notice
+      notice,
+      insertAfterIndex
     });
   }
 
@@ -485,7 +480,16 @@ export const ProductMarkdownEditor = forwardRef<
   ) {
     const saved = await uploadCanvasAssets(canvas, result);
     const updated = editorRef.current?.updateCanvas(saved);
-    if (!updated) editorRef.current?.insertCanvas(saved);
+    if (!updated) {
+      if (canvasEditor?.insertAfterIndex === undefined) {
+        editorRef.current?.insertCanvas(saved);
+      } else {
+        editorRef.current?.insertCanvasAt(
+          canvasEditor.insertAfterIndex,
+          saved
+        );
+      }
+    }
     localStorage.removeItem(canvasDraftKey(workspaceId, documentId, canvas.id));
     setCanvasEditor(undefined);
     window.requestAnimationFrame(syncHandles);
@@ -912,7 +916,7 @@ export const ProductMarkdownEditor = forwardRef<
         </div>
       )}
 
-      <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-7rem)]">
+      <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-10.5rem)]">
         {!readOnly && (
           <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
           {handles.map((handle) => (
@@ -1025,6 +1029,29 @@ export const ProductMarkdownEditor = forwardRef<
                     icon={<Heading6 size={14} />}
                     label="转为六级标题"
                     onSelect={() => editorRef.current?.setHeading(6)}
+                  />
+                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  <BlockMenuItem
+                    icon={<Network size={14} />}
+                    label="插入 Mermaid 图表"
+                    onSelect={() =>
+                      editorRef.current?.insertBlockAt(handle.index, "mermaid")
+                    }
+                  />
+                  <BlockMenuItem
+                    icon={<Shapes size={14} />}
+                    label="插入 Excalidraw 画布"
+                    onSelect={() =>
+                      void openCanvasEditor(
+                        {
+                          id: newCanvasId(),
+                          title: "自由画布",
+                          sceneHash: "",
+                          previewHash: ""
+                        },
+                        handle.index
+                      )
+                    }
                   />
                   <DropdownMenu.Sub>
                     <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
@@ -1173,7 +1200,7 @@ export const ProductMarkdownEditor = forwardRef<
             onTableHeaderChange={setTableHeader}
             onRequestCanvas={() => undefined}
             onOpenCanvas={(canvas) => void openCanvasEditor(canvas)}
-            className="min-h-[calc(100dvh-7rem)]"
+            className="min-h-[calc(100dvh-10.5rem)]"
           />
         </Suspense>
       </div>

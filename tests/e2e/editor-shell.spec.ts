@@ -683,6 +683,137 @@ test("reorders blocks from the single-character gutter handle", async ({
   await expect(page.getByRole("menuitem", { name: "复制此块" })).toBeVisible();
 });
 
+test("fills the editor width, animates document info and resets new-note scroll", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const main = page.getByRole("main");
+  const article = page.locator("article");
+  await expect(article).toBeVisible();
+  const width = await page.evaluate(() => ({
+    main: document.querySelector("main")?.getBoundingClientRect().width ?? 0,
+    article: document.querySelector("article")?.getBoundingClientRect().width ?? 0
+  }));
+  expect(Math.abs(width.main - width.article)).toBeLessThanOrEqual(1);
+
+  const panel = page.locator('[aria-label="文档信息栏"]');
+  await expect(panel).toHaveAttribute("data-state", "closed");
+  await expect(panel).toHaveAttribute("aria-hidden", "true");
+  await expect(panel).toHaveCSS("transition-property", /transform/);
+  await page.getByRole("button", { name: "打开文档信息" }).click();
+  await expect(panel).toHaveAttribute("data-state", "open");
+  await expect
+    .poll(async () => (await panel.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(250);
+  await panel.getByRole("button", { name: "关闭信息栏" }).click();
+  await expect(panel).toHaveAttribute("data-state", "closed");
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBe(0);
+
+  const editor = page.getByLabel("Markdown 正文");
+  const scroller = editor.locator(
+    'xpath=ancestor::div[contains(@class,"overflow-y-auto")][1]'
+  );
+  await scroller.evaluate((element) => {
+    element.scrollTop = 120;
+  });
+  const previousUrl = page.url();
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await page.getByRole("menuitem", { name: "新建随记" }).click();
+  await expect(page).not.toHaveURL(previousUrl);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
+  const scrollMetrics = await scroller.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(scrollMetrics.scrollHeight).toBeLessThanOrEqual(
+    scrollMetrics.clientHeight + 1
+  );
+
+  const toolbar = page.getByRole("toolbar", { name: "文档格式" });
+  const firstParagraph = page.getByLabel("Markdown 正文").locator("p").first();
+  const [toolbarBox, paragraphBox] = await Promise.all([
+    toolbar.boundingBox(),
+    firstParagraph.boundingBox()
+  ]);
+  expect(toolbarBox).not.toBeNull();
+  expect(paragraphBox).not.toBeNull();
+  expect(paragraphBox!.y).toBeGreaterThanOrEqual(
+    toolbarBox!.y + toolbarBox!.height - 1
+  );
+
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("清晰的内容");
+  await page.getByRole("button", { name: "一级标题" }).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("在同一区域继续编辑，格式与内容始终可见。");
+  const heading = page.locator(".ProseMirror h1").first();
+  const [headingBox, finalToolbarBox] = await Promise.all([
+    heading.boundingBox(),
+    toolbar.boundingBox()
+  ]);
+  expect(headingBox).not.toBeNull();
+  expect(finalToolbarBox).not.toBeNull();
+  expect(headingBox!.y).toBeGreaterThanOrEqual(
+    finalToolbarBox!.y + finalToolbarBox!.height - 1
+  );
+});
+
+test("inserts Mermaid and canvas from a block action menu as previews", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("块级插入内容");
+
+  const firstHandle = page.locator('[aria-label^="块 "]').first();
+  await expect(firstHandle).toBeVisible();
+  await firstHandle.click();
+  await expect(
+    page.getByRole("menuitem", { name: "插入 Mermaid 图表" })
+  ).toBeVisible();
+  await page.getByRole("menuitem", { name: "插入 Mermaid 图表" }).click();
+  const mermaid = page.locator(".inkloom-mermaid-view").last();
+  await expect(mermaid).toBeVisible();
+  await expect(mermaid.locator(".inkloom-mermaid-svg svg")).toBeVisible({
+    timeout: 15_000
+  });
+
+  await firstHandle.click();
+  await page
+    .getByRole("menuitem", { name: "插入 Excalidraw 画布" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
+  await expect(dialog.locator(".excalidraw")).toBeVisible({ timeout: 20_000 });
+  await drawExcalidrawRectangle(page);
+  const canvasSave = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    ).includes("<!-- inkloom:canvas");
+  });
+  await dialog.getByRole("button", { name: "保存并关闭" }).click();
+  await expect(dialog).toBeHidden();
+  await canvasSave;
+
+  const canvas = page.locator(".inkloom-canvas-view").last();
+  await expect(canvas).toBeVisible();
+  await expect(canvas.locator("img")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".inkloom-mermaid-view")).toHaveCount(1);
+
+  await page.reload();
+  await expect(page.locator(".inkloom-mermaid-view")).toBeVisible();
+  await expect(page.locator(".inkloom-canvas-view")).toBeVisible();
+});
+
 test("edits structured blocks and restores them after saving", async ({
   page
 }) => {

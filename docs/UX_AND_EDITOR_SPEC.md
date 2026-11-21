@@ -202,6 +202,9 @@ Menu  InkLoom  chevron          Save status   Help   Account
 - 根容器使用 `100dvh` 和安全区域。
 - 不同区域独立滚动。
 - 打开文件栏时关闭信息栏，反之亦然。
+- 文档内容区铺满侧栏与信息栏之间的全部可用宽度，不设置居中固定最大宽度。
+- 文档信息栏展开和收起使用宽度、位移与透明度组合过渡；桌面端不制造未解释的空白列。
+- 信息栏关闭后从布局和无障碍树中退出，内部元素不可聚焦。
 - 抽屉关闭后焦点回到触发按钮。
 - 组件内部优先使用容器查询。
 
@@ -358,9 +361,12 @@ Asset Layer
 块菜单：
 
 - 转换块类型。
+- 在当前块之后插入 Mermaid 图表或 Excalidraw 画布。
 - 复制块或 Markdown。
 - 上移、下移和创建副本。
 - 折叠或删除。
+- 新文档或切换文档后编辑区从顶部显示，首个内容块不得被粘性工具栏遮挡。
+- 短内容只填满当前剩余视口，不制造额外可滚动高度；长内容才进入自然滚动。
 
 ### 8.4 Selection Toolbar
 
@@ -546,7 +552,7 @@ Toggle:
 
 ### 10.4 Mermaid
 
-- Insert an independent Mermaid block at the cursor.
+- Insert an independent Mermaid block from the toolbar, slash menu or current block action menu.
 - Desktop split view: CodeMirror source and live SVG preview.
 - Render after about 300ms idle.
 - Syntax error keeps source and shows line error.
@@ -558,6 +564,7 @@ Toggle:
 ### 10.5 Excalidraw
 
 - Document displays an SVG preview card.
+- Insert from the toolbar, slash menu or current block action menu.
 - Full editor opens in a block-level fullscreen surface.
 - Scene, SVG and preview metadata are separate assets.
 - Excalidraw bundle is loaded only when editing.

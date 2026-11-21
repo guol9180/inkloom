@@ -56,12 +56,19 @@ export function DocumentContextPanel({
     staleTime: 10_000
   });
   const outline = useMemo(() => extractHeadings(markdown), [markdown]);
-  if (!open) return null;
 
   return (
-    <aside
+    <div
+      role="complementary"
       aria-label="文档信息栏"
-      className="absolute inset-y-0 right-0 z-40 flex w-[min(90vw,20rem)] flex-col border-l border-line-soft bg-white/97 shadow-[-18px_0_50px_rgb(28_45_36_/_0.1)] backdrop-blur-xl lg:relative lg:z-10 lg:w-[19rem] lg:shadow-none xl:w-[20rem]"
+      aria-hidden={!open}
+      data-state={open ? "open" : "closed"}
+      inert={!open}
+      className={`absolute inset-y-0 right-0 z-40 flex w-[min(90vw,20rem)] shrink-0 flex-col overflow-hidden border-l bg-white/97 backdrop-blur-xl transition-[width,transform,opacity,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform,opacity] lg:relative lg:z-10 lg:shadow-none ${
+        open
+          ? "translate-x-0 border-line-soft opacity-100 shadow-[-18px_0_50px_rgb(28_45_36_/_0.1)] lg:w-[19rem] xl:w-[20rem]"
+          : "pointer-events-none translate-x-full border-transparent opacity-0 lg:w-0 lg:translate-x-0 lg:border-l-0"
+      }`}
     >
       <div className="flex min-h-14 items-center justify-between border-b border-line-soft px-4">
         <div>
@@ -108,7 +115,7 @@ export function DocumentContextPanel({
           />
         )}
       </div>
-    </aside>
+    </div>
   );
 }
 

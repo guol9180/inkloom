@@ -72,7 +72,9 @@ export type RichMarkdownEditorHandle = {
   run: (action: RichToolbarAction) => void;
   setLink: (href: string) => void;
   insertBlock: (kind: "mermaid" | "canvas") => void;
+  insertBlockAt: (blockIndex: number, kind: "mermaid" | "canvas") => void;
   insertCanvas: (canvas: CanvasBlockAttrs) => boolean;
+  insertCanvasAt: (blockIndex: number, canvas: CanvasBlockAttrs) => boolean;
   updateCanvas: (canvas: CanvasBlockAttrs) => boolean;
   getMarkdown: () => string;
   isCurrentBlockEmpty: () => boolean;
@@ -295,10 +297,32 @@ export const RichMarkdownEditor = forwardRef<
         });
         if (kind === "canvas") onRequestCanvasRef.current();
       },
+      insertBlockAt(blockIndex, kind) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => {
+          insertDiagramBlockAt(
+            ctx,
+            kind === "mermaid"
+              ? mermaidSnippetRef.current
+              : canvasSnippetRef.current,
+            kind,
+            blockIndex + 1
+          );
+        });
+      },
       insertCanvas(canvas) {
         const crepe = crepeRef.current;
         if (!crepe || !readyRef.current) return false;
         crepe.editor.action((ctx) => insertCanvasBlock(ctx, canvas));
+        return true;
+      },
+      insertCanvasAt(blockIndex, canvas) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return false;
+        crepe.editor.action((ctx) =>
+          insertCanvasBlockAt(ctx, canvas, blockIndex + 1)
+        );
         return true;
       },
       updateCanvas(canvas) {
@@ -706,6 +730,46 @@ function insertDiagramBlock(
   const transaction = view.state.tr.insert(position, node);
   transaction.setSelection(
     TextSelection.near(transaction.doc.resolve(position + 1))
+  );
+  view.dispatch(transaction.scrollIntoView());
+  view.focus();
+}
+
+function insertDiagramBlockAt(
+  ctx: Ctx,
+  source: string,
+  language: "mermaid" | "canvas",
+  boundaryIndex: number
+) {
+  const view = ctx.get(editorViewCtx);
+  const schema = ctx.get(schemaCtx);
+  const mermaid = schema.nodes.inkloom_mermaid;
+  const node =
+    language === "mermaid" && mermaid
+      ? mermaid.create(null, source ? schema.text(source) : undefined)
+      : codeBlockSchema
+          .type(ctx)
+          .create({ language: "excalidraw" }, schema.text(source));
+  const position = topLevelBoundary(view.state.doc, boundaryIndex);
+  const transaction = view.state.tr.insert(position, node);
+  transaction.setSelection(
+    TextSelection.near(transaction.doc.resolve(position + node.nodeSize))
+  );
+  view.dispatch(transaction.scrollIntoView());
+  view.focus();
+}
+
+function insertCanvasBlockAt(
+  ctx: Ctx,
+  canvas: CanvasBlockAttrs,
+  boundaryIndex: number
+) {
+  const view = ctx.get(editorViewCtx);
+  const node = ctx.get(schemaCtx).nodes.inkloom_canvas.create(canvas);
+  const position = topLevelBoundary(view.state.doc, boundaryIndex);
+  const transaction = view.state.tr.insert(position, node);
+  transaction.setSelection(
+    TextSelection.near(transaction.doc.resolve(position + node.nodeSize))
   );
   view.dispatch(transaction.scrollIntoView());
   view.focus();

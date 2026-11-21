@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1517,6 +1518,8 @@ function DocumentSurface({
   const [documentActionPending, setDocumentActionPending] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const pendingReaderScrollRef = useRef<number | undefined>(undefined);
   const ownership = useEditorOwnership(
     userId
       ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
@@ -1543,9 +1546,38 @@ function DocumentSurface({
     setEditing(mode === "notes");
   }, [document.meta.id, mode]);
 
+  useLayoutEffect(() => {
+    scrollViewportRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [document.meta.id]);
+
+  useLayoutEffect(() => {
+    const pendingScrollTop = pendingReaderScrollRef.current;
+    const scroller = scrollViewportRef.current;
+    if (pendingScrollTop === undefined || !scroller) return;
+    const targetScrollTop = Math.max(
+      0,
+      pendingScrollTop + (editing ? 48 : -48)
+    );
+    pendingReaderScrollRef.current = undefined;
+    scroller.scrollTop = targetScrollTop;
+    const firstFrame = window.requestAnimationFrame(() => {
+      scroller.scrollTop = targetScrollTop;
+    });
+    const secondFrame = window.requestAnimationFrame(() => {
+      scroller.scrollTop = targetScrollTop;
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [editing]);
+
   async function finishEditing() {
     const saved = await autosave.flush(true);
-    if (saved) setEditing(false);
+    if (saved) {
+      pendingReaderScrollRef.current = scrollViewportRef.current?.scrollTop;
+      setEditing(false);
+    }
   }
 
   async function exportCurrentDocument() {
@@ -1708,8 +1740,11 @@ function DocumentSurface({
 
   return (
     <div className="relative flex h-full min-h-0 bg-paper-warm">
-      <div className="min-w-0 flex-1 overflow-y-auto">
-        <article className="mx-auto min-h-full w-full max-w-[58rem] border-x border-line-soft bg-white">
+      <div
+        ref={scrollViewportRef}
+        className="document-reader-scroll min-w-0 flex-1 overflow-y-auto"
+      >
+        <article className="min-h-full w-full bg-white">
         <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-ink-900">
@@ -1828,7 +1863,15 @@ function DocumentSurface({
             <PanelRight size={16} />
           </IconButton>
           {mode === "knowledge" && !editing && ownsEditor && (
-            <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                pendingReaderScrollRef.current =
+                  scrollViewportRef.current?.scrollTop;
+                setEditing(true);
+              }}
+            >
               编辑
             </Button>
           )}
