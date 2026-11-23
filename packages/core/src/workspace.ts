@@ -94,7 +94,11 @@ export type AssetRef = {
 };
 
 export interface AssetStore {
-  put(input: { workspaceId: WorkspaceId; data: Uint8Array; mime: string }): Promise<AssetRef>;
+  put(input: {
+    workspaceId: WorkspaceId;
+    data: Uint8Array;
+    mime: string;
+  }): Promise<AssetRef>;
   get(workspaceId: WorkspaceId, assetId: string): Promise<Uint8Array>;
   remove(workspaceId: WorkspaceId, assetId: string): Promise<void>;
 }

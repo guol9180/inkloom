@@ -12,7 +12,10 @@ export const useToastStore = create<ToastState>((set, get) => ({
   show(message) {
     const activeTimer = get().timer;
     if (activeTimer !== undefined) window.clearTimeout(activeTimer);
-    const timer = window.setTimeout(() => set({ message: "", timer: undefined }), 2600);
+    const timer = window.setTimeout(
+      () => set({ message: "", timer: undefined }),
+      2600
+    );
     set({ message, timer });
   },
   clear() {

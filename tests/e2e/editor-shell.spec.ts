@@ -69,6 +69,7 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
   page
 }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
@@ -92,12 +93,14 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
   });
   await tagDialog.getByRole("button", { name: "保存标签" }).click();
   await tagSave;
-  await expect(page.getByRole("button", { name: "#产品" }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "#产品" }).first()
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "#产品" }).first()).toBeVisible();
-  await expect(page.getByLabel("Markdown 正文")).toContainText(
-    "产品随记内容"
-  );
+  await expect(
+    page.getByRole("button", { name: "#产品" }).first()
+  ).toBeVisible();
+  await expect(page.getByLabel("Markdown 正文")).toContainText("产品随记内容");
 
   const previousUrl = page.url();
   await page.getByRole("button", { name: "新建", exact: true }).click();
@@ -105,24 +108,22 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
   await expect(page).not.toHaveURL(previousUrl);
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("第二篇随记内容");
-  await expect
-    .poll(() => page.locator("aside").innerText())
-    .toContain("第二篇随记内容");
+  const secondNoteId = documentIdFromUrl(page);
+  await expect(
+    page.locator(`aside [data-document-id="${secondNoteId}"]`).first()
+  ).toBeVisible();
 
   await page.locator("aside").getByRole("button", { name: "#产品" }).click();
   const taggedNote = page
-    .locator("aside")
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button")
-    .filter({ hasText: "产品随记内容" });
+    .first();
   await expect(taggedNote).toBeVisible();
-  await expect(
-    page
-      .locator("aside")
-      .getByRole("button")
-      .filter({ hasText: "第二篇随记内容" })
-  ).toHaveCount(0);
+  await expect(page.locator("aside [data-document-id]")).toHaveCount(1);
 
   await taggedNote.click();
+  await expect(page).toHaveURL(new RegExp(`/notes/${noteId}$`));
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出" }).click();
   const download = await downloadPromise;
@@ -136,26 +137,23 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
     .click();
   await expect(page).toHaveURL(/\/notes$/);
   await expect(
-    page
-      .locator("aside")
-      .getByRole("button")
-      .filter({ hasText: "产品随记内容" })
+    page.locator(`aside [data-document-id="${noteId}"]`)
   ).toHaveCount(0);
 });
 
 test("renames a scratch note from its row action menu", async ({ page }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   await page.keyboard.type("行操作菜单中的随记");
-  await expect
-    .poll(() => page.locator("aside").innerText())
-    .toContain("行操作菜单中的随记");
+  await expect(
+    page.locator(`aside [data-document-id="${noteId}"]`).first()
+  ).toBeVisible();
 
   const rowAction = page
-    .locator("aside")
-    .locator("div.group")
-    .filter({ hasText: "行操作菜单中的随记" })
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button", { name: /操作$/ });
   await rowAction.hover();
   await rowAction.click();
@@ -178,8 +176,7 @@ test("renames a scratch note from its row action menu", async ({ page }) => {
       return false;
     }
     return (
-      (request.postDataJSON() as { title?: unknown }).title ===
-      "重命名后的随记"
+      (request.postDataJSON() as { title?: unknown }).title === "重命名后的随记"
     );
   });
   await dialog.getByRole("button", { name: "保存名称" }).click();
@@ -200,10 +197,50 @@ test("renames a scratch note from its row action menu", async ({ page }) => {
     .toContain("重命名后的随记");
 });
 
+test("shows title-only document rows with ellipsis for long names", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("# 正文大标题");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("正文内容不应出现在侧栏。");
+
+  const row = page.locator(`aside [data-document-id="${noteId}"]`).first();
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("正文大标题");
+  await expect(row).not.toContainText("正文内容不应出现在侧栏。");
+
+  const longTitle = "超长文档名称用于验证省略".repeat(10);
+  await row.getByRole("button", { name: /操作$/ }).click();
+  await page.getByRole("menuitem", { name: "重命名" }).click();
+  const dialog = page.getByRole("dialog", { name: "重命名文档" });
+  await dialog.getByLabel("文档名称").fill(longTitle);
+  await dialog.getByRole("button", { name: "保存名称" }).click();
+
+  const updatedRow = page
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first();
+  const title = updatedRow.locator("strong");
+  await expect(title).toHaveAttribute("title", longTitle);
+  const overflow = await title.evaluate((element) => ({
+    textOverflow: getComputedStyle(element).textOverflow,
+    whiteSpace: getComputedStyle(element).whiteSpace,
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth
+  }));
+  expect(overflow.textOverflow).toBe("ellipsis");
+  expect(overflow.whiteSpace).toBe("nowrap");
+  expect(overflow.scrollWidth).toBeGreaterThan(overflow.clientWidth);
+});
+
 test("archives a saved scratch note into a flat knowledge base", async ({
   page
 }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("等待归档的产品说明");
 
@@ -216,9 +253,10 @@ test("archives a saved scratch note into a flat knowledge base", async ({
 
   await page.getByRole("button", { name: "随记", exact: true }).click();
   const noteRow = page
-    .locator("aside")
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button")
-    .filter({ hasText: "等待归档的产品说明" });
+    .first();
   await expect(noteRow).toBeVisible();
   await noteRow.click();
   await page.getByRole("button", { name: "文档操作" }).click();
@@ -227,23 +265,20 @@ test("archives a saved scratch note into a flat knowledge base", async ({
   await expect(
     archiveDialog.getByRole("button", { name: /产品知识/ })
   ).toBeVisible();
-  await archiveDialog
-    .getByRole("button", { name: "确认归档" })
-    .click();
+  await archiveDialog.getByRole("button", { name: "确认归档" }).click();
   await expect(page).toHaveURL(/\/notes$/);
 
   await page.getByRole("button", { name: "知识库", exact: true }).click();
-  await page.getByRole("button", { name: /产品知识/ }).first().click();
+  await page
+    .getByRole("button", { name: /产品知识/ })
+    .first()
+    .click();
   await expect(
-    page
-      .locator("aside")
-      .getByRole("button")
-      .filter({ hasText: "等待归档的产品说明" })
+    page.locator("aside").locator(`[data-document-id="${noteId}"]`)
   ).toBeVisible();
   const archivedRow = page
-    .locator("aside")
-    .locator("div.group")
-    .filter({ hasText: "等待归档的产品说明" });
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first();
   await archivedRow.getByRole("button", { name: /操作$/ }).click();
   await expect(page.getByRole("menuitem", { name: "重命名" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "删除文档" })).toBeVisible();
@@ -279,14 +314,16 @@ test("moves a knowledge document back and preserves it when deleting the base", 
   page
 }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("知识库往返文档");
   await createKnowledgeBaseFromMenu(page, "往返知识库");
   await page.getByRole("button", { name: "随记", exact: true }).click();
   const noteRow = page
-    .locator("aside")
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button")
-    .filter({ hasText: "知识库往返文档" });
+    .first();
   await expect(noteRow).toBeVisible();
   await noteRow.click();
   await page.getByRole("button", { name: "文档操作" }).click();
@@ -301,8 +338,9 @@ test("moves a knowledge document back and preserves it when deleting the base", 
   await page.getByRole("button", { name: "往返知识库", exact: true }).click();
   const knowledgeDoc = page
     .locator("aside")
+    .locator(`[data-document-id="${noteId}"]`)
     .getByRole("button")
-    .filter({ hasText: "知识库往返文档" });
+    .first();
   await expect(knowledgeDoc).toBeVisible();
   await knowledgeDoc.click();
   await page.getByRole("button", { name: "文档操作" }).click();
@@ -317,16 +355,11 @@ test("moves a knowledge document back and preserves it when deleting the base", 
     .getByRole("dialog", { name: "删除知识库" })
     .getByRole("button", { name: "删除并移回文档" })
     .click();
-  await expect(page.getByRole("button", { name: /往返知识库/ })).toHaveCount(
-    0
-  );
+  await expect(page.getByRole("button", { name: /往返知识库/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "随记", exact: true }).click();
   await expect(
-    page
-      .locator("aside")
-      .getByRole("button")
-      .filter({ hasText: "知识库往返文档" })
+    page.locator(`aside [data-document-id="${noteId}"]`).first()
   ).toBeVisible();
 });
 
@@ -334,6 +367,7 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   page
 }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   for (let index = 0; index < 18; index += 1) {
@@ -345,9 +379,10 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   await createKnowledgeBaseFromMenu(page, "预览知识库");
   await page.getByRole("button", { name: "随记", exact: true }).click();
   const noteRow = page
-    .locator("aside")
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button")
-    .filter({ hasText: "长文预览 01" });
+    .first();
   await expect(noteRow).toBeVisible();
   await noteRow.click();
   await page.getByRole("button", { name: "文档操作" }).click();
@@ -362,15 +397,14 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   await page.getByRole("button", { name: "预览知识库", exact: true }).click();
   await page
     .locator("aside")
+    .locator(`[data-document-id="${noteId}"]`)
     .getByRole("button")
-    .filter({ hasText: "长文预览 01" })
+    .first()
     .click();
 
   const previewEditor = page.getByLabel("Markdown 正文");
   await expect(previewEditor).toHaveAttribute("aria-readonly", "true");
-  await expect(
-    page.getByRole("toolbar", { name: "文档格式" })
-  ).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "文档格式" })).toHaveCount(0);
   await expect(page.locator('[aria-label^="块 "]')).toHaveCount(0);
 
   const scroller = previewEditor.locator(
@@ -382,9 +416,7 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   const scrollBefore = await scroller.evaluate((element) => element.scrollTop);
   await page.getByRole("button", { name: "编辑", exact: true }).click();
   await expect(previewEditor).toHaveAttribute("aria-readonly", "false");
-  await expect(
-    page.getByRole("toolbar", { name: "文档格式" })
-  ).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "文档格式" })).toBeVisible();
   await expect
     .poll(() => scroller.evaluate((element) => element.scrollTop))
     .toBeGreaterThanOrEqual(scrollBefore - 4);
@@ -402,16 +434,12 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   await page.keyboard.type(" 保存失败时仍保留编辑。");
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await expect(previewEditor).toHaveAttribute("aria-readonly", "false");
-  await expect(
-    page.getByRole("toolbar", { name: "文档格式" })
-  ).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "文档格式" })).toBeVisible();
 
   await page.unroute(routePattern);
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await expect(previewEditor).toHaveAttribute("aria-readonly", "true");
-  await expect(
-    page.getByRole("toolbar", { name: "文档格式" })
-  ).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "文档格式" })).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
@@ -427,14 +455,16 @@ test("searches scratch and knowledge documents through the server index", async 
   page
 }) => {
   await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("跨库全文搜索关键词");
   await createKnowledgeBaseFromMenu(page, "搜索知识库");
   await page.getByRole("button", { name: "随记", exact: true }).click();
   const archivedCandidate = page
-    .locator("aside")
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
     .getByRole("button")
-    .filter({ hasText: "跨库全文搜索关键词" });
+    .first();
   await expect(archivedCandidate).toBeVisible();
   await archivedCandidate.click();
   await page.getByRole("button", { name: "文档操作" }).click();
@@ -497,6 +527,7 @@ test("searches scratch and knowledge documents through the server index", async 
     .locator("aside")
     .getByRole("button")
     .filter({ hasText: "跨库全文搜索关键词" })
+    .first()
     .click();
   await expect(page).toHaveURL(/\/knowledge\/[^/]+\/[^/]+$/);
   await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
@@ -622,9 +653,9 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
     );
   });
   await page.getByRole("button", { name: "Mermaid 图表" }).click();
-  await expect(
-    page.locator(".inkloom-mermaid-svg svg").last()
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".inkloom-mermaid-svg svg").last()).toBeVisible({
+    timeout: 15_000
+  });
   await firstCheckpoint;
 
   const trailingParagraph = editor.locator("p").last();
@@ -661,9 +692,9 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
     .getByRole("button", { name: /revision/ })
     .last()
     .click();
-  await expect(
-    drawer.locator(".inkloom-mermaid-view")
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(drawer.locator(".inkloom-mermaid-view")).toBeVisible({
+    timeout: 15_000
+  });
   await expect(drawer.getByLabel("Markdown 正文")).toHaveAttribute(
     "aria-readonly",
     "true"
@@ -672,9 +703,9 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
   await expect(drawer.getByLabel("Markdown 正文")).not.toContainText(
     "版本二内容"
   );
-  await expect(
-    drawer.locator(".inkloom-mermaid-svg svg").first()
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(drawer.locator(".inkloom-mermaid-svg svg").first()).toBeVisible({
+    timeout: 15_000
+  });
   await captureUiReview(page, "t41-history-1440x960.png");
 
   await drawer.getByRole("button", { name: "块差异" }).click();
@@ -702,9 +733,7 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
 
   await page.reload();
   await expect(page.getByLabel("Markdown 正文")).toContainText("版本一内容");
-  await expect(
-    page.locator(".inkloom-mermaid-view").last()
-  ).toBeVisible();
+  await expect(page.locator(".inkloom-mermaid-view").last()).toBeVisible();
 });
 
 test("opens real workspace settings and applies persisted editor preferences", async ({
@@ -717,15 +746,11 @@ test("opens real workspace settings and applies persisted editor preferences", a
   await expect(settings).toBeVisible();
   await expect(settings.getByLabel("工作区名称")).toBeVisible();
   await captureUiReview(page, "t49-workspace-settings.png");
-  await expect(
-    page.getByRole("dialog", { name: "新建知识库" })
-  ).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "新建知识库" })).toBeHidden();
 
   const renamedWorkspace = `验收工作区 ${Date.now()}`;
   await settings.getByLabel("工作区名称").fill(renamedWorkspace);
-  await settings
-    .getByLabel("文档搜索快捷键")
-    .selectOption("ctrl-shift-f");
+  await settings.getByLabel("文档搜索快捷键").selectOption("ctrl-shift-f");
   await settings.getByLabel("新文档默认打开信息栏").check();
   await settings.getByRole("button", { name: "大号正文" }).click();
   await settings.getByRole("button", { name: "保存设置" }).click();
@@ -752,15 +777,12 @@ test("opens real workspace settings and applies persisted editor preferences", a
   await page.reload();
   await page.getByRole("button", { name: "工作区设置" }).click();
   await expect(page.getByLabel("工作区名称")).toHaveValue(renamedWorkspace);
-  await expect(
-    page.getByLabel("文档搜索快捷键")
-  ).toHaveValue("ctrl-shift-f");
-  await expect(
-    page.getByLabel("新文档默认打开信息栏")
-  ).toBeChecked();
-  await expect(
-    page.getByRole("button", { name: "大号正文" })
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("文档搜索快捷键")).toHaveValue("ctrl-shift-f");
+  await expect(page.getByLabel("新文档默认打开信息栏")).toBeChecked();
+  await expect(page.getByRole("button", { name: "大号正文" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
 });
 
 test("reorders blocks from the single-character gutter handle", async ({
@@ -803,6 +825,60 @@ test("reorders blocks from the single-character gutter handle", async ({
   await expect(page.getByRole("menuitem", { name: "复制此块" })).toBeVisible();
 });
 
+test("reserves a separate gutter for block actions", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("操作槽与正文保持独立。");
+
+  const assertGutter = async () => {
+    const handle = await page.locator(".pm-block-handle").first().boundingBox();
+    const content = await editor.locator("> p").first().boundingBox();
+    expect(handle).not.toBeNull();
+    expect(content).not.toBeNull();
+    expect(handle!.x + handle!.width).toBeLessThanOrEqual(content!.x - 8);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth
+      )
+    ).toBe(true);
+  };
+
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await assertGutter();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await assertGutter();
+
+  await editor.click();
+  await page.keyboard.press("Control+End");
+  for (let index = 0; index < 14; index += 1) {
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(`滚动内容 ${index + 1}`);
+  }
+  const scroller = editor.locator(
+    'xpath=ancestor::div[contains(@class,"overflow-y-auto")]'
+  );
+  await scroller.evaluate((element) => {
+    element.scrollTop = 360;
+  });
+  await page.waitForTimeout(120);
+  const overlap = await page.evaluate(() => {
+    const toolbar = document
+      .querySelector('[role="toolbar"][aria-label="文档格式"]')
+      ?.getBoundingClientRect();
+    if (!toolbar) return true;
+    return [...document.querySelectorAll<HTMLElement>(".pm-block-handle")].some(
+      (handle) => {
+        const rect = handle.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < toolbar.bottom - 1;
+      }
+    );
+  });
+  expect(overlap).toBe(false);
+});
+
 test("fills the editor width, animates document info and resets new-note scroll", async ({
   page
 }) => {
@@ -812,7 +888,8 @@ test("fills the editor width, animates document info and resets new-note scroll"
   await expect(article).toBeVisible();
   const width = await page.evaluate(() => ({
     main: document.querySelector("main")?.getBoundingClientRect().width ?? 0,
-    article: document.querySelector("article")?.getBoundingClientRect().width ?? 0
+    article:
+      document.querySelector("article")?.getBoundingClientRect().width ?? 0
   }));
   expect(Math.abs(width.main - width.article)).toBeLessThanOrEqual(1);
 
@@ -827,7 +904,9 @@ test("fills the editor width, animates document info and resets new-note scroll"
     .toBeGreaterThan(250);
   await panel.getByRole("button", { name: "关闭信息栏" }).click();
   await expect(panel).toHaveAttribute("data-state", "closed");
-  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBe(0);
+  await expect
+    .poll(async () => (await panel.boundingBox())?.width ?? 0)
+    .toBe(0);
 
   const editor = page.getByLabel("Markdown 正文");
   const scroller = editor.locator(
@@ -840,7 +919,9 @@ test("fills the editor width, animates document info and resets new-note scroll"
   await page.getByRole("button", { name: "新建", exact: true }).click();
   await page.getByRole("menuitem", { name: "新建随记" }).click();
   await expect(page).not.toHaveURL(previousUrl);
-  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollTop))
+    .toBe(0);
   const scrollMetrics = await scroller.evaluate((element) => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight
@@ -934,12 +1015,23 @@ test("inserts Mermaid and canvas from a block action menu as previews", async ({
   await expect(mermaid.locator(".inkloom-mermaid-svg svg")).toBeVisible({
     timeout: 15_000
   });
+  await expect(mermaid.locator(".inkloom-mermaid-icon")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+  const mermaidActions = mermaid.locator(".inkloom-mermaid-actions");
+  await editor.click({ position: { x: 4, y: 4 } });
+  await page.mouse.move(1, 1);
+  await expect(mermaidActions).toHaveCSS("opacity", "0");
+  await mermaid.hover();
+  await expect(mermaidActions).toHaveCSS("opacity", "1");
+  await expect(
+    mermaid.getByRole("button", { name: "全屏编辑图表" })
+  ).toContainText("编辑");
 
   await firstHandle.click();
   await page.getByRole("menuitem", { name: "图表类型" }).click();
-  await page
-    .getByRole("menuitem", { name: "Excalidraw 画布" })
-    .click();
+  await page.getByRole("menuitem", { name: "Excalidraw 画布" }).click();
   const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
   await expect(dialog.locator(".excalidraw")).toBeVisible({ timeout: 20_000 });
   await drawExcalidrawRectangle(page);
@@ -963,11 +1055,99 @@ test("inserts Mermaid and canvas from a block action menu as previews", async ({
   const canvas = page.locator(".inkloom-canvas-view").last();
   await expect(canvas).toBeVisible();
   await expect(canvas.locator("img")).toBeVisible({ timeout: 15_000 });
+  await expect(canvas.locator(".inkloom-canvas-icon")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+  const canvasEdit = canvas.getByRole("button", { name: "编辑画布" });
+  await editor.click({ position: { x: 4, y: 4 } });
+  await page.mouse.move(1, 1);
+  await expect(canvasEdit).toHaveCSS("opacity", "0");
+  await canvas.hover();
+  await expect(canvasEdit).toHaveCSS("opacity", "1");
+  const canvasLayout = await canvas.evaluate((root) => {
+    const card = root
+      .querySelector(".inkloom-canvas-card")
+      ?.getBoundingClientRect();
+    const title = root
+      .querySelector(".inkloom-canvas-title")
+      ?.getBoundingClientRect();
+    const button = root
+      .querySelector(".inkloom-canvas-edit")
+      ?.getBoundingClientRect();
+    return {
+      cardRight: card?.right ?? 0,
+      titleRight: title?.right ?? 0,
+      buttonLeft: button?.left ?? 0,
+      buttonRight: button?.right ?? 0
+    };
+  });
+  expect(canvasLayout.titleRight).toBeLessThan(canvasLayout.buttonLeft);
+  expect(canvasLayout.buttonRight).toBeLessThanOrEqual(canvasLayout.cardRight);
   await expect(page.locator(".inkloom-mermaid-view")).toHaveCount(1);
 
   await page.reload();
   await expect(page.locator(".inkloom-mermaid-view")).toBeVisible();
   await expect(page.locator(".inkloom-canvas-view")).toBeVisible();
+});
+
+test("keeps a consistent block rhythm and inserts lines from diagram edges", async ({
+  page
+}) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("图表前一行");
+  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+
+  const mermaid = page.locator(".inkloom-mermaid-view").last();
+  await expect(mermaid.locator(".inkloom-mermaid-svg svg")).toBeVisible({
+    timeout: 15_000
+  });
+  const gaps = await page.locator(".ProseMirror").evaluate((root) => {
+    const blocks = [...root.children].filter(
+      (element) => !element.classList.contains("prosemirror-virtual-cursor")
+    );
+    return blocks.slice(0, -1).map((block, index) => {
+      const rect = block.getBoundingClientRect();
+      const next = blocks[index + 1]!.getBoundingClientRect();
+      return next.top - rect.bottom;
+    });
+  });
+  expect(gaps.length).toBeGreaterThan(0);
+  expect(gaps.every((gap) => Math.abs(gap - 16) <= 0.5)).toBe(true);
+
+  const blocks = page.locator(
+    ".ProseMirror > *:not(.prosemirror-virtual-cursor)"
+  );
+  const initialCount = await blocks.count();
+  let mermaidRect = await mermaid.boundingBox();
+  expect(mermaidRect).not.toBeNull();
+  await page.mouse.click(
+    mermaidRect!.x - 10,
+    mermaidRect!.y + mermaidRect!.height / 2
+  );
+  await expect(blocks).toHaveCount(initialCount + 1);
+  mermaidRect = await mermaid.boundingBox();
+  await page.mouse.click(
+    mermaidRect!.x - 10,
+    mermaidRect!.y + mermaidRect!.height / 2
+  );
+  await expect(blocks).toHaveCount(initialCount + 1);
+  await page.keyboard.type("前插空行");
+  await expect(
+    editor.locator(":scope > p", { hasText: "前插空行" })
+  ).toHaveCount(1);
+
+  mermaidRect = await mermaid.boundingBox();
+  await page.mouse.click(
+    mermaidRect!.x + mermaidRect!.width - 8,
+    mermaidRect!.y + mermaidRect!.height / 2
+  );
+  await page.keyboard.type("后插空行");
+  const text = await editor.innerText();
+  expect(text.indexOf("前插空行")).toBeLessThan(text.indexOf("Mermaid"));
+  expect(text.indexOf("Mermaid")).toBeLessThan(text.indexOf("后插空行"));
 });
 
 test("saves a blank Excalidraw canvas and keeps its preview", async ({
@@ -1018,6 +1198,28 @@ test("edits structured blocks and restores them after saving", async ({
   const table = page.locator(".milkdown-table-block").last();
   await expect(table).toBeVisible();
   const tableContent = table.locator("table.children");
+  const tableFrame = await table.evaluate((element) => {
+    const frame = element.getBoundingClientRect();
+    const headers = [...element.querySelectorAll("th")];
+    const first = headers[0]?.getBoundingClientRect();
+    const last = headers.at(-1)?.getBoundingClientRect();
+    return {
+      frameLeft: frame.left,
+      frameRight: frame.right,
+      firstLeft: first?.left ?? 0,
+      lastRight: last?.right ?? 0,
+      headerBackground: headers[0]
+        ? getComputedStyle(headers[0]).backgroundColor
+        : ""
+    };
+  });
+  expect(
+    Math.abs(tableFrame.firstLeft - tableFrame.frameLeft)
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(tableFrame.lastRight - tableFrame.frameRight)
+  ).toBeLessThanOrEqual(2);
+  expect(tableFrame.headerBackground).not.toBe("rgba(0, 0, 0, 0)");
   await expect(tableContent.locator("th")).toHaveCount(3);
   await tableContent.locator("th").first().click();
   await page.keyboard.type("能力");
@@ -1047,6 +1249,13 @@ test("edits structured blocks and restores them after saving", async ({
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "公式", exact: true }).click();
   await expect(page.locator(".milkdown-code-block").last()).toBeVisible();
+  const codeGutter = page.locator(".milkdown-code-block .cm-gutters").last();
+  await expect(codeGutter).toBeVisible();
+  expect(
+    await codeGutter.evaluate(
+      (element) => getComputedStyle(element).backgroundColor
+    )
+  ).not.toBe("rgb(0, 0, 0)");
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
@@ -1055,6 +1264,29 @@ test("edits structured blocks and restores them after saving", async ({
   await expect(callout).toBeVisible();
   await page.keyboard.type("发布前请先完成备份。");
   await expect(callout).toContainText("发布前请先完成备份。");
+  const calloutStyle = await callout.evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    paddingTop: Number.parseFloat(getComputedStyle(element).paddingTop),
+    fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+    bodyOffset:
+      (
+        element.querySelector("p:not(.inkloom-callout-marker-line)") ?? element
+      ).getBoundingClientRect().top - element.getBoundingClientRect().top,
+    labelBackground: getComputedStyle(element, "::before").backgroundColor,
+    labelMinWidth: Number.parseFloat(
+      getComputedStyle(element, "::before").minWidth
+    ),
+    markerLineDisplay: getComputedStyle(
+      element.querySelector(".inkloom-callout-marker-line") ?? element
+    ).display
+  }));
+  expect(calloutStyle.height).toBeLessThan(100);
+  expect(calloutStyle.paddingTop).toBeLessThan(32);
+  expect(calloutStyle.fontSize).toBeLessThan(18);
+  expect(calloutStyle.bodyOffset).toBeGreaterThanOrEqual(30);
+  expect(calloutStyle.labelBackground).not.toBe("rgba(0, 0, 0, 0)");
+  expect(calloutStyle.labelMinWidth).toBeGreaterThanOrEqual(46);
+  expect(calloutStyle.markerLineDisplay).toBe("none");
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
@@ -1073,22 +1305,39 @@ test("edits structured blocks and restores them after saving", async ({
     .fill("部署说明");
   await page.getByRole("button", { name: "保存标题" }).click();
   await expect(toggle.locator("summary")).toHaveText("部署说明");
-  const saveRequest = page.waitForRequest(
-    (request) => {
-      if (
-        request.method() !== "PUT" ||
-        !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
-          new URL(request.url()).pathname
-        )
-      ) {
-        return false;
-      }
-      const markdown = String(
-        (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
-      );
-      return markdown.includes("部署说明") && markdown.includes("部署步骤");
+  expect(
+    await toggle
+      .locator("summary")
+      .evaluate(
+        (element) => getComputedStyle(element, "::before").backgroundColor
+      )
+  ).toBe("rgba(0, 0, 0, 0)");
+
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "分隔线", exact: true }).click();
+  const divider = page.locator(".ProseMirror hr").last();
+  await expect(divider).toBeVisible();
+  const dividerMetrics = await divider.evaluate((element) => ({
+    height: Number.parseFloat(getComputedStyle(element).height),
+    width: element.getBoundingClientRect().width
+  }));
+  expect(dividerMetrics.height).toBe(2);
+  expect(dividerMetrics.width).toBeGreaterThan(300);
+  const saveRequest = page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
     }
-  );
+    const markdown = String(
+      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
+    );
+    return markdown.includes("部署说明") && markdown.includes("部署步骤");
+  });
   await toggle.locator("summary").click();
   await expect(toggle).not.toHaveAttribute("open", "");
 
@@ -1109,12 +1358,12 @@ test("edits structured blocks and restores them after saving", async ({
   await expect(
     page.locator(".milkdown-table-block table.children th").first()
   ).toContainText("能力");
-  await expect(
-    page.locator('blockquote[data-callout="note"]')
-  ).toContainText("发布前请先完成备份。");
-  await expect(
-    page.locator("details[data-inkloom-toggle] summary")
-  ).toHaveText("部署说明");
+  await expect(page.locator('blockquote[data-callout="note"]')).toContainText(
+    "发布前请先完成备份。"
+  );
+  await expect(page.locator("details[data-inkloom-toggle] summary")).toHaveText(
+    "部署说明"
+  );
   await page.waitForTimeout(500);
   await expect(
     page.locator(".milkdown-table-block table.children th").first()
@@ -1127,9 +1376,7 @@ test("edits structured blocks and restores them after saving", async ({
   });
   await page.setViewportSize({ width: 320, height: 720 });
   await page.waitForTimeout(250);
-  await page
-    .getByRole("button", { name: "关闭导航" })
-    .dispatchEvent("click");
+  await page.getByRole("button", { name: "关闭导航" }).dispatchEvent("click");
   const overflow = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth
@@ -1195,17 +1442,18 @@ test("edits Mermaid source beside a live preview and restores it", async ({
   await page.getByRole("button", { name: "Mermaid 图表" }).click();
   const diagram = page.locator(".inkloom-mermaid-view").last();
   await expect(diagram).toBeVisible();
-  await expect(
-    diagram.locator(".inkloom-mermaid-svg svg").first()
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(diagram.locator(".inkloom-mermaid-svg svg").first()).toBeVisible(
+    { timeout: 15_000 }
+  );
   const source = diagram.getByLabel("Mermaid 源码");
   await expect(source).toContainText("A[开始]");
 
   const desktopColumns = await diagram
     .locator(".inkloom-mermaid-workspace")
-    .evaluate((element) =>
-      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
-        .length
+    .evaluate(
+      (element) =>
+        getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
+          .length
     );
   expect(desktopColumns).toBe(2);
 
@@ -1269,9 +1517,10 @@ test("edits Mermaid source beside a live preview and restores it", async ({
   await page.waitForTimeout(250);
   const mobileColumns = await restored
     .locator(".inkloom-mermaid-workspace")
-    .evaluate((element) =>
-      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
-        .length
+    .evaluate(
+      (element) =>
+        getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean)
+          .length
     );
   expect(mobileColumns).toBe(1);
   const overflow = await page.evaluate(() => ({
@@ -1335,6 +1584,7 @@ test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
     /\/assets\/[a-f0-9]{64}$/
   );
 
+  await canvasCard.hover();
   await canvasCard.getByRole("button", { name: "编辑画布" }).click();
   await expect(dialog.locator(".excalidraw")).toBeVisible({
     timeout: 20_000
@@ -1343,6 +1593,7 @@ test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
   await page.waitForTimeout(2_300);
   await dialog.getByRole("button", { name: "稍后继续" }).click();
   await expect(dialog).toBeHidden();
+  await canvasCard.hover();
   await canvasCard.getByRole("button", { name: "编辑画布" }).click();
   await expect(dialog.getByText(/已恢复本机临时快照/)).toBeVisible({
     timeout: 20_000
@@ -1522,11 +1773,10 @@ test("uploads images and attachments and exports a portable zip", async ({
 
   await page.locator('[aria-label^="块 "]').first().click();
   await page.getByRole("menuitem", { name: "图片左对齐" }).click();
-  await expect(imageBlock.locator("img")).toHaveAttribute(
-    "src",
-    /#align=left/
-  );
-  const originalImageSource = await imageBlock.locator("img").getAttribute("src");
+  await expect(imageBlock.locator("img")).toHaveAttribute("src", /#align=left/);
+  const originalImageSource = await imageBlock
+    .locator("img")
+    .getAttribute("src");
   await page.locator('[aria-label^="块 "]').first().click();
   await page.getByRole("menuitem", { name: "替换图片" }).click();
   await imageInput.setInputFiles({
@@ -1586,36 +1836,25 @@ test("uploads images and attachments and exports a portable zip", async ({
     /#align=left/
   );
   await expect(page.locator(".inkloom-file-block")).toContainText("说明.txt");
-  await page
-    .locator(".milkdown-image-block img")
-    .dblclick();
-  await expect(
-    page.getByRole("dialog", { name: "图片预览" })
-  ).toBeVisible();
+  await page.locator(".milkdown-image-block img").dblclick();
+  await expect(page.getByRole("dialog", { name: "图片预览" })).toBeVisible();
 });
 
 test("pastes and drops image and attachment files", async ({ page }) => {
   await openScratchNote(page);
   await expect(page.getByLabel("Markdown 正文")).toBeVisible();
-  await page.locator(".product-markdown-editor").evaluate(
-    (root, base64) => {
-      const bytes = Uint8Array.from(atob(base64), (char) =>
-        char.charCodeAt(0)
-      );
-      const transfer = new DataTransfer();
-      transfer.items.add(
-        new File([bytes], "pasted.png", { type: "image/png" })
-      );
-      root.dispatchEvent(
-        new ClipboardEvent("paste", {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: transfer
-        })
-      );
-    },
-    ONE_PIXEL_PNG.toString("base64")
-  );
+  await page.locator(".product-markdown-editor").evaluate((root, base64) => {
+    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
+    root.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: transfer
+      })
+    );
+  }, ONE_PIXEL_PNG.toString("base64"));
   await expect(page.locator(".milkdown-image-block").last()).toBeVisible();
 
   await page.locator(".product-markdown-editor").evaluate((root) => {
@@ -1740,6 +1979,10 @@ async function openScratchNote(page: Page): Promise<string> {
     .click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
   return page.url();
+}
+
+function documentIdFromUrl(page: Page): string {
+  return /\/notes\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1] ?? "";
 }
 
 async function drawExcalidrawRectangle(page: Page) {

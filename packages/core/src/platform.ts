@@ -66,10 +66,13 @@ export type BridgeResponse<TResult = unknown> =
  */
 export interface PlatformBridge {
   getCapabilities(): Promise<PlatformCapabilities>;
-  request<TPayload, TResult>(request: BridgeRequest<TPayload>): Promise<BridgeResponse<TResult>>;
+  request<TPayload, TResult>(
+    request: BridgeRequest<TPayload>
+  ): Promise<BridgeResponse<TResult>>;
 }
 
-export type BridgeDegradationReason = "unsupported" | "protocol-error" | "offline";
+export type BridgeDegradationReason =
+  "unsupported" | "protocol-error" | "offline";
 
 export type BridgeAvailability =
   | { status: "ready" }
@@ -96,10 +99,16 @@ export function createBridgeRequest<TPayload>(
   payload: TPayload
 ): BridgeRequest<TPayload> {
   if (id.trim().length === 0) {
-    throw new InkLoomError("BRIDGE_PROTOCOL_ERROR", "Bridge request id must not be empty.");
+    throw new InkLoomError(
+      "BRIDGE_PROTOCOL_ERROR",
+      "Bridge request id must not be empty."
+    );
   }
   if (!isBridgeMethod(method)) {
-    throw new InkLoomError("BRIDGE_PROTOCOL_ERROR", `Unsupported bridge method: ${method}`);
+    throw new InkLoomError(
+      "BRIDGE_PROTOCOL_ERROR",
+      `Unsupported bridge method: ${method}`
+    );
   }
   if (!isBridgePayload(payload)) {
     throw new InkLoomError(
@@ -117,7 +126,10 @@ export function createBridgeRequest<TPayload>(
 
 export function parseBridgeRequest(value: unknown): BridgeRequest {
   if (!value || typeof value !== "object") {
-    throw new InkLoomError("BRIDGE_PROTOCOL_ERROR", "Bridge request must be an object.");
+    throw new InkLoomError(
+      "BRIDGE_PROTOCOL_ERROR",
+      "Bridge request must be an object."
+    );
   }
 
   const request = value as Partial<BridgeRequest>;
@@ -128,7 +140,10 @@ export function parseBridgeRequest(value: unknown): BridgeRequest {
     );
   }
   if (typeof request.id !== "string" || request.id.trim().length === 0) {
-    throw new InkLoomError("BRIDGE_PROTOCOL_ERROR", "Bridge request id must not be empty.");
+    throw new InkLoomError(
+      "BRIDGE_PROTOCOL_ERROR",
+      "Bridge request id must not be empty."
+    );
   }
   if (!isBridgeMethod(request.method)) {
     throw new InkLoomError(
@@ -158,9 +173,14 @@ export function bridgeUnavailable(
   };
 }
 
-function isJsonValue(value: unknown, depth: number, ancestors: Set<object>): boolean {
+function isJsonValue(
+  value: unknown,
+  depth: number,
+  ancestors: Set<object>
+): boolean {
   if (depth > 64) return false;
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return true;
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value !== "object") return false;
   if (ancestors.has(value)) return false;
@@ -169,7 +189,9 @@ function isJsonValue(value: unknown, depth: number, ancestors: Set<object>): boo
   const valid = Array.isArray(value)
     ? value.every((item) => isJsonValue(item, depth + 1, ancestors))
     : Object.getPrototypeOf(value) === Object.prototype &&
-      Object.values(value).every((item) => isJsonValue(item, depth + 1, ancestors));
+      Object.values(value).every((item) =>
+        isJsonValue(item, depth + 1, ancestors)
+      );
   ancestors.delete(value);
   return valid;
 }

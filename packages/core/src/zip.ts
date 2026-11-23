@@ -103,10 +103,7 @@ function dosDateTime(date: Date) {
       (date.getHours() << 11) |
       (date.getMinutes() << 5) |
       Math.floor(date.getSeconds() / 2),
-    date:
-      ((year - 1980) << 9) |
-      ((date.getMonth() + 1) << 5) |
-      date.getDate()
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
   };
 }
 

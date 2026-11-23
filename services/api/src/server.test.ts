@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createApiServer } from "./server";
+import { createApiServer, type ApiServerOptions } from "./server";
 
 type TestServer = {
   baseUrl: string;
@@ -24,7 +24,7 @@ describe("InkLoom API", () => {
     const workspaces = await json<{
       workspaces: Array<{ id: string; name: string }>;
     }>(fixture, "/api/workspaces", { cookie: session.cookie });
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
 
     const created = await json<{
       document: { meta: { id: string; revision: number }; markdown: string };
@@ -68,12 +68,12 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/documents/${documentId}/revisions`,
       { cookie: session.cookie }
     );
-    expect(revisions.revisions[0].meta.revision).toBe(1);
+    expect(first(revisions.revisions).meta.revision).toBe(1);
 
     await json(
       fixture,
       `/api/workspaces/${workspaceId}/documents/${documentId}/revisions/${
-        revisions.revisions[0].revisionId
+        first(revisions.revisions).revisionId
       }`,
       {
         method: "POST",
@@ -105,7 +105,7 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: session.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
     const created = await json<{
       document: { meta: { id: string; revision: number } };
     }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
@@ -164,17 +164,13 @@ describe("InkLoom API", () => {
 
   it("streams content-addressed assets and keeps referenced blobs", async () => {
     const fixture = await startServer();
-    const session = await register(
-      fixture,
-      "assets@example.com",
-      "secret-123"
-    );
+    const session = await register(fixture, "assets@example.com", "secret-123");
     const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
       fixture,
       "/api/workspaces",
       { cookie: session.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
     const preflight = await raw(
       fixture,
       `/api/workspaces/${workspaceId}/assets`,
@@ -273,15 +269,19 @@ describe("InkLoom API", () => {
     );
     expect(retained.count).toBe(0);
 
-    await json(fixture, `/api/workspaces/${workspaceId}/documents/${documentId}`, {
-      method: "PUT",
-      cookie: session.cookie,
-      body: {
-        baseRevision: 1,
-        checkpoint: true,
-        markdown: "已移除资产引用。\n"
+    await json(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${documentId}`,
+      {
+        method: "PUT",
+        cookie: session.cookie,
+        body: {
+          baseRevision: 1,
+          checkpoint: true,
+          markdown: "已移除资产引用。\n"
+        }
       }
-    });
+    );
     const removed = await json<{ count: number }>(
       fixture,
       `/api/workspaces/${workspaceId}/assets/cleanup`,
@@ -311,7 +311,6 @@ describe("InkLoom API", () => {
       }
     );
     expect(mismatch.status).toBe(415);
-
   });
 
   it("rejects stale revisions and isolates workspaces between users", async () => {
@@ -323,26 +322,28 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: alice.cookie }
     );
-    const workspaceId = aliceWorkspaces.workspaces[0].id;
-    const created = await json<{ document: { meta: { id: string; revision: number } } }>(
+    const workspaceId = first(aliceWorkspaces.workspaces).id;
+    const created = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: alice.cookie,
+      body: {
+        path: "测试/冲突.md",
+        title: "冲突",
+        markdown: "# v1\n"
+      }
+    });
+    const documentId = created.document.meta.id;
+    await json(
       fixture,
-      `/api/workspaces/${workspaceId}/documents`,
+      `/api/workspaces/${workspaceId}/documents/${documentId}`,
       {
-        method: "POST",
+        method: "PUT",
         cookie: alice.cookie,
-        body: {
-          path: "测试/冲突.md",
-          title: "冲突",
-          markdown: "# v1\n"
-        }
+        body: { baseRevision: 1, markdown: "# v2\n" }
       }
     );
-    const documentId = created.document.meta.id;
-    await json(fixture, `/api/workspaces/${workspaceId}/documents/${documentId}`, {
-      method: "PUT",
-      cookie: alice.cookie,
-      body: { baseRevision: 1, markdown: "# v2\n" }
-    });
 
     const conflict = await raw(
       fixture,
@@ -361,9 +362,13 @@ describe("InkLoom API", () => {
       }
     });
 
-    const forbidden = await raw(fixture, `/api/workspaces/${workspaceId}/tree`, {
-      cookie: bob.cookie
-    });
+    const forbidden = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/tree`,
+      {
+        cookie: bob.cookie
+      }
+    );
     expect(forbidden.status).toBe(404);
   });
 
@@ -379,7 +384,7 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: session.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
     const markdown = [
       "---",
       "title: 保留字段",
@@ -400,13 +405,13 @@ describe("InkLoom API", () => {
       "raw syntax",
       "```",
       "",
-      "[reference]: https://example.com \"引用标题\"",
+      '[reference]: https://example.com "引用标题"',
       "",
       "使用 [引用][reference] 与脚注[^note]。",
       "",
       "[^note]: 脚注定义。",
       "",
-      "<aside data-unknown=\"yes\">未知 HTML</aside>",
+      '<aside data-unknown="yes">未知 HTML</aside>',
       "",
       "最后一行没有换行"
     ].join("\n");
@@ -452,10 +457,10 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/revisions`,
       { cookie: session.cookie }
     );
-    expect(revisions.revisions[0].meta.revision).toBe(1);
+    expect(first(revisions.revisions).meta.revision).toBe(1);
     await json(
       fixture,
-      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/revisions/${revisions.revisions[0].revisionId}`,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/revisions/${first(revisions.revisions).revisionId}`,
       {
         method: "POST",
         cookie: session.cookie,
@@ -470,13 +475,63 @@ describe("InkLoom API", () => {
     expect(restored.document.markdown).toBe(markdown);
   });
 
+  it("accepts malformed anchors without failing the committed write", async () => {
+    const fixture = await startServer();
+    const session = await register(fixture, "anchor@example.com", "secret-123");
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: session.cookie }
+    );
+    const workspaceId = first(workspaces.workspaces).id;
+    const markdown = "[目标](文档/目标.md#%E0%A4%A)";
+    const createdResponse = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents`,
+      {
+        method: "POST",
+        cookie: session.cookie,
+        body: {
+          path: "损坏锚点.md",
+          title: "损坏锚点",
+          markdown
+        }
+      }
+    );
+    expect(createdResponse.status).toBe(201);
+    const created = (await createdResponse.json()) as {
+      document: { meta: { id: string } };
+    };
+    const context = await json<{
+      context: {
+        outgoingLinks: Array<{ anchor?: string; broken: boolean }>;
+      };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${created.document.meta.id}/context`,
+      { cookie: session.cookie }
+    );
+    expect(context.context.outgoingLinks[0]).toMatchObject({
+      anchor: "%E0%A4%A",
+      broken: true
+    });
+  });
+
   it("keeps the session across refresh, logs out, and enforces the origin allow list", async () => {
     const fixture = await startServer();
-    const session = await register(fixture, "session@example.com", "secret-123");
+    const session = await register(
+      fixture,
+      "session@example.com",
+      "secret-123"
+    );
 
-    const me = await json<{ user: { email: string } }>(fixture, "/api/auth/me", {
-      cookie: session.cookie
-    });
+    const me = await json<{ user: { email: string } }>(
+      fixture,
+      "/api/auth/me",
+      {
+        cookie: session.cookie
+      }
+    );
     expect(me.user.email).toBe("session@example.com");
 
     const login = await raw(fixture, "/api/auth/login", {
@@ -501,6 +556,34 @@ describe("InkLoom API", () => {
     expect(denied.status).toBe(403);
   });
 
+  it("limits repeated account authentication attempts", async () => {
+    const fixture = await startServer({
+      authRateLimit: {
+        windowMs: 60_000,
+        ipMaxAttempts: 100,
+        accountMaxAttempts: 2
+      }
+    });
+    const email = "limited@example.com";
+    await register(fixture, email, "secret-123");
+
+    const firstFailure = await raw(fixture, "/api/auth/login", {
+      method: "POST",
+      body: { email, password: "wrong-password" }
+    });
+    expect(firstFailure.status).toBe(401);
+
+    const limited = await raw(fixture, "/api/auth/login", {
+      method: "POST",
+      body: { email, password: "wrong-password" }
+    });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toMatch(/^\d+$/);
+    expect(await limited.json()).toMatchObject({
+      error: { code: "AUTH_RATE_LIMITED" }
+    });
+  });
+
   it("moves documents by stable id and rejects path traversal", async () => {
     const fixture = await startServer();
     const session = await register(fixture, "move@example.com", "secret-123");
@@ -509,20 +592,18 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: session.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
-    const created = await json<{ document: { meta: { id: string; revision: number } } }>(
-      fixture,
-      `/api/workspaces/${workspaceId}/documents`,
-      {
-        method: "POST",
-        cookie: session.cookie,
-        body: {
-          path: "产品/移动前.md",
-          title: "移动前",
-          markdown: "# 移动前\n"
-        }
+    const workspaceId = first(workspaces.workspaces).id;
+    const created = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(fixture, `/api/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      cookie: session.cookie,
+      body: {
+        path: "产品/移动前.md",
+        title: "移动前",
+        markdown: "# 移动前\n"
       }
-    );
+    });
     const moved = await json<{
       node: { id: string; path: string; meta: { revision: number } };
     }>(
@@ -559,13 +640,15 @@ describe("InkLoom API", () => {
   it("renames a workspace without exposing it to another user", async () => {
     const fixture = await startServer();
     const alice = await register(fixture, "rename@example.com", "secret-123");
-    const bob = await register(fixture, "rename-other@example.com", "secret-456");
-    const workspaces = await json<{ workspaces: Array<{ id: string; name: string }> }>(
+    const bob = await register(
       fixture,
-      "/api/workspaces",
-      { cookie: alice.cookie }
+      "rename-other@example.com",
+      "secret-456"
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaces = await json<{
+      workspaces: Array<{ id: string; name: string }>;
+    }>(fixture, "/api/workspaces", { cookie: alice.cookie });
+    const workspaceId = first(workspaces.workspaces).id;
 
     const renamed = await json<{ workspace: { name: string } }>(
       fixture,
@@ -578,15 +661,11 @@ describe("InkLoom API", () => {
     );
     expect(renamed.workspace.name).toBe("长期写作");
 
-    const forbidden = await raw(
-      fixture,
-      `/api/workspaces/${workspaceId}`,
-      {
-        method: "PATCH",
-        cookie: bob.cookie,
-        body: { name: "越权修改" }
-      }
-    );
+    const forbidden = await raw(fixture, `/api/workspaces/${workspaceId}`, {
+      method: "PATCH",
+      cookie: bob.cookie,
+      body: { name: "越权修改" }
+    });
     expect(forbidden.status).toBe(404);
   });
 
@@ -603,7 +682,7 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: alice.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
 
     const initialNotes = await json<{
       documents: Array<{ id: string; title: string; revision: number }>;
@@ -640,7 +719,7 @@ describe("InkLoom API", () => {
     }>(fixture, `/api/workspaces/${workspaceId}/notes?sort=title`, {
       cookie: alice.cookie
     });
-    expect(sortedNotes.documents[0].title).toBe("Alpha 随记");
+    expect(first(sortedNotes.documents).title).toBe("Alpha 随记");
 
     const knowledgeBase = await json<{
       knowledgeBase: { id: string; revision: number; name: string };
@@ -687,9 +766,9 @@ describe("InkLoom API", () => {
     }>(fixture, `/api/workspaces/${workspaceId}/notes`, {
       cookie: alice.cookie
     });
-    expect(notesAfterArchive.documents.map((document) => document.id)).not.toContain(
-      note.document.meta.id
-    );
+    expect(
+      notesAfterArchive.documents.map((document) => document.id)
+    ).not.toContain(note.document.meta.id);
 
     const knowledgeDocuments = await json<{
       documents: Array<{
@@ -717,11 +796,10 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/documents/${note.document.meta.id}/open`,
       {
         method: "POST",
-        cookie: alice.cookie,
-        body: { baseRevision: 2 }
+        cookie: alice.cookie
       }
     );
-    expect(opened.document.meta).toMatchObject({ revision: 3 });
+    expect(opened.document.meta).toMatchObject({ revision: 2 });
     expect(opened.document.meta.lastOpenedAt).toBeTruthy();
 
     const recent = await json<{ documents: Array<{ id: string }> }>(
@@ -729,7 +807,7 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/notes/recent`,
       { cookie: alice.cookie }
     );
-    expect(recent.documents[0].id).toBe(note.document.meta.id);
+    expect(first(recent.documents).id).toBe(note.document.meta.id);
 
     const renamed = await json<{
       knowledgeBase: { name: string; revision: number };
@@ -789,13 +867,13 @@ describe("InkLoom API", () => {
       {
         method: "POST",
         cookie: alice.cookie,
-        body: { baseRevision: 3 }
+        body: { baseRevision: 2 }
       }
     );
     expect(restored.document.meta).toMatchObject({
       lifecycle: "scratch",
       path: "同名 (2).md",
-      revision: 4
+      revision: 3
     });
     expect(restored.document.meta.knowledgeBaseId).toBeUndefined();
 
@@ -803,13 +881,13 @@ describe("InkLoom API", () => {
       document: { meta: { id: string; revision: number } };
     }>(
       fixture,
-      `/api/workspaces/${workspaceId}/documents/${initialNotes.documents[0].id}/archive`,
+      `/api/workspaces/${workspaceId}/documents/${first(initialNotes.documents).id}/archive`,
       {
         method: "POST",
         cookie: alice.cookie,
         body: {
           knowledgeBaseId: knowledgeBase.knowledgeBase.id,
-          baseRevision: initialNotes.documents[0].revision
+          baseRevision: first(initialNotes.documents).revision
         }
       }
     );
@@ -860,6 +938,77 @@ describe("InkLoom API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  it("reorders knowledge bases atomically and rejects stale order revisions", async () => {
+    const fixture = await startServer();
+    const session = await register(fixture, "order@example.com", "secret-123");
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: session.cookie }
+    );
+    const workspaceId = first(workspaces.workspaces).id;
+    for (const name of ["甲", "乙", "丙"]) {
+      await json(fixture, `/api/workspaces/${workspaceId}/knowledge-bases`, {
+        method: "POST",
+        cookie: session.cookie,
+        body: { name }
+      });
+    }
+    const listed = await json<{
+      knowledgeBases: Array<{
+        id: string;
+        name: string;
+        revision: number;
+      }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/knowledge-bases`, {
+      cookie: session.cookie
+    });
+    const reordered = [...listed.knowledgeBases].reverse();
+    const updated = await json<{
+      knowledgeBases: Array<{ name: string }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/knowledge-bases/order`, {
+      method: "PUT",
+      cookie: session.cookie,
+      body: {
+        knowledgeBases: reordered.map((item) => ({
+          id: item.id,
+          baseRevision: item.revision
+        }))
+      }
+    });
+    expect(updated.knowledgeBases.map((item) => item.name)).toEqual([
+      "丙",
+      "乙",
+      "甲"
+    ]);
+
+    const stale = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/knowledge-bases/order`,
+      {
+        method: "PUT",
+        cookie: session.cookie,
+        body: {
+          knowledgeBases: listed.knowledgeBases.map((item) => ({
+            id: item.id,
+            baseRevision: item.revision
+          }))
+        }
+      }
+    );
+    expect(stale.status).toBe(409);
+    const unchanged = await json<{
+      knowledgeBases: Array<{ name: string }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/knowledge-bases`, {
+      cookie: session.cookie
+    });
+    expect(unchanged.knowledgeBases.map((item) => item.name)).toEqual([
+      "丙",
+      "乙",
+      "甲"
+    ]);
+  });
+
   it("searches Chinese text, tags, filenames and archived documents with pagination", async () => {
     const fixture = await startServer();
     const writer = await register(fixture, "search@example.com", "secret-123");
@@ -868,7 +1017,7 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: writer.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
+    const workspaceId = first(workspaces.workspaces).id;
     const create = (input: {
       title: string;
       path: string;
@@ -943,7 +1092,7 @@ describe("InkLoom API", () => {
       lifecycle: "knowledge",
       knowledgeBaseId: knowledgeBase.knowledgeBase.id
     });
-    expect(chinese.results[0].snippet).toContain("<mark>");
+    expect(first(chinese.results).snippet).toContain("<mark>");
 
     const english = await json<{
       results: Array<{ title: string }>;
@@ -952,7 +1101,7 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/search?q=${encodeURIComponent("API")}`,
       { cookie: writer.cookie }
     );
-    expect(english.results[0].title).toBe("API 指南");
+    expect(first(english.results).title).toBe("API 指南");
 
     const firstPage = await json<{
       results: Array<{ title: string }>;
@@ -978,12 +1127,8 @@ describe("InkLoom API", () => {
       "/api/workspaces",
       { cookie: writer.cookie }
     );
-    const workspaceId = workspaces.workspaces[0].id;
-    const create = (input: {
-      title: string;
-      path: string;
-      markdown: string;
-    }) =>
+    const workspaceId = first(workspaces.workspaces).id;
+    const create = (input: { title: string; path: string; markdown: string }) =>
       json<{ document: { meta: { id: string; revision: number } } }>(
         fixture,
         `/api/workspaces/${workspaceId}/documents`,
@@ -1024,7 +1169,9 @@ describe("InkLoom API", () => {
         linkText: "目标文档"
       })
     ]);
-    expect(targetContext.context.backlinks[0].snippet).toContain("目标文档.md");
+    expect(first(targetContext.context.backlinks).snippet).toContain(
+      "目标文档.md"
+    );
 
     const sourceContext = await json<{
       context: {
@@ -1061,19 +1208,22 @@ describe("InkLoom API", () => {
       `/api/workspaces/${workspaceId}/documents/${target.document.meta.id}/context`,
       { cookie: writer.cookie }
     );
-    expect(movedContext.context.backlinks[0].targetPath).toBe(
+    expect(first(movedContext.context.backlinks).targetPath).toBe(
       "归档/目标文档.md"
     );
   });
 });
 
-async function startServer(): Promise<TestServer> {
+async function startServer(
+  overrides: Partial<ApiServerOptions> = {}
+): Promise<TestServer> {
   const assetDirectory = mkdtempSync(join(tmpdir(), "inkloom-assets-"));
   const application = createApiServer({
     databaseOptions: { filename: ":memory:" },
     assetDirectory,
     allowedOrigins: ["http://127.0.0.1:4173"],
-    secureCookies: false
+    secureCookies: false,
+    ...overrides
   });
   await new Promise<void>((resolve) => {
     application.server.listen(0, "127.0.0.1", resolve);
@@ -1108,6 +1258,14 @@ async function register(
   return { cookie };
 }
 
+function first<T>(items: readonly T[]): T {
+  const item = items[0];
+  if (item === undefined) {
+    throw new Error("Expected at least one item.");
+  }
+  return item;
+}
+
 async function json<T>(
   fixture: TestServer,
   path: string,
@@ -1139,8 +1297,7 @@ async function raw(
   if (options.origin) headers.Origin = options.origin;
   Object.assign(headers, options.headers);
   if (options.body !== undefined) {
-    headers["Content-Type"] =
-      options.contentType ?? "application/json";
+    headers["Content-Type"] = options.contentType ?? "application/json";
   }
   const body =
     options.body === undefined

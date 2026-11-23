@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export type EditorOwnershipState =
-  | "acquiring"
-  | "owned"
-  | "blocked"
-  | "unavailable";
+  "acquiring" | "owned" | "blocked" | "unavailable";
 
 type WebLock = {
   name: string;
@@ -56,9 +53,8 @@ export function useEditorOwnership(scopeKey: string) {
       }
     });
 
-    const lockManager = (
-      navigator as Navigator & { locks?: WebLockManager }
-    ).locks;
+    const lockManager = (navigator as Navigator & { locks?: WebLockManager })
+      .locks;
     if (!lockManager) {
       ownedRef.current = true;
       setState("owned");

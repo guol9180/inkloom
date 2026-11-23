@@ -9,7 +9,7 @@ import {
 } from "react-router";
 import { lazy, Suspense, type ReactNode } from "react";
 import type { WorkspaceId } from "@inkloom/core";
-import { WorkspaceSkeleton } from "./components/ui/skeleton";
+import { WorkspaceSkeleton } from "@inkloom/ui";
 import { cloudClient } from "./cloud-workspace";
 import { AuthPage } from "./pages/auth-page";
 import { HomeRedirect } from "./pages/home-redirect";
@@ -124,9 +124,7 @@ function LegacyDocumentRedirect() {
   const document = useQuery({
     queryKey: ["document", workspaceId, documentId],
     queryFn: () =>
-      cloudClient
-        .workspace(workspaceId as WorkspaceId)
-        .readDocument(documentId)
+      cloudClient.workspace(workspaceId as WorkspaceId).readDocument(documentId)
   });
 
   if (document.isPending) return <WorkspaceSkeleton />;

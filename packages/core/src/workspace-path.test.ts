@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  InkLoomError,
-  PLATFORM_BRIDGE_VERSION,
-  workspacePath
-} from "./index";
+import { InkLoomError, PLATFORM_BRIDGE_VERSION, workspacePath } from "./index";
 
 describe("workspacePath", () => {
   it("normalizes platform separators into a logical path", () => {
@@ -18,8 +14,12 @@ describe("workspacePath", () => {
 
   it("rejects absolute and platform URI paths instead of rebasing them", () => {
     expect(() => workspacePath("/etc/passwd")).toThrow(InkLoomError);
-    expect(() => workspacePath("C:\\Users\\PC\\secret.md")).toThrow(InkLoomError);
-    expect(() => workspacePath("\\\\server\\share\\secret.md")).toThrow(InkLoomError);
+    expect(() => workspacePath("C:\\Users\\PC\\secret.md")).toThrow(
+      InkLoomError
+    );
+    expect(() => workspacePath("\\\\server\\share\\secret.md")).toThrow(
+      InkLoomError
+    );
     expect(() => workspacePath("file:///secret.md")).toThrow(InkLoomError);
   });
 });

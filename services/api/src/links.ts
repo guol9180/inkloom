@@ -11,16 +11,20 @@ const WIKI_LINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 export function extractDocumentLinks(markdown: string): ParsedDocumentLink[] {
   const links: ParsedDocumentLink[] = [];
   for (const match of markdown.matchAll(MARKDOWN_LINK)) {
-    const target = normalizeTarget(match[2]);
-    if (!target) continue;
-    links.push({ targetPath: target.path, linkText: match[1].trim(), ...(target.anchor ? { anchor: target.anchor } : {}) });
-  }
-  for (const match of markdown.matchAll(WIKI_LINK)) {
-    const target = normalizeTarget(match[1]);
+    const target = normalizeTarget(match[2] ?? "");
     if (!target) continue;
     links.push({
       targetPath: target.path,
-      linkText: (match[2] ?? match[1]).trim(),
+      linkText: (match[1] ?? "").trim(),
+      ...(target.anchor ? { anchor: target.anchor } : {})
+    });
+  }
+  for (const match of markdown.matchAll(WIKI_LINK)) {
+    const target = normalizeTarget(match[1] ?? "");
+    if (!target) continue;
+    links.push({
+      targetPath: target.path,
+      linkText: (match[2] ?? match[1] ?? "").trim(),
       ...(target.anchor ? { anchor: target.anchor } : {})
     });
   }
@@ -46,10 +50,18 @@ function normalizeTarget(
     return undefined;
   }
   const [pathPart, anchor] = value.split("#", 2);
-  const path = pathPart.replace(/^\.\//, "");
+  const path = (pathPart ?? "").replace(/^\.\//, "");
   if (!path) return undefined;
   return {
     path,
-    ...(anchor ? { anchor: decodeURIComponent(anchor) } : {})
+    ...(anchor ? { anchor: decodeAnchor(anchor) } : {})
   };
+}
+
+function decodeAnchor(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

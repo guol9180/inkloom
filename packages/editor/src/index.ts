@@ -98,6 +98,7 @@ function markdownNodeText(node: RootContent): string {
 export function countWords(markdown: string): number {
   const plain = stripMarkdown(markdown);
   const cjk = plain.match(/[\u3400-\u9fff]/g)?.length ?? 0;
-  const latin = plain.replace(/[\u3400-\u9fff]/g, " ").match(/[A-Za-z0-9]+/g)?.length ?? 0;
+  const latin =
+    plain.replace(/[\u3400-\u9fff]/g, " ").match(/[A-Za-z0-9]+/g)?.length ?? 0;
   return cjk + latin;
 }

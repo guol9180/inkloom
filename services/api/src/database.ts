@@ -191,6 +191,10 @@ type SearchRow = DocumentRow & {
   rank: number;
 };
 
+type DocumentSummaryRow = Omit<DocumentRow, "markdown"> & {
+  excerpt_source: string;
+};
+
 type DocumentLinkRow = {
   id: string;
   source_document_id: string;
@@ -306,9 +310,9 @@ export class DocumentDatabase {
           timestamp,
           timestamp
         );
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.syncDocumentLinks(workspaceId, documentId);
     });
-    this.syncDocumentSearch(workspaceId, documentId);
-    this.syncDocumentLinks(workspaceId, documentId);
 
     return { id: userId, email, displayName, createdAt: timestamp };
   }
@@ -410,6 +414,8 @@ export class DocumentDatabase {
           timestamp,
           timestamp
         );
+      this.syncDocumentSearch(workspace.id, documentId);
+      this.syncDocumentLinks(workspace.id, documentId);
     });
     return workspace;
   }
@@ -439,10 +445,7 @@ export class DocumentDatabase {
     return row ? workspaceFromRow(row) : undefined;
   }
 
-  listKnowledgeBases(
-    userId: string,
-    workspaceId: string
-  ): ApiKnowledgeBase[] {
+  listKnowledgeBases(userId: string, workspaceId: string): ApiKnowledgeBase[] {
     this.requireWorkspace(userId, workspaceId);
     return (
       this.db
@@ -535,6 +538,55 @@ export class DocumentDatabase {
     );
   }
 
+  reorderKnowledgeBases(
+    userId: string,
+    workspaceId: string,
+    items: readonly { id: string; baseRevision: number }[]
+  ): ApiKnowledgeBase[] {
+    this.requireWorkspace(userId, workspaceId);
+    const current = this.db
+      .prepare(
+        `SELECT * FROM knowledge_bases
+         WHERE workspace_id = ?
+         ORDER BY sort_order ASC, created_at ASC, name ASC`
+      )
+      .all(workspaceId) as KnowledgeBaseRow[];
+    const currentIds = new Set(current.map((item) => item.id));
+    const nextIds = new Set(items.map((item) => item.id));
+    if (
+      items.length !== current.length ||
+      nextIds.size !== items.length ||
+      items.some((item) => !currentIds.has(item.id))
+    ) {
+      throw new ApiDatabaseError(
+        409,
+        "KNOWLEDGE_BASE_ORDER_STALE",
+        "知识库列表已变化，请刷新后重试。"
+      );
+    }
+    const revisions = new Map(current.map((item) => [item.id, item.revision]));
+    if (items.some((item) => revisions.get(item.id) !== item.baseRevision)) {
+      throw new ApiDatabaseError(
+        409,
+        "KNOWLEDGE_BASE_ORDER_STALE",
+        "知识库顺序已被其他会话修改，请刷新后重试。"
+      );
+    }
+    const timestamp = this.now();
+    const update = this.db.prepare(
+      `UPDATE knowledge_bases
+       SET sort_order = ?, revision = revision + 1, updated_at = ?
+       WHERE id = ? AND workspace_id = ?`
+    );
+    this.transaction(() => {
+      for (const [sortOrder, item] of items.entries()) {
+        update.run(sortOrder, timestamp, item.id, workspaceId);
+      }
+      this.touchWorkspace(workspaceId, timestamp);
+    });
+    return this.listKnowledgeBases(userId, workspaceId);
+  }
+
   deleteKnowledgeBase(
     userId: string,
     workspaceId: string,
@@ -582,18 +634,18 @@ export class DocumentDatabase {
           "DELETE FROM knowledge_bases WHERE id = ? AND workspace_id = ?"
         )
         .run(knowledgeBaseId, workspaceId);
+      for (const row of documents) {
+        this.syncDocumentSearch(workspaceId, row.id);
+        const updated = this.requireDocument(workspaceId, row.id);
+        this.refreshIncomingLinksForPath(
+          workspaceId,
+          row.path,
+          row.id,
+          updated.path
+        );
+      }
       this.touchWorkspace(workspaceId, timestamp);
     });
-    for (const row of documents) {
-      this.syncDocumentSearch(workspaceId, row.id);
-      const updated = this.requireDocument(workspaceId, row.id);
-      this.refreshIncomingLinksForPath(
-        workspaceId,
-        row.path,
-        row.id,
-        updated.path
-      );
-    }
 
     return documents.map((row) =>
       this.readDocument(userId, workspaceId, row.id)
@@ -623,8 +675,9 @@ export class DocumentDatabase {
     return this.listDocumentSummaries(
       `workspace_id = ? AND last_opened_at IS NOT NULL AND deleted_at IS NULL`,
       [workspaceId],
-      "recent"
-    ).slice(0, 12);
+      "recent",
+      12
+    );
   }
 
   listKnowledgeBaseDocuments(
@@ -651,7 +704,10 @@ export class DocumentDatabase {
     this.requireWorkspace(userId, workspaceId);
     const query = buildFtsQuery(input.query);
     const page = Math.max(1, Math.floor(input.page ?? 1));
-    const pageSize = Math.min(50, Math.max(1, Math.floor(input.pageSize ?? 20)));
+    const pageSize = Math.min(
+      50,
+      Math.max(1, Math.floor(input.pageSize ?? 20))
+    );
     if (!query) return { results: [], total: 0, page, pageSize };
     const offset = (page - 1) * pageSize;
     const rows = this.db
@@ -697,9 +753,7 @@ export class DocumentDatabase {
           ...document.meta,
           excerpt: markdownExcerpt(document.markdown),
           snippet:
-            highlighted ||
-            row.snippet ||
-            markdownExcerpt(document.markdown)
+            highlighted || row.snippet || markdownExcerpt(document.markdown)
         };
       }),
       total,
@@ -749,15 +803,15 @@ export class DocumentDatabase {
           documentId,
           workspaceId
         );
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.refreshIncomingLinksForPath(
+        workspaceId,
+        currentRow.path,
+        documentId,
+        nextPath
+      );
       this.touchWorkspace(workspaceId, timestamp);
     });
-    this.syncDocumentSearch(workspaceId, documentId);
-    this.refreshIncomingLinksForPath(
-      workspaceId,
-      currentRow.path,
-      documentId,
-      nextPath
-    );
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -794,31 +848,29 @@ export class DocumentDatabase {
            WHERE id = ? AND workspace_id = ?`
         )
         .run(nextPath, timestamp, documentId, workspaceId);
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.refreshIncomingLinksForPath(
+        workspaceId,
+        currentRow.path,
+        documentId,
+        nextPath
+      );
       this.touchWorkspace(workspaceId, timestamp);
     });
-    this.syncDocumentSearch(workspaceId, documentId);
-    this.refreshIncomingLinksForPath(
-      workspaceId,
-      currentRow.path,
-      documentId,
-      nextPath
-    );
     return this.readDocument(userId, workspaceId, documentId);
   }
 
   markDocumentOpened(
     userId: string,
     workspaceId: string,
-    documentId: string,
-    baseRevision: number
+    documentId: string
   ): DocumentSnapshot {
     this.requireWorkspace(userId, workspaceId);
-    const current = this.requireDocument(workspaceId, documentId);
-    assertRevision(documentId, baseRevision, current.revision);
+    this.requireDocument(workspaceId, documentId);
     this.db
       .prepare(
         `UPDATE documents
-         SET last_opened_at = ?, revision = revision + 1
+         SET last_opened_at = ?
          WHERE id = ? AND workspace_id = ?`
       )
       .run(this.now(), documentId, workspaceId);
@@ -962,36 +1014,38 @@ export class DocumentDatabase {
       markdown,
       extensions: input.extensions
     };
-    this.db
-      .prepare(
-        `INSERT INTO documents
-          (id, workspace_id, lifecycle, knowledge_base_id, path, title,
-           tags_json, markdown, extensions_json, revision, content_hash,
-           created_at, updated_at, archived_at, last_opened_at, deleted_at)
-         VALUES (?, ?, 'scratch', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
-      )
-      .run(
-        snapshot.meta.id,
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO documents
+            (id, workspace_id, lifecycle, knowledge_base_id, path, title,
+             tags_json, markdown, extensions_json, revision, content_hash,
+             created_at, updated_at, archived_at, last_opened_at, deleted_at)
+           VALUES (?, ?, 'scratch', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
+        )
+        .run(
+          snapshot.meta.id,
+          workspaceId,
+          path,
+          title,
+          JSON.stringify(snapshot.meta.tags),
+          markdown,
+          serializeExtensions(snapshot.extensions),
+          snapshot.meta.revision,
+          snapshot.meta.contentHash,
+          timestamp,
+          timestamp
+        );
+      this.syncDocumentAssetRefs(
         workspaceId,
-        path,
-        title,
-        JSON.stringify(snapshot.meta.tags),
+        snapshot.meta.id,
         markdown,
-        serializeExtensions(snapshot.extensions),
-        snapshot.meta.revision,
-        snapshot.meta.contentHash,
-        timestamp,
         timestamp
       );
-    this.syncDocumentAssetRefs(
-      workspaceId,
-      snapshot.meta.id,
-      markdown,
-      timestamp
-    );
-    this.syncDocumentSearch(workspaceId, snapshot.meta.id);
-    this.syncDocumentLinks(workspaceId, snapshot.meta.id);
-    this.touchWorkspace(workspace.id, timestamp);
+      this.syncDocumentSearch(workspaceId, snapshot.meta.id);
+      this.syncDocumentLinks(workspaceId, snapshot.meta.id);
+      this.touchWorkspace(workspace.id, timestamp);
+    });
     return snapshot;
   }
 
@@ -1014,7 +1068,9 @@ export class DocumentDatabase {
     const timestamp = this.now();
     const current = documentFromRow(currentRow);
     const nextTitle =
-      input.title === undefined ? current.meta.title : validateTitle(input.title);
+      input.title === undefined
+        ? current.meta.title
+        : validateTitle(input.title);
     const tags =
       input.tags === undefined ? current.meta.tags : validateTags(input.tags);
     const extensions =
@@ -1049,11 +1105,11 @@ export class DocumentDatabase {
         input.markdown,
         timestamp
       );
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.syncDocumentLinks(workspaceId, documentId);
       this.touchWorkspace(workspaceId, timestamp);
     });
 
-    this.syncDocumentSearch(workspaceId, documentId);
-    this.syncDocumentLinks(workspaceId, documentId);
     return this.readDocument(userId, workspaceId, documentId);
   }
 
@@ -1074,22 +1130,26 @@ export class DocumentDatabase {
       currentRow.knowledge_base_id
     );
     const timestamp = this.now();
-    this.db
-      .prepare(
-        `UPDATE documents
-         SET path = ?, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND workspace_id = ?`
-      )
-      .run(path, timestamp, documentId, workspaceId);
-    this.touchWorkspace(workspaceId, timestamp);
-    this.refreshIncomingLinksForPath(
-      workspaceId,
-      currentRow.path,
-      documentId,
-      path
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE documents
+           SET path = ?, revision = revision + 1, updated_at = ?
+           WHERE id = ? AND workspace_id = ?`
+        )
+        .run(path, timestamp, documentId, workspaceId);
+      this.touchWorkspace(workspaceId, timestamp);
+      this.refreshIncomingLinksForPath(
+        workspaceId,
+        currentRow.path,
+        documentId,
+        path
+      );
+      this.syncDocumentSearch(workspaceId, documentId);
+    });
+    const snapshot = documentFromRow(
+      this.requireDocument(workspaceId, documentId)
     );
-    this.syncDocumentSearch(workspaceId, documentId);
-    const snapshot = documentFromRow(this.requireDocument(workspaceId, documentId));
     return {
       kind: "document",
       id: snapshot.meta.id,
@@ -1109,16 +1169,18 @@ export class DocumentDatabase {
     const currentRow = this.requireDocument(workspaceId, documentId);
     assertRevision(documentId, baseRevision, currentRow.revision);
     const timestamp = this.now();
-    this.db
-      .prepare(
-        `UPDATE documents
-         SET deleted_at = ?, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND workspace_id = ?`
-      )
-      .run(timestamp, timestamp, documentId, workspaceId);
-    this.touchWorkspace(workspaceId, timestamp);
-    this.syncDocumentSearch(workspaceId, documentId);
-    this.clearDocumentLinks(workspaceId, documentId, true);
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE documents
+           SET deleted_at = ?, revision = revision + 1, updated_at = ?
+           WHERE id = ? AND workspace_id = ?`
+        )
+        .run(timestamp, timestamp, documentId, workspaceId);
+      this.touchWorkspace(workspaceId, timestamp);
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.clearDocumentLinks(workspaceId, documentId, true);
+    });
   }
 
   listRevisions(
@@ -1156,7 +1218,8 @@ export class DocumentDatabase {
          WHERE id = ? AND document_id = ? AND workspace_id = ?`
       )
       .get(revisionId, documentId, workspaceId) as RevisionRow | undefined;
-    if (!revision) throw new ApiDatabaseError(404, "REVISION_NOT_FOUND", "找不到历史版本。");
+    if (!revision)
+      throw new ApiDatabaseError(404, "REVISION_NOT_FOUND", "找不到历史版本。");
 
     return this.writeDocument(userId, workspaceId, documentId, {
       markdown: revision.markdown,
@@ -1311,7 +1374,10 @@ export class DocumentDatabase {
     return row;
   }
 
-  private requireDocument(workspaceId: string, documentId: string): DocumentRow {
+  private requireDocument(
+    workspaceId: string,
+    documentId: string
+  ): DocumentRow {
     const row = this.db
       .prepare(
         `SELECT * FROM documents
@@ -1346,8 +1412,7 @@ export class DocumentDatabase {
                  AND lifecycle = 'knowledge' AND knowledge_base_id = ?`
             )
             .get(workspaceId, path, knowledgeBaseId) as
-            | { id: string }
-            | undefined);
+            { id: string } | undefined);
     if (row && row.id !== exceptDocumentId) {
       throw new ApiDatabaseError(
         409,
@@ -1413,22 +1478,28 @@ export class DocumentDatabase {
   private listDocumentSummaries(
     whereSql: string,
     parameters: readonly string[],
-    sort: DocumentSort | "recent"
+    sort: DocumentSort | "recent",
+    limit?: number
   ): ApiDocumentSummary[] {
     const rows = this.db
       .prepare(
-        `SELECT * FROM documents
+        `SELECT id, workspace_id, lifecycle, knowledge_base_id, path, title,
+                tags_json, extensions_json, revision, content_hash, created_at,
+                updated_at, archived_at, last_opened_at,
+                substr(markdown, 1, 4096) AS excerpt_source
+         FROM documents
          WHERE ${whereSql}
-         ORDER BY ${documentOrder(sort)}`
+         ORDER BY ${documentOrder(sort)}
+         ${limit === undefined ? "" : "LIMIT ?"}`
       )
-      .all(...parameters) as DocumentRow[];
-    return rows.map((row) => {
-      const document = documentFromRow(row);
-      return {
-        ...document.meta,
-        excerpt: markdownExcerpt(document.markdown)
-      };
-    });
+      .all(
+        ...parameters,
+        ...(limit === undefined ? [] : [limit])
+      ) as DocumentSummaryRow[];
+    return rows.map((row) => ({
+      ...documentMetaFromRow(row),
+      excerpt: markdownExcerpt(row.excerpt_source)
+    }));
   }
 
   private insertRevision(document: DocumentSnapshot, recordedAt: string): void {
@@ -1605,14 +1676,7 @@ export class DocumentDatabase {
          SET target_document_id = ?, target_path = ?, broken = 0, updated_at = ?
          WHERE workspace_id = ? AND (target_document_id = ? OR target_path = ?)`
       )
-      .run(
-        documentId,
-        newPath,
-        this.now(),
-        workspaceId,
-        documentId,
-        oldPath
-      );
+      .run(documentId, newPath, this.now(), workspaceId, documentId, oldPath);
   }
 
   private clearDocumentLinks(
@@ -1669,7 +1733,10 @@ export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function normalizeDisplayName(value: string | undefined, email: string): string {
+function normalizeDisplayName(
+  value: string | undefined,
+  email: string
+): string {
   const fallback = email.split("@")[0] || "写作者";
   const name = (value ?? fallback).trim().slice(0, 40);
   return name.length > 0 ? name : "写作者";
@@ -1677,7 +1744,12 @@ function normalizeDisplayName(value: string | undefined, email: string): string 
 
 function normalizeWorkspaceName(value: string): string {
   const name = value.trim().slice(0, 80);
-  if (!name) throw new ApiDatabaseError(400, "INVALID_WORKSPACE_NAME", "工作区名称不能为空。");
+  if (!name)
+    throw new ApiDatabaseError(
+      400,
+      "INVALID_WORKSPACE_NAME",
+      "工作区名称不能为空。"
+    );
   return name;
 }
 
@@ -1706,12 +1778,16 @@ function validateSortOrder(value: number): number {
 
 function validateTitle(value: string): string {
   const title = value.trim().slice(0, 200);
-  if (!title) throw new ApiDatabaseError(400, "INVALID_TITLE", "文档标题不能为空。");
+  if (!title)
+    throw new ApiDatabaseError(400, "INVALID_TITLE", "文档标题不能为空。");
   return title;
 }
 
 function validateTags(tags: readonly string[]): string[] {
-  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].slice(0, 30);
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].slice(
+    0,
+    30
+  );
 }
 
 function assertRevision(
@@ -1720,7 +1796,11 @@ function assertRevision(
   actualRevision: number
 ): void {
   if (expectedRevision !== actualRevision) {
-    throw new RevisionConflictError(documentId, expectedRevision, actualRevision);
+    throw new RevisionConflictError(
+      documentId,
+      expectedRevision,
+      actualRevision
+    );
   }
 }
 
@@ -1786,6 +1866,14 @@ function assetFromRow(row: AssetRow): StoredAssetRecord {
 }
 
 function documentFromRow(row: DocumentRow): DocumentSnapshot {
+  return {
+    meta: documentMetaFromRow(row),
+    markdown: row.markdown,
+    extensions: parseExtensions(row.extensions_json)
+  };
+}
+
+function documentMetaFromRow(row: Omit<DocumentRow, "markdown">): DocumentMeta {
   const meta: DocumentMeta = {
     id: row.id,
     workspaceId: row.workspace_id as WorkspaceId,
@@ -1801,11 +1889,7 @@ function documentFromRow(row: DocumentRow): DocumentSnapshot {
     archivedAt: row.archived_at ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined
   };
-  return {
-    meta,
-    markdown: row.markdown,
-    extensions: parseExtensions(row.extensions_json)
-  };
+  return meta;
 }
 
 function revisionFromRow(row: RevisionRow): WorkspaceDocumentRevision {
@@ -1932,22 +2016,27 @@ function documentLinkFromRow(
 ): ApiDocumentLink {
   const sourceTitle = row.source_title ?? "未知文档";
   const sourcePath = row.source_path ?? "";
-  const title = direction === "outgoing" ? row.target_title ?? row.target_path : sourceTitle;
+  const title =
+    direction === "outgoing"
+      ? (row.target_title ?? row.target_path)
+      : sourceTitle;
   const path = direction === "outgoing" ? row.target_path : sourcePath;
   return {
     documentId:
       direction === "outgoing"
-        ? row.target_document_id ?? ""
+        ? (row.target_document_id ?? "")
         : row.source_document_id,
     title,
     path,
     lifecycle:
       direction === "incoming"
-        ? row.source_lifecycle ?? "scratch"
-        : row.target_lifecycle ?? "scratch",
-    ...((direction === "incoming"
-      ? row.source_knowledge_base_id
-      : row.target_knowledge_base_id)
+        ? (row.source_lifecycle ?? "scratch")
+        : (row.target_lifecycle ?? "scratch"),
+    ...((
+      direction === "incoming"
+        ? row.source_knowledge_base_id
+        : row.target_knowledge_base_id
+    )
       ? {
           knowledgeBaseId: (direction === "incoming"
             ? row.source_knowledge_base_id
@@ -1957,7 +2046,11 @@ function documentLinkFromRow(
     linkText: row.link_text,
     targetPath: row.target_path,
     ...(row.anchor ? { anchor: row.anchor } : {}),
-    snippet: linkSnippet(row.source_markdown ?? "", row.link_text, row.target_path),
+    snippet: linkSnippet(
+      row.source_markdown ?? "",
+      row.link_text,
+      row.target_path
+    ),
     broken: Boolean(row.broken)
   };
 }

@@ -5,8 +5,7 @@ import { useForm } from "react-hook-form";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { BrandLockup } from "../components/brand-mark";
-import { Button } from "../components/ui/button";
-import { FieldLabel, TextInput } from "../components/ui/field";
+import { Button, FieldLabel, TextInput } from "@inkloom/ui";
 import { cloudClient } from "../cloud-workspace";
 import { sessionQuery } from "../queries";
 

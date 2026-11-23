@@ -33,7 +33,11 @@ button {
   place-items: center;
   padding: 32px;
   background:
-    radial-gradient(circle at 20% 10%, rgba(165, 104, 39, 0.12), transparent 30%),
+    radial-gradient(
+      circle at 20% 10%,
+      rgba(165, 104, 39, 0.12),
+      transparent 30%
+    ),
     linear-gradient(145deg, #edf2f0, #dce6e3);
 }
 

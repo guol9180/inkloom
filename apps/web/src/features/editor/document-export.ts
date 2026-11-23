@@ -1,4 +1,8 @@
-import { createStoreZip, type DocumentSnapshot, type WorkspaceId } from "@inkloom/core";
+import {
+  createStoreZip,
+  type DocumentSnapshot,
+  type WorkspaceId
+} from "@inkloom/core";
 import { cloudClient } from "../../cloud-workspace";
 
 const ASSET_URL_PATTERN =
@@ -11,7 +15,7 @@ export async function exportDocumentZip(
   const hashes = [
     ...new Set(
       [...markdown.matchAll(ASSET_URL_PATTERN)].map((match) =>
-        match[1].toLowerCase()
+        (match[1] ?? "").toLowerCase()
       )
     )
   ];

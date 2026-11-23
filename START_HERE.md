@@ -14,4 +14,6 @@ Read in this order:
 8. [docs/adr/0006-notes-knowledge-base-and-editor-shell.md](./docs/adr/0006-notes-knowledge-base-and-editor-shell.md) — M1.1 product and editor decision.
 9. [docs/adr/0005-mobile-ready-foundation.md](./docs/adr/0005-mobile-ready-foundation.md) — future host boundaries.
 
-Current next task: **T25 — migrate the workspace data model for scratch notes, flat knowledge bases and assets. Do not resume desktop, M2 or collaboration without confirmation.**
+Current next task: **Review, commit and release the completed T50–T55 quality
+remediation when authorized. Do not resume desktop, M2 or collaboration without
+confirmation.**

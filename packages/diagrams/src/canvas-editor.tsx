@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  lazy,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   canvasEditorData,
   exportCanvasAssets,
@@ -61,10 +54,7 @@ export function CanvasEditor({
   const dataRef = useRef<CanvasEditorData>(scene ?? { elements: [] });
   const onSnapshotRef = useRef(onSnapshot);
   onSnapshotRef.current = onSnapshot;
-  const initialData = useMemo(
-    () => canvasEditorData(scene) as never,
-    [scene]
-  );
+  const initialData = useMemo(() => canvasEditorData(scene) as never, [scene]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +86,12 @@ export function CanvasEditor({
   }
 
   return (
-    <div className="canvas-modal" role="dialog" aria-modal="true" aria-label="Excalidraw 画布">
+    <div
+      className="canvas-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Excalidraw 画布"
+    >
       <div className="canvas-modal-head">
         <div>
           <span className="section-label">EXCALIDRAW 场景</span>
@@ -125,7 +120,9 @@ export function CanvasEditor({
         </div>
       </div>
       <div className="excalidraw-shell">
-        <Suspense fallback={<div className="canvas-loading">正在加载画布引擎…</div>}>
+        <Suspense
+          fallback={<div className="canvas-loading">正在加载画布引擎…</div>}
+        >
           <LazyExcalidraw
             initialData={initialData}
             onChange={(elements, appState, files) => {

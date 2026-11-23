@@ -45,9 +45,7 @@ export function searchIndexTerms(value: string): string[] {
 export function buildFtsQuery(value: string): string | undefined {
   const terms = searchIndexTerms(value);
   if (terms.length === 0) return undefined;
-  return terms
-    .map((term) => `"${term.replaceAll('"', '""')}"`)
-    .join(" AND ");
+  return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(" AND ");
 }
 
 export function filenameFromPath(path: string): string {

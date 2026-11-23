@@ -15,12 +15,13 @@ import {
 } from "@milkdown/kit/preset/gfm";
 import { editorViewCtx, schemaCtx } from "@milkdown/kit/core";
 import { imageBlockSchema } from "@milkdown/kit/component/image-block";
-import type {
-  Attrs,
-  Node as ProseNode
-} from "@milkdown/kit/prose/model";
+import type { Attrs, Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
-import { findTable, isInTable, type FindNodeResult } from "@milkdown/kit/prose/tables";
+import {
+  findTable,
+  isInTable,
+  type FindNodeResult
+} from "@milkdown/kit/prose/tables";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $nodeSchema, $prose, $remark } from "@milkdown/kit/utils";
@@ -29,13 +30,9 @@ import {
   serializeCanvasBlock,
   type CanvasBlockAttrs
 } from "@inkloom/editor";
-import {
-  CALLOUT_LABELS,
-  type CalloutKind
-} from "./editor-block-meta";
+import { CALLOUT_LABELS, type CalloutKind } from "./editor-block-meta";
 
-const CALLOUT_PATTERN =
-  /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\r?\n)?/i;
+const CALLOUT_PATTERN = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\r?\n)?/i;
 
 type MarkdownTreeNode = {
   type: string;
@@ -63,12 +60,15 @@ export type FileBlockAttrs = {
   url: string;
 };
 
-const inkloomBlocksRemark = $remark("inkloomBlocksRemark", () => () => (tree) => {
-  transformMermaid(tree as MarkdownRoot);
-  transformCanvas(tree as MarkdownRoot);
-  transformToggles(tree as MarkdownRoot);
-  transformFiles(tree as MarkdownRoot);
-});
+const inkloomBlocksRemark = $remark(
+  "inkloomBlocksRemark",
+  () => () => (tree) => {
+    transformMermaid(tree as MarkdownRoot);
+    transformCanvas(tree as MarkdownRoot);
+    transformToggles(tree as MarkdownRoot);
+    transformFiles(tree as MarkdownRoot);
+  }
+);
 
 const mermaidSchema = $nodeSchema("inkloom_mermaid", () => ({
   content: "text*",
@@ -200,8 +200,7 @@ const toggleSchema = $nodeSchema("inkloom_toggle", () => ({
     runner: (state, node, type) => {
       state
         .openNode(type, {
-          summary:
-            typeof node.summary === "string" ? node.summary : "折叠内容",
+          summary: typeof node.summary === "string" ? node.summary : "折叠内容",
           open: node.open === true
         })
         .next(node.children)
@@ -346,7 +345,8 @@ const calloutDecorations = $prose(
             if (firstParagraph?.type.name !== "paragraph") return false;
             const marker = firstParagraph.textContent.match(CALLOUT_PATTERN);
             if (!marker) return false;
-            const kind = marker[1].toLowerCase() as CalloutKind;
+            const kind = (marker[1] ?? "note").toLowerCase() as CalloutKind;
+            const markerText = marker[0].replace(/\r?\n$/, "");
             decorations.push(
               Decoration.node(position, position + node.nodeSize, {
                 class: "inkloom-callout",
@@ -354,13 +354,23 @@ const calloutDecorations = $prose(
                 "data-callout-label": CALLOUT_LABELS[kind]
               })
             );
+            if (
+              firstParagraph.textContent.slice(markerText.length).trim()
+                .length === 0
+            ) {
+              decorations.push(
+                Decoration.node(
+                  position + 1,
+                  position + 1 + firstParagraph.nodeSize,
+                  { class: "inkloom-callout-marker-line" }
+                )
+              );
+            }
             const markerStart = position + 2;
             decorations.push(
-              Decoration.inline(
-                markerStart,
-                markerStart + marker[0].replace(/\r?\n$/, "").length,
-                { class: "inkloom-callout-marker" }
-              )
+              Decoration.inline(markerStart, markerStart + markerText.length, {
+                class: "inkloom-callout-marker"
+              })
             );
             return false;
           });
@@ -386,11 +396,7 @@ const tablePaste = $prose(
             const table = createPastedTable(ctx, matrix, found);
             view.dispatch(
               view.state.tr
-                .replaceWith(
-                  found.pos,
-                  found.pos + found.node.nodeSize,
-                  table
-                )
+                .replaceWith(found.pos, found.pos + found.node.nodeSize, table)
                 .scrollIntoView()
             );
             return true;
@@ -462,13 +468,10 @@ export function insertFile(ctx: Ctx, attrs: FileBlockAttrs) {
   );
 }
 
-export function insertCanvasBlock(
-  ctx: Ctx,
-  attrs: CanvasBlockAttrs
-) {
+export function insertCanvasBlock(ctx: Ctx, attrs: CanvasBlockAttrs) {
   replaceOrInsertTopLevelBlock(
     ctx,
-    ctx.get(schemaCtx).nodes.inkloom_canvas.create(attrs)
+    ctx.get(schemaCtx).nodes.inkloom_canvas!.create(attrs)
   );
 }
 
@@ -512,15 +515,11 @@ export function replaceImageBlock(
   const block = topLevelNode(view.state.doc, blockIndex);
   if (!block || block.node.type.name !== "image-block") return;
   view.dispatch(
-    view.state.tr.setNodeMarkup(
-      block.position,
-      undefined,
-      {
-        ...block.node.attrs,
-        src: imageUrlWithAlignment(input.src, "center"),
-        caption: input.caption
-      }
-    )
+    view.state.tr.setNodeMarkup(block.position, undefined, {
+      ...block.node.attrs,
+      src: imageUrlWithAlignment(input.src, "center"),
+      caption: input.caption
+    })
   );
   view.focus();
 }
@@ -537,9 +536,7 @@ export function setCalloutKind(
   if (!firstParagraph) return;
   const marker = firstParagraph.textContent.match(CALLOUT_PATTERN);
   if (!marker) return;
-  const replacement = ctx
-    .get(schemaCtx)
-    .text(`[!${kind.toUpperCase()}]`);
+  const replacement = ctx.get(schemaCtx).text(`[!${kind.toUpperCase()}]`);
   const markerStart = block.position + 2;
   view.dispatch(
     view.state.tr
@@ -597,8 +594,7 @@ function replaceOrInsertTopLevelBlock(ctx: Ctx, node: ProseNode) {
       $from.pos <= entry.position + entry.node.nodeSize
   );
   const current = currentIndex === -1 ? undefined : topLevel[currentIndex];
-  const shouldReplace =
-    current !== undefined && isEmptyParagraph(current.node);
+  const shouldReplace = current !== undefined && isEmptyParagraph(current.node);
   let start = current
     ? shouldReplace
       ? current.position
@@ -611,15 +607,15 @@ function replaceOrInsertTopLevelBlock(ctx: Ctx, node: ProseNode) {
     : start;
   if (shouldReplace && currentIndex > 0) {
     let previous = currentIndex - 1;
-    while (previous >= 0 && isEmptyParagraph(topLevel[previous].node)) {
-      start = topLevel[previous].position;
+    while (previous >= 0 && isEmptyParagraph(topLevel[previous]!.node)) {
+      start = topLevel[previous]!.position;
       previous -= 1;
     }
   }
   if (current) {
     let next = currentIndex + 1;
-    while (next < topLevel.length && isEmptyParagraph(topLevel[next].node)) {
-      end = topLevel[next].position + topLevel[next].node.nodeSize;
+    while (next < topLevel.length && isEmptyParagraph(topLevel[next]!.node)) {
+      end = topLevel[next]!.position + topLevel[next]!.node.nodeSize;
       next += 1;
     }
   }
@@ -728,7 +724,8 @@ function createPastedTable(
   existing: FindNodeResult
 ) {
   const schema = ctx.get(schemaCtx);
-  const alignment = matrix[0].map((_, index) => {
+  const headerRow = matrix[0] ?? [];
+  const alignment = headerRow.map((_, index) => {
     const cell = existing.node.firstChild?.child(index);
     return typeof cell?.attrs.alignment === "string"
       ? cell.attrs.alignment
@@ -736,7 +733,7 @@ function createPastedTable(
   });
   const header = tableHeaderRowSchema.type(ctx).create(
     null,
-    matrix[0].map((value, index) =>
+    headerRow.map((value, index) =>
       tableHeaderSchema
         .type(ctx)
         .create({ alignment: alignment[index] }, [
@@ -746,9 +743,8 @@ function createPastedTable(
         ])
     )
   );
-  const bodyRows = (matrix.slice(1).length > 0
-    ? matrix.slice(1)
-    : [matrix[0].map(() => "")]
+  const bodyRows = (
+    matrix.slice(1).length > 0 ? matrix.slice(1) : [headerRow.map(() => "")]
   ).map((row) =>
     tableRowSchema.type(ctx).create(
       null,
@@ -771,7 +767,7 @@ function transformToggles(root: MarkdownRoot) {
   if (!children?.length) return;
   const next: MarkdownTreeNode[] = [];
   for (let index = 0; index < children.length; index += 1) {
-    const node = children[index];
+    const node = children[index]!;
     const opening = parseToggleOpening(node);
     if (!opening) {
       next.push(node);
@@ -800,7 +796,10 @@ function transformToggles(root: MarkdownRoot) {
 
 function transformMermaid(root: MarkdownRoot) {
   for (const child of root.children ?? []) {
-    if (child.type !== "code" || child.lang?.trim().toLowerCase() !== "mermaid") {
+    if (
+      child.type !== "code" ||
+      child.lang?.trim().toLowerCase() !== "mermaid"
+    ) {
       continue;
     }
     const source = child.value ?? "";
@@ -816,16 +815,14 @@ function transformCanvas(root: MarkdownRoot) {
   if (!children?.length) return;
   const next: MarkdownTreeNode[] = [];
   for (let index = 0; index < children.length; index += 1) {
-    const node = children[index];
+    const node = children[index]!;
     const direct = parseCanvasBlock(markdownNodeText(node));
     if (direct) {
       next.push({ type: "inkloom_canvas", canvasAttrs: direct });
       continue;
     }
     if (
-      !/^<!--\s*inkloom:canvas\s*\n[\s\S]*-->\s*$/i.test(
-        markdownNodeText(node)
-      )
+      !/^<!--\s*inkloom:canvas\s*\n[\s\S]*-->\s*$/i.test(markdownNodeText(node))
     ) {
       next.push(node);
       continue;
@@ -841,7 +838,7 @@ function transformCanvas(root: MarkdownRoot) {
         .slice(index + 1, closing)
         .map((child) => canvasNodeMarkdown(child).trim())
         .filter(Boolean),
-      markdownNodeText(children[closing]).trim()
+      markdownNodeText(children[closing]!).trim()
     ].join("\n\n");
     const attrs = parseCanvasBlock(portable);
     if (!attrs) {
@@ -855,10 +852,7 @@ function transformCanvas(root: MarkdownRoot) {
 }
 
 function canvasNodeMarkdown(node: MarkdownTreeNode): string {
-  if (
-    (node.type === "image" || node.type === "image-block") &&
-    node.url
-  ) {
+  if ((node.type === "image" || node.type === "image-block") && node.url) {
     return `![${node.alt ?? ""}](${node.url})`;
   }
   if (node.children?.length) {
@@ -871,7 +865,7 @@ function findCanvasClosing(children: MarkdownTreeNode[], start: number) {
   for (let index = start; index < children.length; index += 1) {
     if (
       /^\s*<!--\s*\/inkloom:canvas\s*-->\s*$/i.test(
-        markdownNodeText(children[index])
+        markdownNodeText(children[index]!)
       )
     ) {
       return index;
@@ -885,19 +879,19 @@ function transformFiles(root: MarkdownRoot) {
   if (!children?.length) return;
   const next: MarkdownTreeNode[] = [];
   for (let index = 0; index < children.length; index += 1) {
-    const metadata = parseFileOpening(children[index]);
+    const metadata = parseFileOpening(children[index]!);
     if (!metadata) {
-      next.push(children[index]);
+      next.push(children[index]!);
       continue;
     }
     const closingIndex = findFileClosing(children, index + 1);
     if (closingIndex === -1) {
-      next.push(children[index]);
+      next.push(children[index]!);
       continue;
     }
     const url = findFirstLink(children.slice(index + 1, closingIndex));
     if (!url) {
-      next.push(children[index]);
+      next.push(children[index]!);
       continue;
     }
     next.push({
@@ -919,9 +913,11 @@ function parseFileOpening(node: MarkdownTreeNode) {
     .match(/^<!--\s*inkloom:file\s*\n([\s\S]*?)-->$/i);
   if (!match) return undefined;
   const values = new Map<string, string>();
-  for (const line of match[1].split(/\r?\n/)) {
+  for (const line of (match[1] ?? "").split(/\r?\n/)) {
     const entry = line.match(/^\s*([a-z][a-z0-9_-]*):\s*(.*?)\s*$/i);
-    if (entry) values.set(entry[1].toLowerCase(), entry[2]);
+    const key = entry?.[1];
+    const value = entry?.[2];
+    if (key && value !== undefined) values.set(key.toLowerCase(), value);
   }
   const id = values.get("id");
   const hash = values.get("hash");
@@ -940,7 +936,11 @@ function parseFileOpening(node: MarkdownTreeNode) {
 
 function findFileClosing(children: MarkdownTreeNode[], start: number) {
   for (let index = start; index < children.length; index += 1) {
-    if (/^\s*<!--\s*\/inkloom:file\s*-->\s*$/i.test(markdownNodeText(children[index]))) {
+    if (
+      /^\s*<!--\s*\/inkloom:file\s*-->\s*$/i.test(
+        markdownNodeText(children[index]!)
+      )
+    ) {
       return index;
     }
   }
@@ -964,13 +964,13 @@ function parseToggleOpening(node: MarkdownTreeNode) {
   if (!match?.groups) return undefined;
   return {
     open: Boolean(match.groups.open),
-    summary: decodeSummary(match.groups.summary)
+    summary: decodeSummary(match.groups.summary ?? "")
   };
 }
 
 function findToggleClosing(children: MarkdownTreeNode[], start: number) {
   for (let index = start; index < children.length; index += 1) {
-    const node = children[index];
+    const node = children[index]!;
     if (/^\s*<\/details>\s*$/i.test(markdownNodeText(node))) {
       return index;
     }
@@ -980,11 +980,7 @@ function findToggleClosing(children: MarkdownTreeNode[], start: number) {
 
 function markdownNodeText(node: MarkdownTreeNode): string {
   if (typeof node.value === "string") return node.value;
-  return (
-    node.children
-      ?.map((child) => markdownNodeText(child))
-      .join("") ?? ""
-  );
+  return node.children?.map((child) => markdownNodeText(child)).join("") ?? "";
 }
 
 function decodeSummary(summary: string) {
@@ -1004,7 +1000,10 @@ function escapeHtml(value: string) {
 }
 
 function fileBlockMarkdown(attrs: FileBlockAttrs) {
-  const name = String(attrs.name).replace(/[\[\]\r\n]/g, " ");
+  const name = String(attrs.name)
+    .replaceAll("[", " ")
+    .replaceAll("]", " ")
+    .replace(/[\r\n]/g, " ");
   return `<!-- inkloom:file
 id: ${attrs.id}
 hash: ${attrs.hash}

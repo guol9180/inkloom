@@ -233,12 +233,15 @@ export async function renderMermaidBlocks(
       const code = node.querySelector(".mermaid-source")?.textContent ?? "";
       if (!code) return;
       try {
-        const result = await mermaid.render(`inkloom-diagram-${Date.now()}-${index}`, code);
+        const result = await mermaid.render(
+          `inkloom-diagram-${Date.now()}-${index}`,
+          code
+        );
         if (!isCancelled()) node.innerHTML = result.svg;
       } catch {
         if (!isCancelled()) {
           node.innerHTML = `<div class="diagram-error">图表语法需要检查<br><code>${escapeHtml(
-            code.split("\n")[0]
+            code.split("\n")[0] ?? ""
           )}</code></div>`;
         }
       }

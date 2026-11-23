@@ -1,0 +1,87 @@
+@theme {
+  --font-sans:
+    "Geist Sans", "Aptos", "Segoe UI Variable", "Noto Sans SC",
+    "Microsoft YaHei", sans-serif;
+  --font-display:
+    "Iowan Old Style", "Baskerville", "Noto Serif SC", "Songti SC", serif;
+  --font-reading: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --font-mono:
+    "Geist Mono", "IBM Plex Mono", "SFMono-Regular", Consolas,
+    "Liberation Mono", monospace;
+
+  --color-paper: #ffffff;
+  --color-paper-warm: #fafbf9;
+  --color-canvas: #f7f8f6;
+  --color-line: #e5e9e4;
+  --color-line-soft: #eef1ed;
+  --color-line-strong: #d4dbd4;
+  --color-surface-subtle: #f4f6f3;
+  --color-surface-hover: #f2f5f2;
+  --color-surface-selected: #eef3ef;
+
+  --color-ink-50: #f8f9f8;
+  --color-ink-100: #f0f2f0;
+  --color-ink-200: #e0e5e1;
+  --color-ink-300: #bdc6bf;
+  --color-ink-400: #87928a;
+  --color-ink-500: #68746c;
+  --color-ink-600: #4f5c54;
+  --color-ink-700: #39463e;
+  --color-ink-800: #29342d;
+  --color-ink-900: #1d2721;
+  --color-ink-950: #121a15;
+
+  --color-brand-50: #f0f7f3;
+  --color-brand-100: #dcefe6;
+  --color-brand-200: #bedfd0;
+  --color-brand-300: #90c8ae;
+  --color-brand-400: #5fab8b;
+  --color-brand-500: #3f8d6c;
+  --color-brand-600: #2f7457;
+  --color-brand-700: #285e49;
+  --color-brand-800: #234c3c;
+  --color-brand-900: #1f4034;
+  --color-brand-950: #10271f;
+
+  --color-sun-50: #fff9e9;
+  --color-sun-100: #ffefc4;
+  --color-sun-200: #f8dc8d;
+  --color-sun-300: #edc15b;
+  --color-sun-400: #dfa73b;
+  --color-sun-500: #d58d22;
+  --color-sun-600: #b96f14;
+  --color-sun-700: #965410;
+
+  --color-danger-50: #fff4f1;
+  --color-danger-100: #ffe4de;
+  --color-danger-200: #f7c7bd;
+  --color-danger-500: #d27667;
+  --color-danger-700: #a84f43;
+  --color-danger-800: #873b32;
+
+  --color-callout-note: #508a70;
+  --color-callout-tip: #2c8a78;
+  --color-callout-important: #6d69a8;
+  --color-callout-warning: #aa742e;
+  --color-callout-caution: #b05d59;
+  --color-code-surface: #1d3229;
+  --color-code-text: #e6f1eb;
+  --color-editor-panel: #fbfcfa;
+  --color-editor-subtle: #f8faf8;
+  --color-editor-hover: #f1f4f0;
+  --color-editor-grid: #e8ece7;
+  --color-muted-icon: #536a5e;
+
+  --shadow-xs: 0 1px 2px rgb(31 64 52 / 0.06);
+  --shadow-popover: 0 18px 50px rgb(20 36 28 / 0.14);
+  --shadow-panel: 0 24px 80px rgb(18 35 27 / 0.08);
+  --shadow-dialog: 0 30px 90px rgb(20 40 32 / 0.2);
+  --radius-row: 0.625rem;
+  --radius-control: 0.75rem;
+  --radius-panel: 1rem;
+  --radius-dialog: 1.5rem;
+  --spacing-editor-block: 1rem;
+  --ease-fluid: cubic-bezier(0.2, 0.85, 0.28, 1);
+  --duration-fast: 140ms;
+  --duration-standard: 190ms;
+}

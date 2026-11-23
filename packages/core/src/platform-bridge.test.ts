@@ -11,7 +11,12 @@ import {
 
 describe("PlatformBridge protocol", () => {
   it("declares every supported platform and bridge method", () => {
-    expect(PLATFORM_KINDS).toEqual(["web", "tauri-desktop", "tauri-mobile", "harmony"]);
+    expect(PLATFORM_KINDS).toEqual([
+      "web",
+      "tauri-desktop",
+      "tauri-mobile",
+      "harmony"
+    ]);
     expect(BRIDGE_METHODS).toContain("storage.writeText");
   });
 
@@ -21,11 +26,15 @@ describe("PlatformBridge protocol", () => {
       text: "# 标题"
     });
 
-    expect(parseBridgeRequest(JSON.parse(JSON.stringify(request)))).toEqual(request);
+    expect(parseBridgeRequest(JSON.parse(JSON.stringify(request)))).toEqual(
+      request
+    );
   });
 
   it("rejects empty ids and non-JSON payloads", () => {
-    expect(() => createBridgeRequest("", "sync.flush", {})).toThrow(InkLoomError);
+    expect(() => createBridgeRequest("", "sync.flush", {})).toThrow(
+      InkLoomError
+    );
     expect(isBridgePayload({ value: undefined })).toBe(false);
     expect(isBridgePayload({ value: Number.NaN })).toBe(false);
     expect(isBridgePayload({ value: () => undefined })).toBe(false);
@@ -56,7 +65,10 @@ describe("PlatformBridge protocol", () => {
 
   it("describes cached-only degradation when a platform method is unavailable", () => {
     expect(
-      bridgeUnavailable("unsupported", "当前平台不支持目录写入，正在读取本地缓存。")
+      bridgeUnavailable(
+        "unsupported",
+        "当前平台不支持目录写入，正在读取本地缓存。"
+      )
     ).toEqual({
       status: "degraded",
       mode: "cached-only",

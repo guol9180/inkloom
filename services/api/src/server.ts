@@ -1,11 +1,14 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse
+} from "node:http";
 import { resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   InkLoomError,
   RevisionConflictError,
-  workspacePath,
   type DocumentExtensions,
   type JsonValue
 } from "@inkloom/core";
@@ -19,11 +22,9 @@ import {
   type DocumentDatabaseOptions
 } from "./database";
 import { LocalDiskAssetStore } from "./local-disk-assets";
+import { AssetUploadError, type AssetBlobStore } from "./asset-blob-store";
 import {
-  AssetUploadError,
-  type AssetBlobStore
-} from "./asset-blob-store";
-import {
+  createConcurrencyLimiter,
   createSessionToken,
   hashPassword,
   verifyPassword
@@ -44,6 +45,24 @@ export type ApiServerOptions = {
   allowedOrigins?: readonly string[];
   secureCookies?: boolean;
   now?: () => number;
+  trustProxy?: boolean;
+  passwordConcurrency?: number;
+  authRateLimit?:
+    | {
+        windowMs: number;
+        ipMaxAttempts: number;
+        accountMaxAttempts: number;
+      }
+    | false;
+};
+
+type AuthRateLimiter = {
+  readonly config: {
+    windowMs: number;
+    ipMaxAttempts: number;
+    accountMaxAttempts: number;
+  };
+  readonly buckets: Map<string, { count: number; resetAt: number }>;
 };
 
 type RequestContext = {
@@ -66,8 +85,10 @@ export function createApiServer(options: ApiServerOptions = {}) {
     );
   const allowedOrigins = new Set(
     options.allowedOrigins ??
-      (process.env.INKLOOM_WEB_ORIGINS ??
-        "http://127.0.0.1:4173,http://localhost:4173")
+      (
+        process.env.INKLOOM_WEB_ORIGINS ??
+        "http://127.0.0.1:4173,http://localhost:4173"
+      )
         .split(",")
         .map((origin) => origin.trim())
         .filter(Boolean)
@@ -88,13 +109,25 @@ export function createApiServer(options: ApiServerOptions = {}) {
     options.maxAssetBytes ??
     parsePositiveInteger(process.env.INKLOOM_MAX_ASSET_BYTES) ??
     DEFAULT_MAX_ASSET_BYTES;
+  const trustProxy =
+    options.trustProxy ?? process.env.INKLOOM_TRUST_PROXY === "true";
+  const authRateLimiter = createAuthRateLimiter(options.authRateLimit);
+  const runPasswordWork = createConcurrencyLimiter(
+    options.passwordConcurrency ??
+      parsePositiveInteger(process.env.INKLOOM_PASSWORD_CONCURRENCY) ??
+      4
+  );
 
   const server = createServer(async (request, response) => {
     try {
       applyBaseHeaders(response);
       const origin = request.headers.origin;
       if (origin && !allowedOrigins.has(origin)) {
-        throw new ApiHttpError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在允许列表中。");
+        throw new ApiHttpError(
+          403,
+          "ORIGIN_NOT_ALLOWED",
+          "请求来源不在允许列表中。"
+        );
       }
       if (origin) {
         response.setHeader("Access-Control-Allow-Origin", origin);
@@ -129,6 +162,9 @@ export function createApiServer(options: ApiServerOptions = {}) {
         maxAssetBytes,
         secureCookies,
         now,
+        trustProxy,
+        authRateLimiter,
+        runPasswordWork,
         context: { request, response, url, body, assetUpload }
       });
     } catch (error) {
@@ -154,6 +190,9 @@ async function route({
   maxAssetBytes,
   secureCookies,
   now,
+  trustProxy,
+  authRateLimiter,
+  runPasswordWork,
   context
 }: {
   database: DocumentDatabase;
@@ -161,10 +200,16 @@ async function route({
   maxAssetBytes: number;
   secureCookies: boolean;
   now: () => number;
+  trustProxy: boolean;
+  authRateLimiter: AuthRateLimiter | undefined;
+  runPasswordWork: <T>(task: () => Promise<T>) => Promise<T>;
   context: RequestContext;
 }): Promise<void> {
   const { request, response, url, body, assetUpload } = context;
-  const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  const segments = url.pathname
+    .split("/")
+    .filter(Boolean)
+    .map(decodeURIComponent);
   const method = request.method ?? "GET";
 
   if (method === "GET" && url.pathname === "/api/health") {
@@ -184,10 +229,18 @@ async function route({
     const input = parseRecord(body);
     const email = validateEmail(input.email);
     const password = validatePassword(input.password);
+    assertAuthRateAllowed(
+      authRateLimiter,
+      request,
+      response,
+      email,
+      trustProxy,
+      now()
+    );
     if (database.findUserByEmail(email)) {
       throw new ApiHttpError(409, "EMAIL_IN_USE", "该邮箱已注册。");
     }
-    const passwordData = hashPassword(password);
+    const passwordData = await runPasswordWork(() => hashPassword(password));
     let user: ApiUser;
     try {
       user = database.createUser({
@@ -211,10 +264,20 @@ async function route({
     const input = parseRecord(body);
     const email = validateEmail(input.email);
     const password = validatePassword(input.password);
+    assertAuthRateAllowed(
+      authRateLimiter,
+      request,
+      response,
+      email,
+      trustProxy,
+      now()
+    );
     const row = database.findUserByEmail(email);
     if (
       !row ||
-      !verifyPassword(password, row.password_hash, row.password_salt)
+      !(await runPasswordWork(() =>
+        verifyPassword(password, row.password_hash, row.password_salt)
+      ))
     ) {
       throw new ApiHttpError(401, "INVALID_CREDENTIALS", "邮箱或密码不正确。");
     }
@@ -226,7 +289,9 @@ async function route({
   }
 
   const sessionToken = readSessionToken(request, secureCookies);
-  const user = sessionToken ? database.findUserBySession(sessionToken) : undefined;
+  const user = sessionToken
+    ? database.findUserBySession(sessionToken)
+    : undefined;
 
   if (method === "POST" && url.pathname === "/api/auth/logout") {
     if (sessionToken) database.deleteSession(sessionToken);
@@ -266,9 +331,15 @@ async function route({
     if (method === "GET" && segments[3] === "search") {
       const query = (url.searchParams.get("q") ?? "").trim();
       if (query.length > 200) {
-        throw new ApiHttpError(413, "QUERY_TOO_LONG", "搜索词不能超过 200 个字符。");
+        throw new ApiHttpError(
+          413,
+          "QUERY_TOO_LONG",
+          "搜索词不能超过 200 个字符。"
+        );
       }
-      const page = parsePositiveInteger(url.searchParams.get("page") ?? undefined);
+      const page = parsePositiveInteger(
+        url.searchParams.get("page") ?? undefined
+      );
       const pageSize = parsePositiveInteger(
         url.searchParams.get("pageSize") ?? undefined
       );
@@ -357,7 +428,7 @@ async function route({
         segments.length === 5 &&
         segments[4] !== "cleanup"
       ) {
-        const asset = database.getAsset(user.id, workspaceId, segments[4]);
+        const asset = database.getAsset(user.id, workspaceId, segments[4]!);
         response.statusCode = 200;
         response.setHeader("Content-Type", asset.mime);
         response.setHeader("Content-Length", String(asset.size));
@@ -366,8 +437,7 @@ async function route({
           "private, max-age=31536000, immutable"
         );
         response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-        const embeddedImage =
-          request.headers["sec-fetch-dest"] === "image";
+        const embeddedImage = request.headers["sec-fetch-dest"] === "image";
         response.setHeader(
           "Content-Disposition",
           asset.mime.startsWith("image/") &&
@@ -389,12 +459,8 @@ async function route({
         return;
       }
 
-      if (
-        method === "GET" &&
-        segments.length === 6 &&
-        segments[5] === "info"
-      ) {
-        const asset = database.getAsset(user.id, workspaceId, segments[4]);
+      if (method === "GET" && segments.length === 6 && segments[5] === "info") {
+        const asset = database.getAsset(user.id, workspaceId, segments[4]!);
         sendJson(response, 200, { asset: publicAsset(asset) });
         return;
       }
@@ -444,6 +510,35 @@ async function route({
         name: requiredString(input.name, "知识库名称", 80)
       });
       sendJson(response, 201, { knowledgeBase });
+      return;
+    }
+
+    if (
+      method === "PUT" &&
+      segments.length === 5 &&
+      segments[3] === "knowledge-bases" &&
+      segments[4] === "order"
+    ) {
+      const input = parseRecord(body);
+      if (!Array.isArray(input.knowledgeBases)) {
+        throw new ApiHttpError(
+          400,
+          "INVALID_KNOWLEDGE_BASE_ORDER",
+          "知识库顺序必须是数组。"
+        );
+      }
+      const knowledgeBases = database.reorderKnowledgeBases(
+        user.id,
+        workspaceId,
+        input.knowledgeBases.map((item) => {
+          const record = parseRecord(item);
+          return {
+            id: requiredString(record.id, "知识库", 200),
+            baseRevision: requiredRevision(record.baseRevision)
+          };
+        })
+      );
+      sendJson(response, 200, { knowledgeBases });
       return;
     }
 
@@ -511,7 +606,11 @@ async function route({
       return;
     }
 
-    if (method === "POST" && segments.length === 4 && segments[3] === "documents") {
+    if (
+      method === "POST" &&
+      segments.length === 4 &&
+      segments[3] === "documents"
+    ) {
       const input = parseRecord(body);
       const document = database.createDocument(user.id, workspaceId, {
         path: requiredString(input.path, "文档路径"),
@@ -543,11 +642,7 @@ async function route({
       method === "GET"
     ) {
       sendJson(response, 200, {
-        context: database.getDocumentContext(
-          user.id,
-          workspaceId,
-          segments[4]
-        )
+        context: database.getDocumentContext(user.id, workspaceId, segments[4])
       });
       return;
     }
@@ -590,19 +685,14 @@ async function route({
         const document = database.markDocumentOpened(
           user.id,
           workspaceId,
-          segments[4],
-          requiredRevision(input.baseRevision)
+          segments[4]
         );
         sendJson(response, 200, { document });
         return;
       }
     }
 
-    if (
-      segments.length === 5 &&
-      segments[3] === "documents" &&
-      segments[4]
-    ) {
+    if (segments.length === 5 && segments[3] === "documents" && segments[4]) {
       const documentId = segments[4];
       if (method === "GET") {
         sendJson(response, 200, {
@@ -675,11 +765,7 @@ async function route({
       return;
     }
 
-    if (
-      segments.length === 5 &&
-      segments[3] === "nodes" &&
-      segments[4]
-    ) {
+    if (segments.length === 5 && segments[3] === "nodes" && segments[4]) {
       if (method === "PUT") {
         const input = parseRecord(body);
         const node = database.moveDocument(user.id, workspaceId, segments[4], {
@@ -788,7 +874,11 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   if (chunks.length === 0) return {};
   const contentType = request.headers["content-type"] ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
-    throw new ApiHttpError(415, "UNSUPPORTED_MEDIA_TYPE", "请求正文必须是 JSON。");
+    throw new ApiHttpError(
+      415,
+      "UNSUPPORTED_MEDIA_TYPE",
+      "请求正文必须是 JSON。"
+    );
   }
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
@@ -797,7 +887,11 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
-function sendJson(response: ServerResponse, status: number, value: unknown): void {
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  value: unknown
+): void {
   const body = JSON.stringify(value);
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -837,8 +931,7 @@ function sendError(response: ServerResponse, error: unknown): void {
     return;
   }
   if (error instanceof InkLoomError) {
-    const status =
-      error.code === "INVALID_WORKSPACE_PATH" ? 400 : 409;
+    const status = error.code === "INVALID_WORKSPACE_PATH" ? 400 : 409;
     sendJson(response, status, {
       error: { code: error.code, message: error.message }
     });
@@ -855,6 +948,106 @@ function applyBaseHeaders(response: ServerResponse): void {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Cross-Origin-Resource-Policy", "same-site");
+}
+
+function createAuthRateLimiter(
+  option: ApiServerOptions["authRateLimit"]
+): AuthRateLimiter | undefined {
+  if (option === false) return undefined;
+  const windowMs =
+    option?.windowMs ??
+    (parsePositiveInteger(process.env.INKLOOM_AUTH_WINDOW_SECONDS) ?? 600) *
+      1000;
+  const ipMaxAttempts =
+    option?.ipMaxAttempts ??
+    parsePositiveInteger(process.env.INKLOOM_AUTH_IP_ATTEMPTS) ??
+    30;
+  const accountMaxAttempts =
+    option?.accountMaxAttempts ??
+    parsePositiveInteger(process.env.INKLOOM_AUTH_ACCOUNT_ATTEMPTS) ??
+    10;
+  return {
+    config: {
+      windowMs,
+      ipMaxAttempts,
+      accountMaxAttempts
+    },
+    buckets: new Map()
+  };
+}
+
+function assertAuthRateAllowed(
+  limiter: AuthRateLimiter | undefined,
+  request: IncomingMessage,
+  response: ServerResponse,
+  email: string,
+  trustProxy: boolean,
+  timestamp: number
+): void {
+  if (!limiter) return;
+  const { config, buckets } = limiter;
+  const keys = [
+    {
+      key: `ip:${requestAddress(request, trustProxy)}`,
+      limit: config.ipMaxAttempts
+    },
+    {
+      key: `account:${normalizeEmail(email)}`,
+      limit: config.accountMaxAttempts
+    }
+  ];
+  let retryAfterSeconds = 0;
+  for (const { key, limit } of keys) {
+    const bucket = buckets.get(key);
+    if (!bucket || bucket.resetAt <= timestamp) {
+      if (bucket) buckets.delete(key);
+      continue;
+    }
+    if (bucket.count >= limit) {
+      retryAfterSeconds = Math.max(
+        retryAfterSeconds,
+        Math.ceil((bucket.resetAt - timestamp) / 1000)
+      );
+    }
+  }
+  if (retryAfterSeconds > 0) {
+    response.setHeader("Retry-After", String(retryAfterSeconds));
+    throw new ApiHttpError(
+      429,
+      "AUTH_RATE_LIMITED",
+      "登录尝试过于频繁，请稍后再试。"
+    );
+  }
+  for (const { key } of keys) {
+    const bucket = buckets.get(key);
+    if (bucket && bucket.resetAt > timestamp) {
+      bucket.count += 1;
+    } else {
+      buckets.set(key, {
+        count: 1,
+        resetAt: timestamp + config.windowMs
+      });
+    }
+  }
+  if (buckets.size > 10_000) {
+    for (const [key, bucket] of buckets) {
+      if (bucket.resetAt <= timestamp) buckets.delete(key);
+    }
+  }
+}
+
+function requestAddress(request: IncomingMessage, trustProxy: boolean): string {
+  if (trustProxy) {
+    const forwarded = request.headers["x-forwarded-for"];
+    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+      ?.split(",")[0]
+      ?.trim();
+    if (first) return first;
+    const realIp = request.headers["x-real-ip"];
+    const real = Array.isArray(realIp) ? realIp[0] : realIp;
+    if (real?.trim()) return real.trim();
+  }
+  return request.socket.remoteAddress ?? "unknown";
 }
 
 function parseRecord(value: unknown): Record<string, unknown> {
@@ -880,11 +1073,7 @@ function validatePassword(value: unknown): string {
   return password;
 }
 
-function requiredString(
-  value: unknown,
-  name: string,
-  maxLength = 200
-): string {
+function requiredString(value: unknown, name: string, maxLength = 200): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new ApiHttpError(400, "INVALID_INPUT", `${name}不能为空。`);
   }
@@ -899,7 +1088,11 @@ function requiredMarkdown(value: unknown): string {
     throw new ApiHttpError(400, "INVALID_INPUT", "Markdown 正文必须是字符串。");
   }
   if (value.length > 1_500_000) {
-    throw new ApiHttpError(413, "INPUT_TOO_LARGE", "Markdown 正文超过长度限制。");
+    throw new ApiHttpError(
+      413,
+      "INPUT_TOO_LARGE",
+      "Markdown 正文超过长度限制。"
+    );
   }
   return value;
 }
@@ -917,7 +1110,10 @@ function optionalString(value: unknown, maxLength: number): string | undefined {
 
 function optionalStringArray(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string")
+  ) {
     throw new ApiHttpError(400, "INVALID_INPUT", "标签必须是字符串数组。");
   }
   return value.slice(0, 30);
@@ -926,7 +1122,11 @@ function optionalStringArray(value: unknown): string[] | undefined {
 function optionalExtensions(value: unknown): DocumentExtensions | undefined {
   if (value === undefined) return undefined;
   if (!isJsonObject(value)) {
-    throw new ApiHttpError(400, "INVALID_EXTENSIONS", "扩展数据必须是 JSON 对象。");
+    throw new ApiHttpError(
+      400,
+      "INVALID_EXTENSIONS",
+      "扩展数据必须是 JSON 对象。"
+    );
   }
   return value as DocumentExtensions;
 }
@@ -975,7 +1175,11 @@ function isAssetUploadRequest(request: IncomingMessage, url: URL) {
 function normalizeAssetMime(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const mime = raw?.split(";", 1)[0]?.trim().toLowerCase();
-  if (!mime || mime.length > 120 || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mime)) {
+  if (
+    !mime ||
+    mime.length > 120 ||
+    !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mime)
+  ) {
     throw new AssetUploadError(
       415,
       "ASSET_MIME_REQUIRED",
@@ -1004,7 +1208,9 @@ function parseAssetKind(value: string | string[] | undefined): AssetKind {
 
 function assertMimeKind(mime: string, kind: AssetKind) {
   const valid =
-    (kind === "image" && mime.startsWith("image/") && mime !== "image/svg+xml") ||
+    (kind === "image" &&
+      mime.startsWith("image/") &&
+      mime !== "image/svg+xml") ||
     (kind === "svg" && mime === "image/svg+xml") ||
     (kind === "excalidraw" &&
       (mime === "application/json" ||
@@ -1040,22 +1246,27 @@ async function* validateAssetStream(
 function assertAssetSignature(mime: string, bytes: Buffer) {
   const matches =
     (mime === "image/png" &&
-      bytes.subarray(0, 8).equals(
-        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-      )) ||
+      bytes
+        .subarray(0, 8)
+        .equals(
+          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        )) ||
     (mime === "image/jpeg" &&
       bytes[0] === 0xff &&
       bytes[1] === 0xd8 &&
       bytes[2] === 0xff) ||
     ((mime === "image/gif" || mime === "image/webp" || mime === "image/avif") &&
       ((mime === "image/gif" &&
-        ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii"))) ||
+        ["GIF87a", "GIF89a"].includes(
+          bytes.subarray(0, 6).toString("ascii")
+        )) ||
         (mime === "image/webp" &&
           bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
           bytes.subarray(8, 12).toString("ascii") === "WEBP") ||
         (mime === "image/avif" &&
           bytes.subarray(4, 12).toString("ascii").includes("ftyp")))) ||
-    (mime === "application/pdf" && bytes.subarray(0, 5).toString() === "%PDF-") ||
+    (mime === "application/pdf" &&
+      bytes.subarray(0, 5).toString() === "%PDF-") ||
     (mime === "image/svg+xml" && /<svg[\s>]/i.test(bytes.toString("utf8"))) ||
     ((mime === "application/json" ||
       mime === "application/vnd.excalidraw+json") &&
@@ -1096,7 +1307,9 @@ function publicAsset(asset: StoredAssetRecord) {
   };
 }
 
-function parseDocumentSort(value: string | null): "updated" | "created" | "title" {
+function parseDocumentSort(
+  value: string | null
+): "updated" | "created" | "title" {
   if (value === null || value === "updated") return "updated";
   if (value === "created" || value === "title") return value;
   throw new ApiHttpError(
@@ -1113,8 +1326,7 @@ function isJsonObject(value: unknown): value is Record<string, JsonValue> {
 
 function isUniqueConstraint(error: unknown): boolean {
   return (
-    error instanceof Error &&
-    /UNIQUE constraint failed/i.test(error.message)
+    error instanceof Error && /UNIQUE constraint failed/i.test(error.message)
   );
 }
 

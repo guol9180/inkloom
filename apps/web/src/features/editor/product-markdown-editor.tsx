@@ -5,11 +5,11 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -51,9 +51,13 @@ import {
   Undo2,
   X
 } from "lucide-react";
-import { AppDialog } from "../../components/ui/app-dialog";
-import { Button, IconButton } from "../../components/ui/button";
-import { FieldLabel, TextInput } from "../../components/ui/field";
+import {
+  AppDialog,
+  Button,
+  FieldLabel,
+  IconButton,
+  TextInput
+} from "@inkloom/ui";
 import type {
   RichMarkdownEditorHandle,
   RichToolbarAction,
@@ -97,6 +101,8 @@ const RichMarkdownEditor = lazy(() =>
   }))
 );
 
+const DIAGRAM_EDGE_HIT_PX = 20;
+
 type BlockHandle = {
   index: number;
   top: number;
@@ -104,6 +110,7 @@ type BlockHandle = {
   lineHeight: number;
   kind: MarkdownBlockType;
   empty: boolean;
+  visible: boolean;
   calloutKind?: CalloutKind;
   toggleOpen?: boolean;
 };
@@ -166,12 +173,15 @@ export const ProductMarkdownEditor = forwardRef<
   const [draggingIndex, setDraggingIndex] = useState<number>();
   const [dropIndex, setDropIndex] = useState<number>();
   const [openMenuIndex, setOpenMenuIndex] = useState<number>();
-  const pointerDragRef = useRef<{
-    from: number;
-    pointerId: number;
-    startY: number;
-    moved: boolean;
-  } | undefined>(undefined);
+  const pointerDragRef = useRef<
+    | {
+        from: number;
+        pointerId: number;
+        startY: number;
+        moved: boolean;
+      }
+    | undefined
+  >(undefined);
   const [selection, setSelection] = useState<FloatingPosition>();
   const [slash, setSlash] = useState<{
     position: FloatingPosition;
@@ -200,8 +210,7 @@ export const ProductMarkdownEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getMarkdown: () =>
-        editorRef.current?.getMarkdown() ?? value,
+      getMarkdown: () => editorRef.current?.getMarkdown() ?? value,
       focus: () => editorRef.current?.focus()
     }),
     [value]
@@ -213,6 +222,10 @@ export const ProductMarkdownEditor = forwardRef<
     const editor = root?.querySelector<HTMLElement>(".ProseMirror");
     if (!root || !handleLayer || !editor) return;
     const layerRect = handleLayer.getBoundingClientRect();
+    const toolbarRect = root
+      .querySelector<HTMLElement>('[role="toolbar"][aria-label="文档格式"]')
+      ?.getBoundingClientRect();
+    const contentTop = toolbarRect?.bottom ?? layerRect.top;
     const blocks = [...editor.children].filter(
       (element) => !element.classList.contains("prosemirror-virtual-cursor")
     );
@@ -226,13 +239,9 @@ export const ProductMarkdownEditor = forwardRef<
       const lineRect = firstLine.getBoundingClientRect();
       const computed = window.getComputedStyle(firstLine);
       const parsedLineHeight = Number.parseFloat(computed.lineHeight);
-      const calloutElement = blockElement.matches(
-        "blockquote[data-callout]"
-      )
+      const calloutElement = blockElement.matches("blockquote[data-callout]")
         ? blockElement
-        : blockElement.querySelector<HTMLElement>(
-            "blockquote[data-callout]"
-          );
+        : blockElement.querySelector<HTMLElement>("blockquote[data-callout]");
       const toggleElement =
         blockElement instanceof HTMLDetailsElement &&
         blockElement.matches("details[data-inkloom-toggle]")
@@ -253,9 +262,8 @@ export const ProductMarkdownEditor = forwardRef<
         empty:
           kind === "paragraph" &&
           (blockElement.textContent?.trim().length ?? 0) === 0,
-        calloutKind: calloutElement?.dataset.callout as
-          | CalloutKind
-          | undefined,
+        visible: lineRect.top >= contentTop - 1,
+        calloutKind: calloutElement?.dataset.callout as CalloutKind | undefined,
         toggleOpen: toggleElement?.open
       };
     });
@@ -276,11 +284,16 @@ export const ProductMarkdownEditor = forwardRef<
     const resize = new ResizeObserver(syncHandles);
     resize.observe(root);
     const sync = () => window.requestAnimationFrame(syncHandles);
+    const scrollContainer =
+      root.closest<HTMLElement>(".overflow-y-auto") ??
+      root.querySelector<HTMLElement>(".overflow-y-auto");
+    scrollContainer?.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
     sync();
     return () => {
       observer.disconnect();
       resize.disconnect();
+      scrollContainer?.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
     };
   }, [syncHandles]);
@@ -390,11 +403,12 @@ export const ProductMarkdownEditor = forwardRef<
 
   function targetBlockAt(clientY: number): number | undefined {
     const handleLayer = handleLayerRef.current;
-    if (!handleLayer || handles.length === 0) return undefined;
+    const visibleHandles = handles.filter((handle) => handle.visible);
+    if (!handleLayer || visibleHandles.length === 0) return undefined;
     const layerTop = handleLayer.getBoundingClientRect().top;
-    let nearest = handles[0];
+    let nearest = visibleHandles[0]!;
     let distance = Number.POSITIVE_INFINITY;
-    for (const handle of handles) {
+    for (const handle of visibleHandles) {
       const center = layerTop + handle.top + handle.lineHeight / 2;
       const nextDistance = Math.abs(clientY - center);
       if (nextDistance < distance) {
@@ -403,6 +417,45 @@ export const ProductMarkdownEditor = forwardRef<
       }
     }
     return nearest.index;
+  }
+
+  function focusDiagramBoundary(event: ReactPointerEvent<HTMLDivElement>) {
+    if (readOnly || event.button !== 0) return;
+    const target = event.target as Element | null;
+    if (
+      target?.closest(
+        "button, a, input, textarea, select, [role='button'], [role='menuitem'], .cm-editor"
+      )
+    ) {
+      return;
+    }
+    const editor = rootRef.current?.querySelector<HTMLElement>(".ProseMirror");
+    if (!editor) return;
+    const blocks = [...editor.children].filter(
+      (element) => !element.classList.contains("prosemirror-virtual-cursor")
+    );
+    for (const [index, block] of blocks.entries()) {
+      if (!(
+        block.classList.contains("inkloom-mermaid-view") ||
+        block.classList.contains("inkloom-canvas-view")
+      )) {
+        continue;
+      }
+      const rect = block.getBoundingClientRect();
+      if (event.clientY < rect.top || event.clientY > rect.bottom) continue;
+      const edgeWidth = Math.min(DIAGRAM_EDGE_HIT_PX, rect.width * 0.12);
+      const side =
+        event.clientX < rect.left + edgeWidth
+          ? "before"
+          : event.clientX > rect.right - edgeWidth
+            ? "after"
+            : undefined;
+      if (!side) return;
+      event.preventDefault();
+      event.stopPropagation();
+      editorRef.current?.focusTopLevelBoundary(index, side);
+      return;
+    }
   }
 
   async function openCanvasEditor(
@@ -492,10 +545,7 @@ export const ProductMarkdownEditor = forwardRef<
       if (canvasEditor?.insertAfterIndex === undefined) {
         editorRef.current?.insertCanvas(saved);
       } else {
-        editorRef.current?.insertCanvasAt(
-          canvasEditor.insertAfterIndex,
-          saved
-        );
+        editorRef.current?.insertCanvasAt(canvasEditor.insertAfterIndex, saved);
       }
     }
     localStorage.removeItem(canvasDraftKey(workspaceId, documentId, canvas.id));
@@ -672,8 +722,7 @@ export const ProductMarkdownEditor = forwardRef<
       const classification = classifyAssetFile(file);
       const kind =
         requestedKind === "image"
-          ? classification.kind === "image" ||
-            classification.kind === "svg"
+          ? classification.kind === "image" || classification.kind === "svg"
             ? classification.kind
             : undefined
           : requestedKind === "attachment"
@@ -728,9 +777,7 @@ export const ProductMarkdownEditor = forwardRef<
         )
       );
       window.setTimeout(() => {
-        setUploads((current) =>
-          current.filter((item) => item.id !== task.id)
-        );
+        setUploads((current) => current.filter((item) => item.id !== task.id));
       }, 1_500);
     } catch (uploadError) {
       const cancelled =
@@ -757,10 +804,7 @@ export const ProductMarkdownEditor = forwardRef<
   }
 
   function insertUploadedAsset(task: ProductUploadTask, asset: CloudAsset) {
-    const src = cloudClient.assetUrl(
-      workspaceId as WorkspaceId,
-      asset.hash
-    );
+    const src = cloudClient.assetUrl(workspaceId as WorkspaceId, asset.hash);
     const caption = task.file.name.replace(/\.[^.]+$/, "") || task.file.name;
     if (task.kind === "image" || task.kind === "svg") {
       if (task.replaceBlockIndex !== undefined) {
@@ -797,6 +841,7 @@ export const ProductMarkdownEditor = forwardRef<
       ref={rootRef}
       className="product-markdown-editor relative min-h-0"
       data-reading-scale={readingScale}
+      data-empty-document={!hasDocumentContent}
       onKeyDownCapture={readOnly ? undefined : handleKeyDown}
       onPaste={(event) => {
         if (readOnly) return;
@@ -839,367 +884,387 @@ export const ProductMarkdownEditor = forwardRef<
           role="toolbar"
           aria-label="文档格式"
         >
-        {blockType === "table" ? (
-          <>
-            <span className="mx-1 shrink-0 text-[0.62rem] font-bold tracking-[0.08em] text-ink-400 uppercase">
-              表格
-            </span>
-            <TableToolbarButton
-              label="增加行"
-              icon={<Rows3 size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="add-row"
-            />
-            <TableToolbarButton
-              label="删除行"
-              icon={<Rows3 size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="delete-row"
-              disabled={tableHeader}
-            />
-            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
-            <TableToolbarButton
-              label="增加列"
-              icon={<Columns3 size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="add-column"
-            />
-            <TableToolbarButton
-              label="删除列"
-              icon={<Columns3 size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="delete-column"
-              disabled={tableHeader}
-            />
-            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
-            <TableToolbarButton
-              label="左对齐"
-              icon={<TextAlignStart size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="align-left"
-            />
-            <TableToolbarButton
-              label="居中对齐"
-              icon={<TextAlignCenter size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="align-center"
-            />
-            <TableToolbarButton
-              label="右对齐"
-              icon={<TextAlignEnd size={15} />}
-              onAction={(action) => editorRef.current?.tableAction(action)}
-              action="align-right"
-            />
-          </>
-        ) : (
-          TOOLBAR_COMMANDS.map((command, index) => {
-            const previous = TOOLBAR_COMMANDS[index - 1];
-            const separator = previous && previous.group !== command.group;
-            return (
-              <span className="contents" key={command.id}>
-                {separator && (
-                  <span className="mx-1 h-5 w-px shrink-0 bg-line" />
-                )}
-                <button
-                  type="button"
-                  className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
-                    commandIdMatchesBlockType(command.id, blockType)
-                      ? "bg-surface-selected text-brand-800"
-                      : "text-ink-500"
-                  }`}
-                  title={
-                    command.hint
-                      ? `${command.label} · ${command.hint}`
-                      : command.label
-                  }
-                  aria-label={command.label}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => executeCommand(command.id)}
-                >
-                  <CommandIcon command={command} />
-                </button>
+          {blockType === "table" ? (
+            <>
+              <span className="mx-1 shrink-0 text-[0.62rem] font-bold tracking-[0.08em] text-ink-400 uppercase">
+                表格
               </span>
-            );
-          })
+              <TableToolbarButton
+                label="增加行"
+                icon={<Rows3 size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="add-row"
+              />
+              <TableToolbarButton
+                label="删除行"
+                icon={<Rows3 size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="delete-row"
+                disabled={tableHeader}
+              />
+              <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <TableToolbarButton
+                label="增加列"
+                icon={<Columns3 size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="add-column"
+              />
+              <TableToolbarButton
+                label="删除列"
+                icon={<Columns3 size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="delete-column"
+                disabled={tableHeader}
+              />
+              <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <TableToolbarButton
+                label="左对齐"
+                icon={<TextAlignStart size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="align-left"
+              />
+              <TableToolbarButton
+                label="居中对齐"
+                icon={<TextAlignCenter size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="align-center"
+              />
+              <TableToolbarButton
+                label="右对齐"
+                icon={<TextAlignEnd size={15} />}
+                onAction={(action) => editorRef.current?.tableAction(action)}
+                action="align-right"
+              />
+            </>
+          ) : (
+            TOOLBAR_COMMANDS.map((command, index) => {
+              const previous = TOOLBAR_COMMANDS[index - 1];
+              const separator = previous && previous.group !== command.group;
+              return (
+                <span className="contents" key={command.id}>
+                  {separator && (
+                    <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+                  )}
+                  <button
+                    type="button"
+                    className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
+                      commandIdMatchesBlockType(command.id, blockType)
+                        ? "bg-surface-selected text-brand-800"
+                        : "text-ink-500"
+                    }`}
+                    title={
+                      command.hint
+                        ? `${command.label} · ${command.hint}`
+                        : command.label
+                    }
+                    aria-label={command.label}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => executeCommand(command.id)}
+                  >
+                    <CommandIcon command={command} />
+                  </button>
+                </span>
+              );
+            })
           )}
         </div>
       )}
 
-      <div ref={handleLayerRef} className="relative min-h-[calc(100dvh-10.5rem)]">
+      <div
+        ref={handleLayerRef}
+        className="relative min-h-[calc(100dvh-10.5rem)]"
+        onPointerDownCapture={focusDiagramBoundary}
+      >
         {!readOnly && hasDocumentContent && (
           <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
-          {handles.map((handle) => (
-            <DropdownMenu.Root
-              key={handle.index}
-              open={openMenuIndex === handle.index}
-              onOpenChange={(open) =>
-                setOpenMenuIndex(open ? handle.index : undefined)
-              }
-            >
-              <DropdownMenu.Trigger asChild>
-                <button
-                  type="button"
-                  className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-surface-hover hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
-                    dropIndex === handle.index ? "bg-brand-100 text-brand-800" : ""
-                  }`}
-                  style={{
-                    top:
-                      handle.top +
-                      Math.max(0, (handle.lineHeight - 28) / 2)
-                  }}
-                  aria-label={`块 ${handle.index + 1} 操作`}
-                  data-dragging={draggingIndex === handle.index}
-                  data-drop={dropIndex === handle.index}
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) return;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    pointerDragRef.current = {
-                      from: handle.index,
-                      pointerId: event.pointerId,
-                      startY: event.clientY,
-                      moved: false
-                    };
-                  }}
-                  onPointerMove={(event) => {
-                    const drag = pointerDragRef.current;
-                    if (!drag || drag.pointerId !== event.pointerId) return;
-                    if (
-                      !drag.moved &&
-                      Math.abs(event.clientY - drag.startY) < 6
-                    ) {
-                      return;
-                    }
-                    drag.moved = true;
-                    setOpenMenuIndex(undefined);
-                    setDraggingIndex(drag.from);
-                    setDropIndex(targetBlockAt(event.clientY));
-                  }}
-                  onPointerUp={(event) => {
-                    const drag = pointerDragRef.current;
-                    pointerDragRef.current = undefined;
-                    if (!drag || drag.pointerId !== event.pointerId) return;
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                    }
-                    if (drag.moved) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const target = targetBlockAt(event.clientY);
-                      if (target !== undefined && target !== drag.from) {
-                        editorRef.current?.moveTopLevelBlock(drag.from, target);
-                      }
-                    }
-                    setDraggingIndex(undefined);
-                    setDropIndex(undefined);
-                    window.requestAnimationFrame(syncHandles);
-                  }}
+            {handles.map((handle) =>
+              !handle.visible ? null : (
+                <DropdownMenu.Root
+                  key={handle.index}
+                  open={openMenuIndex === handle.index}
+                  onOpenChange={(open) =>
+                    setOpenMenuIndex(open ? handle.index : undefined)
+                  }
                 >
-                  ⠿
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  side="right"
-                  align="start"
-                  sideOffset={4}
-                  className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                >
-                  <DropdownMenu.Sub>
-                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                      <Pilcrow size={14} />
-                      <span className="flex-1">转化为</span>
-                      <span className="text-ink-300">›</span>
-                    </DropdownMenu.SubTrigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.SubContent
-                        sideOffset={6}
-                        className="z-[80] w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                      >
-                        <BlockMenuItem
-                          icon={<Pilcrow size={14} />}
-                          label="正文"
-                          onSelect={() => editorRef.current?.setHeading(null)}
-                        />
-                        {[1, 2, 3, 4, 5, 6].map((level) => (
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-surface-hover hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
+                        dropIndex === handle.index
+                          ? "bg-brand-100 text-brand-800"
+                          : ""
+                      }`}
+                      style={{
+                        top:
+                          handle.top + Math.max(0, (handle.lineHeight - 28) / 2)
+                      }}
+                      aria-label={`块 ${handle.index + 1} 操作`}
+                      data-dragging={draggingIndex === handle.index}
+                      data-drop={dropIndex === handle.index}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        pointerDragRef.current = {
+                          from: handle.index,
+                          pointerId: event.pointerId,
+                          startY: event.clientY,
+                          moved: false
+                        };
+                      }}
+                      onPointerMove={(event) => {
+                        const drag = pointerDragRef.current;
+                        if (!drag || drag.pointerId !== event.pointerId) return;
+                        if (
+                          !drag.moved &&
+                          Math.abs(event.clientY - drag.startY) < 6
+                        ) {
+                          return;
+                        }
+                        drag.moved = true;
+                        setOpenMenuIndex(undefined);
+                        setDraggingIndex(drag.from);
+                        setDropIndex(targetBlockAt(event.clientY));
+                      }}
+                      onPointerUp={(event) => {
+                        const drag = pointerDragRef.current;
+                        pointerDragRef.current = undefined;
+                        if (!drag || drag.pointerId !== event.pointerId) return;
+                        if (
+                          event.currentTarget.hasPointerCapture(event.pointerId)
+                        ) {
+                          event.currentTarget.releasePointerCapture(
+                            event.pointerId
+                          );
+                        }
+                        if (drag.moved) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const target = targetBlockAt(event.clientY);
+                          if (target !== undefined && target !== drag.from) {
+                            editorRef.current?.moveTopLevelBlock(
+                              drag.from,
+                              target
+                            );
+                          }
+                        }
+                        setDraggingIndex(undefined);
+                        setDropIndex(undefined);
+                        window.requestAnimationFrame(syncHandles);
+                      }}
+                    >
+                      ⠿
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      side="right"
+                      align="start"
+                      sideOffset={4}
+                      className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                    >
+                      <DropdownMenu.Sub>
+                        <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                          <Pilcrow size={14} />
+                          <span className="flex-1">转化为</span>
+                          <span className="text-ink-300">›</span>
+                        </DropdownMenu.SubTrigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.SubContent
+                            sideOffset={6}
+                            className="z-[80] w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                          >
+                            <BlockMenuItem
+                              icon={<Pilcrow size={14} />}
+                              label="正文"
+                              onSelect={() =>
+                                editorRef.current?.setHeading(null)
+                              }
+                            />
+                            {[1, 2, 3, 4, 5, 6].map((level) => (
+                              <BlockMenuItem
+                                key={level}
+                                icon={headingIcon(level)}
+                                label={`${level} 级标题`}
+                                onSelect={() =>
+                                  editorRef.current?.setHeading(
+                                    level as 1 | 2 | 3 | 4 | 5 | 6
+                                  )
+                                }
+                              />
+                            ))}
+                            <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                            <DropdownMenu.Sub>
+                              <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                                <MessageSquareText size={14} />
+                                <span className="flex-1">提示块</span>
+                                <span className="text-ink-300">›</span>
+                              </DropdownMenu.SubTrigger>
+                              <DropdownMenu.Portal>
+                                <DropdownMenu.SubContent
+                                  sideOffset={6}
+                                  className="z-[90] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                                >
+                                  {CALLOUT_KINDS.map((kind) => (
+                                    <BlockMenuItem
+                                      key={kind}
+                                      icon={
+                                        <span
+                                          className={`size-1.5 rounded-full callout-dot-${kind}`}
+                                        />
+                                      }
+                                      label={CALLOUT_LABELS[kind]}
+                                      onSelect={() =>
+                                        editorRef.current?.setCalloutKind(
+                                          handle.index,
+                                          kind
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </DropdownMenu.SubContent>
+                              </DropdownMenu.Portal>
+                            </DropdownMenu.Sub>
+                          </DropdownMenu.SubContent>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Sub>
+                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                      <DropdownMenu.Sub>
+                        <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                          <Network size={14} />
+                          <span className="flex-1">图表类型</span>
+                          <span className="text-ink-300">›</span>
+                        </DropdownMenu.SubTrigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.SubContent
+                            sideOffset={6}
+                            className="z-[80] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                          >
+                            <BlockMenuItem
+                              icon={<Network size={14} />}
+                              label="Mermaid 图表"
+                              onSelect={() =>
+                                editorRef.current?.insertBlockAt(
+                                  handle.index,
+                                  "mermaid"
+                                )
+                              }
+                            />
+                            <BlockMenuItem
+                              icon={<Shapes size={14} />}
+                              label="Excalidraw 画布"
+                              onSelect={() =>
+                                void openCanvasEditor(
+                                  {
+                                    id: newCanvasId(),
+                                    title: "自由画布",
+                                    sceneHash: "",
+                                    previewHash: ""
+                                  },
+                                  handle.index
+                                )
+                              }
+                            />
+                          </DropdownMenu.SubContent>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Sub>
+                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                      {handle.kind === "image" && (
+                        <>
                           <BlockMenuItem
-                            key={level}
-                            icon={headingIcon(level)}
-                            label={`${level} 级标题`}
+                            icon={<Image size={14} />}
+                            label="替换图片"
+                            onSelect={() => {
+                              setReplaceImageIndex(handle.index);
+                              imageInputRef.current?.click();
+                            }}
+                          />
+                          <BlockMenuItem
+                            icon={<Image size={14} />}
+                            label="图片左对齐"
                             onSelect={() =>
-                              editorRef.current?.setHeading(
-                                level as 1 | 2 | 3 | 4 | 5 | 6
+                              editorRef.current?.setImageAlignment(
+                                handle.index,
+                                "left"
                               )
                             }
                           />
-                        ))}
-                        <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                        <DropdownMenu.Sub>
-                          <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                            <MessageSquareText size={14} />
-                            <span className="flex-1">提示块</span>
-                            <span className="text-ink-300">›</span>
-                          </DropdownMenu.SubTrigger>
-                          <DropdownMenu.Portal>
-                            <DropdownMenu.SubContent
-                              sideOffset={6}
-                              className="z-[90] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                            >
-                              {CALLOUT_KINDS.map((kind) => (
-                                <BlockMenuItem
-                                  key={kind}
-                                  icon={
-                                    <span
-                                      className={`size-1.5 rounded-full callout-dot-${kind}`}
-                                    />
-                                  }
-                                  label={CALLOUT_LABELS[kind]}
-                                  onSelect={() =>
-                                    editorRef.current?.setCalloutKind(
-                                      handle.index,
-                                      kind
-                                    )
-                                  }
-                                />
-                              ))}
-                            </DropdownMenu.SubContent>
-                          </DropdownMenu.Portal>
-                        </DropdownMenu.Sub>
-                      </DropdownMenu.SubContent>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Sub>
-                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                  <DropdownMenu.Sub>
-                    <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                      <Network size={14} />
-                      <span className="flex-1">图表类型</span>
-                      <span className="text-ink-300">›</span>
-                    </DropdownMenu.SubTrigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.SubContent
-                        sideOffset={6}
-                        className="z-[80] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                      >
-                        <BlockMenuItem
-                          icon={<Network size={14} />}
-                          label="Mermaid 图表"
-                          onSelect={() =>
-                            editorRef.current?.insertBlockAt(
-                              handle.index,
-                              "mermaid"
-                            )
-                          }
-                        />
-                        <BlockMenuItem
-                          icon={<Shapes size={14} />}
-                          label="Excalidraw 画布"
-                          onSelect={() =>
-                            void openCanvasEditor(
-                              {
-                                id: newCanvasId(),
-                                title: "自由画布",
-                                sceneHash: "",
-                                previewHash: ""
-                              },
-                              handle.index
-                            )
-                          }
-                        />
-                      </DropdownMenu.SubContent>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Sub>
-                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                  {handle.kind === "image" && (
-                    <>
+                          <BlockMenuItem
+                            icon={<Image size={14} />}
+                            label="图片居中"
+                            onSelect={() =>
+                              editorRef.current?.setImageAlignment(
+                                handle.index,
+                                "center"
+                              )
+                            }
+                          />
+                          <BlockMenuItem
+                            icon={<Image size={14} />}
+                            label="图片右对齐"
+                            onSelect={() =>
+                              editorRef.current?.setImageAlignment(
+                                handle.index,
+                                "right"
+                              )
+                            }
+                          />
+                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                        </>
+                      )}
+                      {handle.kind === "toggle" && (
+                        <>
+                          <BlockMenuItem
+                            icon={<ChevronsDownUp size={14} />}
+                            label="重命名折叠标题"
+                            onSelect={() => {
+                              const details = rootRef.current
+                                ?.querySelectorAll<HTMLDetailsElement>(
+                                  "details[data-inkloom-toggle]"
+                                )
+                                .item(handle.index);
+                              setToggleSummaryError("");
+                              setToggleEdit({
+                                index: handle.index,
+                                summary:
+                                  details?.querySelector("summary")
+                                    ?.textContent ?? "折叠内容"
+                              });
+                            }}
+                          />
+                          <BlockMenuItem
+                            icon={<ChevronsDownUp size={14} />}
+                            label={
+                              handle.toggleOpen ? "收起折叠块" : "展开折叠块"
+                            }
+                            onSelect={() =>
+                              editorRef.current?.toggleToggleOpen(handle.index)
+                            }
+                          />
+                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                        </>
+                      )}
                       <BlockMenuItem
-                        icon={<Image size={14} />}
-                        label="替换图片"
-                        onSelect={() => {
-                          setReplaceImageIndex(handle.index);
-                          imageInputRef.current?.click();
-                        }}
-                      />
-                      <BlockMenuItem
-                        icon={<Image size={14} />}
-                        label="图片左对齐"
+                        icon={<Copy size={14} />}
+                        label="复制此块"
                         onSelect={() =>
-                          editorRef.current?.setImageAlignment(
-                            handle.index,
-                            "left"
+                          editorRef.current?.duplicateTopLevelBlock(
+                            handle.index
                           )
                         }
                       />
                       <BlockMenuItem
-                        icon={<Image size={14} />}
-                        label="图片居中"
+                        danger
+                        icon={<Trash2 size={14} />}
+                        label="删除此块"
                         onSelect={() =>
-                          editorRef.current?.setImageAlignment(
-                            handle.index,
-                            "center"
-                          )
+                          editorRef.current?.deleteTopLevelBlock(handle.index)
                         }
                       />
-                      <BlockMenuItem
-                        icon={<Image size={14} />}
-                        label="图片右对齐"
-                        onSelect={() =>
-                          editorRef.current?.setImageAlignment(
-                            handle.index,
-                            "right"
-                          )
-                        }
-                      />
-                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                    </>
-                  )}
-                  {handle.kind === "toggle" && (
-                    <>
-                      <BlockMenuItem
-                        icon={<ChevronsDownUp size={14} />}
-                        label="重命名折叠标题"
-                        onSelect={() => {
-                          const details = rootRef.current
-                            ?.querySelectorAll<HTMLDetailsElement>(
-                              "details[data-inkloom-toggle]"
-                            )
-                            .item(handle.index);
-                          setToggleSummaryError("");
-                          setToggleEdit({
-                            index: handle.index,
-                            summary:
-                              details?.querySelector("summary")?.textContent ??
-                              "折叠内容"
-                          });
-                        }}
-                      />
-                      <BlockMenuItem
-                        icon={<ChevronsDownUp size={14} />}
-                        label={handle.toggleOpen ? "收起折叠块" : "展开折叠块"}
-                        onSelect={() =>
-                          editorRef.current?.toggleToggleOpen(handle.index)
-                        }
-                      />
-                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                    </>
-                  )}
-                  <BlockMenuItem
-                    icon={<Copy size={14} />}
-                    label="复制此块"
-                    onSelect={() =>
-                      editorRef.current?.duplicateTopLevelBlock(handle.index)
-                    }
-                  />
-                  <BlockMenuItem
-                    danger
-                    icon={<Trash2 size={14} />}
-                    label="删除此块"
-                    onSelect={() =>
-                      editorRef.current?.deleteTopLevelBlock(handle.index)
-                    }
-                  />
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          ))}
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              )
+            )}
           </div>
         )}
 
@@ -1239,11 +1304,7 @@ export const ProductMarkdownEditor = forwardRef<
           onSnapshot={(sceneJson) => {
             try {
               localStorage.setItem(
-                canvasDraftKey(
-                  workspaceId,
-                  documentId,
-                  canvasEditor.canvas.id
-                ),
+                canvasDraftKey(workspaceId, documentId, canvasEditor.canvas.id),
                 sceneJson
               );
             } catch {
@@ -1448,7 +1509,11 @@ export const ProductMarkdownEditor = forwardRef<
           </>
         }
       >
-        <form id="product-link-form" className="grid gap-4" onSubmit={submitLink}>
+        <form
+          id="product-link-form"
+          className="grid gap-4"
+          onSubmit={submitLink}
+        >
           <FieldLabel>
             链接地址
             <TextInput
@@ -1535,7 +1600,10 @@ export const ProductMarkdownEditor = forwardRef<
         description="双击图片可再次打开大图。"
         onClose={() => setImagePreview(undefined)}
         footer={
-          <Button variant="secondary" onClick={() => setImagePreview(undefined)}>
+          <Button
+            variant="secondary"
+            onClick={() => setImagePreview(undefined)}
+          >
             关闭
           </Button>
         }
@@ -1720,7 +1788,10 @@ function commandIdMatchesBlockType(
   command: EditorCommandId,
   blockType: MarkdownBlockType
 ) {
-  return command === blockType || (blockType === "paragraph" && command === "paragraph");
+  return (
+    command === blockType ||
+    (blockType === "paragraph" && command === "paragraph")
+  );
 }
 
 function editorCommandLabel(command: EditorCommandId) {

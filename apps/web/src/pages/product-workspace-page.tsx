@@ -1,7 +1,6 @@
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -43,10 +42,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import {
-  useNavigate,
-  useParams
-} from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   workspacePath,
   type DocumentSnapshot,
@@ -61,10 +57,15 @@ import type {
 } from "@inkloom/storage";
 import type { CanvasScene } from "@inkloom/diagrams";
 import { BrandLockup, BrandMark } from "../components/brand-mark";
-import { AppDialog } from "../components/ui/app-dialog";
-import { Button, IconButton } from "../components/ui/button";
-import { FieldLabel, TextInput } from "../components/ui/field";
-import { Skeleton, WorkspaceSkeleton } from "../components/ui/skeleton";
+import {
+  AppDialog,
+  Button,
+  FieldLabel,
+  IconButton,
+  Skeleton,
+  TextInput,
+  WorkspaceSkeleton
+} from "@inkloom/ui";
 import { cloudClient } from "../cloud-workspace";
 import {
   useDocumentAutosave,
@@ -80,9 +81,7 @@ import {
   useWorkspacePreferences,
   type WorkspacePreferences
 } from "../features/workspace/workspace-preferences";
-import {
-  ProductMarkdownEditor
-} from "../features/editor/product-markdown-editor";
+import { ProductMarkdownEditor } from "../features/editor/product-markdown-editor";
 import { sessionQuery, workspacesQuery } from "../queries";
 import { useToastStore } from "../stores/toast-store";
 
@@ -102,11 +101,7 @@ type DocumentRowAction = {
 };
 
 export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
-  const {
-    workspaceId = "",
-    knowledgeBaseId,
-    documentId
-  } = useParams();
+  const { workspaceId = "", knowledgeBaseId, documentId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useToastStore((state) => state.show);
@@ -133,9 +128,9 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   const [draftName, setDraftName] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [knowledgeDialog, setKnowledgeDialog] = useState<
-    { mode: "rename"; knowledgeBase: CloudKnowledgeBase } |
-    { mode: "delete"; knowledgeBase: CloudKnowledgeBase } |
-    null
+    | { mode: "rename"; knowledgeBase: CloudKnowledgeBase }
+    | { mode: "delete"; knowledgeBase: CloudKnowledgeBase }
+    | null
   >(null);
   const [knowledgeNameDraft, setKnowledgeNameDraft] = useState("");
   const [knowledgeActionPending, setKnowledgeActionPending] = useState(false);
@@ -200,7 +195,11 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   });
 
   const createNote = useMutation({
-    mutationFn: async (input: { title: string; markdown?: string; tags?: string[] }) => {
+    mutationFn: async (input: {
+      title: string;
+      markdown?: string;
+      tags?: string[];
+    }) => {
       const title = input.title.trim() || "未命名文档";
       const existingPaths = new Set(
         (notes.data ?? []).map((item) => item.path.toLowerCase())
@@ -265,7 +264,9 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
       setKnowledgeDialog(null);
       showToast("知识库名称已更新");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "重命名失败，请重试。");
+      showToast(
+        error instanceof Error ? error.message : "重命名失败，请重试。"
+      );
     } finally {
       setKnowledgeActionPending(false);
     }
@@ -313,25 +314,21 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     const index = ordered.findIndex((item) => item.id === knowledgeBase.id);
     const target = ordered[direction === "up" ? index - 1 : index + 1];
     if (index < 0 || !target) return;
+    const reordered = [...ordered];
+    reordered.splice(index, 1);
+    reordered.splice(
+      direction === "up" ? index - 1 : index + 1,
+      0,
+      knowledgeBase
+    );
     setKnowledgeActionPending(true);
     try {
-      await cloudClient.renameKnowledgeBase(
+      await cloudClient.reorderKnowledgeBases(
         workspaceId as WorkspaceId,
-        knowledgeBase.id,
-        {
-          name: knowledgeBase.name,
-          baseRevision: knowledgeBase.revision,
-          sortOrder: target.sortOrder
-        }
-      );
-      await cloudClient.renameKnowledgeBase(
-        workspaceId as WorkspaceId,
-        target.id,
-        {
-          name: target.name,
-          baseRevision: target.revision,
-          sortOrder: knowledgeBase.sortOrder
-        }
+        reordered.map((item) => ({
+          id: item.id,
+          baseRevision: item.revision
+        }))
       );
       await queryClient.invalidateQueries({
         queryKey: ["knowledge-bases", workspaceId]
@@ -349,11 +346,17 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   }
 
   useEffect(() => {
-    if (mode === "knowledge" && !knowledgeBaseId && knowledgeBases.data?.length === 1) {
+    if (
+      mode === "knowledge" &&
+      !knowledgeBaseId &&
+      knowledgeBases.data?.length === 1
+    ) {
+      const knowledgeBase = knowledgeBases.data[0];
+      if (!knowledgeBase) return;
       navigate(
         `/workspaces/${encodeURIComponent(
           workspaceId
-        )}/knowledge/${encodeURIComponent(knowledgeBases.data[0].id)}`,
+        )}/knowledge/${encodeURIComponent(knowledgeBase.id)}`,
         { replace: true }
       );
     }
@@ -400,9 +403,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
     (item) => item.id === knowledgeBaseId
   );
   const currentSummaries =
-    mode === "knowledge"
-      ? knowledgeDocuments.data ?? []
-      : notes.data ?? [];
+    mode === "knowledge" ? (knowledgeDocuments.data ?? []) : (notes.data ?? []);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSummaries = currentSummaries.filter(
     (item) =>
@@ -610,9 +611,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                   key={item.id}
                   className="flex min-h-10 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
                   onSelect={() =>
-                    navigate(
-                      `/workspaces/${encodeURIComponent(item.id)}/notes`
-                    )
+                    navigate(`/workspaces/${encodeURIComponent(item.id)}/notes`)
                   }
                 >
                   <span className="grid size-7 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -866,8 +865,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                 setPreferencesDraft((current) => ({
                   ...current,
                   searchShortcut: event.target.value as
-                    | "ctrl-j"
-                    | "ctrl-shift-f"
+                    "ctrl-j" | "ctrl-shift-f"
                 }))
               }
             >
@@ -1257,7 +1255,10 @@ function WorkspaceSidebar({
               sideOffset={8}
               className="z-50 w-52 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
             >
-              <SidebarMenuItem icon={<FileText size={14} />} onSelect={onCreateNote}>
+              <SidebarMenuItem
+                icon={<FileText size={14} />}
+                onSelect={onCreateNote}
+              >
                 新建随记
               </SidebarMenuItem>
               <SidebarMenuItem
@@ -1267,10 +1268,16 @@ function WorkspaceSidebar({
                 新建知识库
               </SidebarMenuItem>
               <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-              <SidebarMenuItem icon={<Import size={14} />} onSelect={onImportMarkdown}>
+              <SidebarMenuItem
+                icon={<Import size={14} />}
+                onSelect={onImportMarkdown}
+              >
                 导入 Markdown
               </SidebarMenuItem>
-              <SidebarMenuItem icon={<Import size={14} />} onSelect={onImportFolder}>
+              <SidebarMenuItem
+                icon={<Import size={14} />}
+                onSelect={onImportFolder}
+              >
                 导入文件夹
               </SidebarMenuItem>
             </DropdownMenu.Content>
@@ -1355,7 +1362,7 @@ function WorkspaceSidebar({
           )
         ) : mode === "notes" ? (
           <>
-            {recent.length > 0 && !normalizedQuery && (
+            {recent.length > 0 && !normalizedQuery && !tagFilter && (
               <SidebarGroup icon={<Clock3 size={13} />} title="最近">
                 {recent.slice(0, 4).map((item) => (
                   <DocumentRow
@@ -1423,9 +1430,7 @@ function WorkspaceSidebar({
                     }
                   >
                     <BookOpen size={14} className="text-brand-600" />
-                    <span className="min-w-0 flex-1 truncate">
-                      {item.name}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
                   </button>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
@@ -1451,7 +1456,9 @@ function WorkspaceSidebar({
                           重命名
                         </SidebarMenuItem>
                         <SidebarMenuItem
-                          icon={<ChevronDown size={14} className="-rotate-90" />}
+                          icon={
+                            <ChevronDown size={14} className="-rotate-90" />
+                          }
                           onSelect={() => onMoveKnowledgeBase(item, "up")}
                         >
                           上移
@@ -1568,7 +1575,7 @@ function SidebarGroup({
         {icon}
         {title}
       </h2>
-      <div className="grid gap-0.5">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">{children}</div>
     </section>
   );
 }
@@ -1681,6 +1688,8 @@ function DocumentRow({
 }) {
   return (
     <div
+      data-document-id={document.id}
+      data-document-active={active ? "true" : undefined}
       className={`group flex min-h-11 w-full items-center rounded-xl pr-1 transition ${
         active
           ? "bg-surface-selected text-ink-950 ring-1 ring-brand-200/60"
@@ -1690,6 +1699,7 @@ function DocumentRow({
       <button
         type="button"
         className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2.5 text-left"
+        data-document-title={document.title}
         aria-current={active ? "page" : undefined}
         onClick={onClick}
       >
@@ -1698,12 +1708,12 @@ function DocumentRow({
           className={active ? "text-brand-600" : "text-ink-300"}
         />
         <span className="min-w-0 flex-1">
-          <strong className="block truncate text-xs font-semibold">
+          <strong
+            className="block truncate text-xs font-semibold"
+            title={document.title}
+          >
             {document.title}
           </strong>
-          <small className="mt-0.5 block truncate text-[0.62rem] text-ink-400">
-            {document.excerpt || "空白文档"}
-          </small>
         </span>
       </button>
       {actions.length > 0 && (
@@ -1868,9 +1878,7 @@ function DocumentSurface({
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const pendingReaderScrollRef = useRef<number | undefined>(undefined);
   const ownership = useEditorOwnership(
-    userId
-      ? `${userId}:${document.meta.workspaceId}:${document.meta.id}`
-      : ""
+    userId ? `${userId}:${document.meta.workspaceId}:${document.meta.id}` : ""
   );
   const ownsEditor = ownership === "owned" || ownership === "unavailable";
   const editorActive =
@@ -1892,6 +1900,30 @@ function DocumentSurface({
   useEffect(() => {
     setEditing(mode === "notes");
   }, [document.meta.id, mode]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    void cloudClient
+      .markDocumentOpened(
+        document.meta.workspaceId as WorkspaceId,
+        document.meta.id
+      )
+      .then(async (opened) => {
+        if (!active) return;
+        queryClient.setQueryData(
+          ["document", document.meta.workspaceId, document.meta.id],
+          opened
+        );
+        await queryClient.invalidateQueries({
+          queryKey: ["notes", document.meta.workspaceId, "recent"]
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [document.meta.id, document.meta.workspaceId, queryClient, userId]);
 
   useEffect(() => {
     setInfoOpen(defaultInfoOpen);
@@ -2031,7 +2063,9 @@ function DocumentSurface({
         }
       );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["notes", document.meta.workspaceId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["notes", document.meta.workspaceId]
+        }),
         queryClient.invalidateQueries({
           queryKey: ["knowledge-documents", document.meta.workspaceId]
         })
@@ -2062,8 +2096,30 @@ function DocumentSurface({
         nodeId: document.meta.id,
         baseRevision: latest.meta.revision
       });
+      const removeDeleted = (documents: CloudDocumentSummary[] | undefined) =>
+        documents?.filter((item) => item.id !== document.meta.id);
+      queryClient.setQueryData<CloudDocumentSummary[]>(
+        ["notes", document.meta.workspaceId],
+        removeDeleted
+      );
+      queryClient.setQueryData<CloudDocumentSummary[]>(
+        ["notes", document.meta.workspaceId, "recent"],
+        removeDeleted
+      );
+      if (document.meta.knowledgeBaseId) {
+        queryClient.setQueryData<CloudDocumentSummary[]>(
+          [
+            "knowledge-documents",
+            document.meta.workspaceId,
+            document.meta.knowledgeBaseId
+          ],
+          removeDeleted
+        );
+      }
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["notes", document.meta.workspaceId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["notes", document.meta.workspaceId]
+        }),
         queryClient.invalidateQueries({
           queryKey: ["knowledge-documents", document.meta.workspaceId]
         })
@@ -2073,9 +2129,7 @@ function DocumentSurface({
       navigate(
         `/workspaces/${encodeURIComponent(document.meta.workspaceId)}/${
           mode === "knowledge" && document.meta.knowledgeBaseId
-            ? `knowledge/${encodeURIComponent(
-                document.meta.knowledgeBaseId
-              )}`
+            ? `knowledge/${encodeURIComponent(document.meta.knowledgeBaseId)}`
             : "notes"
         }`
       );
@@ -2119,7 +2173,9 @@ function DocumentSurface({
         )}/notes/${encodeURIComponent(document.meta.id)}`
       );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "移回随记失败，请重试。");
+      showToast(
+        error instanceof Error ? error.message : "移回随记失败，请重试。"
+      );
     } finally {
       setDocumentActionPending(false);
     }
@@ -2134,232 +2190,226 @@ function DocumentSurface({
         className="document-reader-scroll min-w-0 flex-1 overflow-y-auto"
       >
         <article className="min-h-full w-full bg-white">
-        <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-ink-900">
-              {autosave.title}
-            </h1>
-            <p className="mt-0.5 text-[0.62rem] font-medium text-ink-400">
-              {document.meta.lifecycle === "knowledge"
-                ? "知识库 · 预览优先"
-                : "随记 · Markdown"}
-            </p>
-            {autosave.tags.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {autosave.tags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="rounded-full bg-surface-subtle px-2 py-0.5 text-[0.66rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
-                    onClick={() => {
+          <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-line-soft bg-white/94 px-4 backdrop-blur-xl sm:px-6">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-sm font-semibold text-ink-900">
+                {autosave.title}
+              </h1>
+              <p className="mt-0.5 text-[0.62rem] font-medium text-ink-400">
+                {document.meta.lifecycle === "knowledge"
+                  ? "知识库 · 预览优先"
+                  : "随记 · Markdown"}
+              </p>
+              {autosave.tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {autosave.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="rounded-full bg-surface-subtle px-2 py-0.5 text-[0.66rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
+                      onClick={() => {
+                        setTagDraft(autosave.tags.join(", "));
+                        setTagDialogOpen(true);
+                      }}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {editorActive && (
+              <AutosaveIndicator
+                status={autosave.status}
+                lastSavedAt={autosave.lastSavedAt}
+              />
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void exportCurrentDocument()}
+              disabled={exporting}
+            >
+              <Download size={13} />
+              <span className="hidden sm:inline">
+                {exporting ? "导出中…" : "导出"}
+              </span>
+            </Button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <IconButton aria-label="文档操作">
+                  <MoreHorizontal size={16} />
+                </IconButton>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                >
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                    onSelect={() => {
+                      setRenameDraft(autosave.title);
+                      setRenameOpen(true);
+                    }}
+                  >
+                    <Pencil size={14} />
+                    重命名文档
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                    onSelect={() => setHistoryOpen(true)}
+                  >
+                    <History size={14} />
+                    版本历史
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                    onSelect={() => {
                       setTagDraft(autosave.tags.join(", "));
                       setTagDialogOpen(true);
                     }}
                   >
-                    #{tag}
-                  </button>
-                ))}
-              </div>
+                    <Tag size={14} />
+                    管理标签
+                  </DropdownMenu.Item>
+                  {mode === "notes" && (
+                    <DropdownMenu.Item
+                      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:opacity-40"
+                      disabled={knowledgeBases.length === 0}
+                      onSelect={() => {
+                        setArchiveKnowledgeBaseId(knowledgeBases[0]?.id ?? "");
+                        setArchiveOpen(true);
+                      }}
+                    >
+                      <Archive size={14} />
+                      归档到知识库
+                    </DropdownMenu.Item>
+                  )}
+                  {mode === "knowledge" && (
+                    <DropdownMenu.Item
+                      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                      onSelect={() => void restoreCurrentDocumentToNotes()}
+                    >
+                      <FileText size={14} />
+                      移回随记
+                    </DropdownMenu.Item>
+                  )}
+                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  <DropdownMenu.Item
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+                    onSelect={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 size={14} />
+                    删除文档
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+            <IconButton
+              aria-label={infoOpen ? "关闭文档信息" : "打开文档信息"}
+              aria-pressed={infoOpen}
+              className={infoOpen ? "bg-brand-50 text-brand-800" : ""}
+              onClick={() => setInfoOpen((current) => !current)}
+            >
+              <PanelRight size={16} />
+            </IconButton>
+            {mode === "knowledge" && !editing && ownsEditor && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  pendingReaderScrollRef.current =
+                    scrollViewportRef.current?.scrollTop;
+                  setEditing(true);
+                }}
+              >
+                编辑
+              </Button>
             )}
-          </div>
-          {editorActive && (
-            <AutosaveIndicator
-              status={autosave.status}
-              lastSavedAt={autosave.lastSavedAt}
+            {mode === "knowledge" && editing && ownsEditor && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void finishEditing()}
+                disabled={autosave.status === "saving"}
+              >
+                完成
+              </Button>
+            )}
+          </header>
+          {ownership === "blocked" && (
+            <DocumentNotice
+              tone="warning"
+              title="此文档正在另一个标签页编辑"
+              description="当前标签页以只读方式打开。关闭另一个编辑标签页后会重新接管。"
             />
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void exportCurrentDocument()}
-            disabled={exporting}
-          >
-            <Download size={13} />
-            <span className="hidden sm:inline">
-              {exporting ? "导出中…" : "导出"}
-            </span>
-          </Button>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <IconButton aria-label="文档操作">
-                <MoreHorizontal size={16} />
-              </IconButton>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="end"
-                sideOffset={8}
-                className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-              >
-                <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                  onSelect={() => {
-                    setRenameDraft(autosave.title);
-                    setRenameOpen(true);
-                  }}
-                >
-                  <Pencil size={14} />
-                  重命名文档
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                  onSelect={() => setHistoryOpen(true)}
-                >
-                  <History size={14} />
-                  版本历史
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                  onSelect={() => {
-                    setTagDraft(autosave.tags.join(", "));
-                    setTagDialogOpen(true);
-                  }}
-                >
-                  <Tag size={14} />
-                  管理标签
-                </DropdownMenu.Item>
-                {mode === "notes" && (
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:opacity-40"
-                    disabled={knowledgeBases.length === 0}
-                    onSelect={() => {
-                      setArchiveKnowledgeBaseId(
-                        knowledgeBases[0]?.id ?? ""
-                      );
-                      setArchiveOpen(true);
-                    }}
-                  >
-                    <Archive size={14} />
-                    归档到知识库
-                  </DropdownMenu.Item>
-                )}
-                {mode === "knowledge" && (
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                    onSelect={() => void restoreCurrentDocumentToNotes()}
-                  >
-                    <FileText size={14} />
-                    移回随记
-                  </DropdownMenu.Item>
-                )}
-                <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                <DropdownMenu.Item
-                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
-                  onSelect={() => setDeleteOpen(true)}
-                >
-                  <Trash2 size={14} />
-                  删除文档
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-          <IconButton
-            aria-label={infoOpen ? "关闭文档信息" : "打开文档信息"}
-            aria-pressed={infoOpen}
-            className={infoOpen ? "bg-brand-50 text-brand-800" : ""}
-            onClick={() => setInfoOpen((current) => !current)}
-          >
-            <PanelRight size={16} />
-          </IconButton>
-          {mode === "knowledge" && !editing && ownsEditor && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                pendingReaderScrollRef.current =
-                  scrollViewportRef.current?.scrollTop;
-                setEditing(true);
-              }}
-            >
-              编辑
-            </Button>
+          {autosave.draftRecovered && autosave.status !== "conflict" && (
+            <DocumentNotice
+              tone="neutral"
+              title="已恢复本机草稿"
+              description="草稿保存在 IndexedDB 中，正在与云端重新同步。"
+            />
           )}
-          {mode === "knowledge" && editing && ownsEditor && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => void finishEditing()}
-              disabled={autosave.status === "saving"}
-            >
-              完成
-            </Button>
+          {(autosave.status === "error" || autosave.status === "offline") && (
+            <DocumentNotice
+              tone="warning"
+              title={
+                autosave.status === "offline"
+                  ? "当前已保存在本机"
+                  : "自动保存暂时失败"
+              }
+              description={autosave.error}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void autosave.retry()}
+                >
+                  <RefreshCw size={13} />
+                  重试
+                </Button>
+              }
+            />
           )}
-        </header>
-        {ownership === "blocked" && (
-          <DocumentNotice
-            tone="warning"
-            title="此文档正在另一个标签页编辑"
-            description="当前标签页以只读方式打开。关闭另一个编辑标签页后会重新接管。"
-          />
-        )}
-        {autosave.draftRecovered && autosave.status !== "conflict" && (
-          <DocumentNotice
-            tone="neutral"
-            title="已恢复本机草稿"
-            description="草稿保存在 IndexedDB 中，正在与云端重新同步。"
-          />
-        )}
-        {(autosave.status === "error" || autosave.status === "offline") && (
-          <DocumentNotice
-            tone="warning"
-            title={
-              autosave.status === "offline"
-                ? "当前已保存在本机"
-                : "自动保存暂时失败"
+          {autosave.conflictCopy && (
+            <DocumentNotice
+              tone="danger"
+              title="发现版本冲突"
+              description={autosave.error}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    navigate(
+                      `/workspaces/${encodeURIComponent(
+                        document.meta.workspaceId
+                      )}/notes/${encodeURIComponent(autosave.conflictCopy!.id)}`
+                    )
+                  }
+                >
+                  打开本地副本
+                </Button>
+              }
+            />
+          )}
+          <ProductMarkdownEditor
+            value={autosave.markdown}
+            title={autosave.title}
+            documentId={document.meta.id}
+            workspaceId={document.meta.workspaceId}
+            readOnly={!showEditor}
+            readingScale={readingScale}
+            legacyCanvas={
+              document.extensions?.canvas as unknown as CanvasScene | undefined
             }
-            description={autosave.error}
-            action={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void autosave.retry()}
-              >
-                <RefreshCw size={13} />
-                重试
-              </Button>
-            }
+            onChange={autosave.changeMarkdown}
+            onFocusSearch={onFocusSearch}
           />
-        )}
-        {autosave.conflictCopy && (
-          <DocumentNotice
-            tone="danger"
-            title="发现版本冲突"
-            description={autosave.error}
-            action={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  navigate(
-                    `/workspaces/${encodeURIComponent(
-                      document.meta.workspaceId
-                    )}/notes/${encodeURIComponent(
-                      autosave.conflictCopy!.id
-                    )}`
-                  )
-                }
-              >
-                打开本地副本
-              </Button>
-            }
-          />
-        )}
-        <ProductMarkdownEditor
-          value={autosave.markdown}
-          title={autosave.title}
-          documentId={document.meta.id}
-          workspaceId={document.meta.workspaceId}
-          readOnly={!showEditor}
-          readingScale={readingScale}
-          legacyCanvas={
-            document.extensions?.canvas as unknown as
-              | CanvasScene
-              | undefined
-          }
-          onChange={autosave.changeMarkdown}
-          onFocusSearch={onFocusSearch}
-        />
-      </article>
+        </article>
       </div>
       <DocumentContextPanel
         open={infoOpen}
@@ -2400,11 +2450,7 @@ function DocumentSurface({
             <Button variant="secondary" onClick={closeRenameDialog}>
               取消
             </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="document-rename-form"
-            >
+            <Button variant="primary" type="submit" form="document-rename-form">
               保存名称
             </Button>
           </>
@@ -2435,17 +2481,10 @@ function DocumentSurface({
         onClose={() => setTagDialogOpen(false)}
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => setTagDialogOpen(false)}
-            >
+            <Button variant="secondary" onClick={() => setTagDialogOpen(false)}>
               取消
             </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="document-tags-form"
-            >
+            <Button variant="primary" type="submit" form="document-tags-form">
               保存标签
             </Button>
           </>
@@ -2641,7 +2680,11 @@ function DocumentSkeleton() {
         <div className="mt-10 grid gap-3">
           {Array.from({ length: 11 }, (_, index) => (
             <Skeleton
-              className={index % 4 === 3 ? "h-4 w-3/5 rounded-md" : "h-4 w-full rounded-md"}
+              className={
+                index % 4 === 3
+                  ? "h-4 w-3/5 rounded-md"
+                  : "h-4 w-full rounded-md"
+              }
               key={String(index)}
             />
           ))}

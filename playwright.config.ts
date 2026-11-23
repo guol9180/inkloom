@@ -33,7 +33,9 @@ export default defineConfig({
         PORT: "3001",
         INKLOOM_DATABASE_PATH: ".inkloom/e2e.sqlite",
         INKLOOM_ASSET_DIR: ".inkloom/e2e-assets",
-        INKLOOM_WEB_ORIGINS: "http://127.0.0.1:4173"
+        INKLOOM_WEB_ORIGINS: "http://127.0.0.1:4173",
+        INKLOOM_AUTH_IP_ATTEMPTS: "10000",
+        INKLOOM_AUTH_ACCOUNT_ATTEMPTS: "100"
       }
     },
     {

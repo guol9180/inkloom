@@ -1,11 +1,7 @@
 import DOMPurify from "dompurify";
 
 export type MermaidTemplateId =
-  | "flowchart"
-  | "sequence"
-  | "state"
-  | "class"
-  | "er";
+  "flowchart" | "sequence" | "state" | "class" | "er";
 
 export type MermaidTemplate = {
   id: MermaidTemplateId;
@@ -23,27 +19,32 @@ export const MERMAID_TEMPLATES: readonly MermaidTemplate[] = [
   {
     id: "flowchart",
     label: "流程图",
-    source: "flowchart LR\n  A[开始] --> B{需要处理?}\n  B -->|是| C[执行]\n  B -->|否| D[结束]"
+    source:
+      "flowchart LR\n  A[开始] --> B{需要处理?}\n  B -->|是| C[执行]\n  B -->|否| D[结束]"
   },
   {
     id: "sequence",
     label: "时序图",
-    source: "sequenceDiagram\n  participant U as 用户\n  participant S as 系统\n  U->>S: 提交请求\n  S-->>U: 返回结果"
+    source:
+      "sequenceDiagram\n  participant U as 用户\n  participant S as 系统\n  U->>S: 提交请求\n  S-->>U: 返回结果"
   },
   {
     id: "state",
     label: "状态图",
-    source: "stateDiagram-v2\n  [*] --> 草稿\n  草稿 --> 已发布: 发布\n  已发布 --> [*]"
+    source:
+      "stateDiagram-v2\n  [*] --> 草稿\n  草稿 --> 已发布: 发布\n  已发布 --> [*]"
   },
   {
     id: "class",
     label: "类图",
-    source: "classDiagram\n  class 文档 {\n    +String title\n    +save()\n  }\n  文档 <|-- 随记"
+    source:
+      "classDiagram\n  class 文档 {\n    +String title\n    +save()\n  }\n  文档 <|-- 随记"
   },
   {
     id: "er",
     label: "关系图",
-    source: "erDiagram\n  WORKSPACE ||--o{ DOCUMENT : contains\n  DOCUMENT ||--o{ ASSET : references"
+    source:
+      "erDiagram\n  WORKSPACE ||--o{ DOCUMENT : contains\n  DOCUMENT ||--o{ ASSET : references"
   }
 ];
 

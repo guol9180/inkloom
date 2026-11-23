@@ -1,0 +1,10 @@
+node_modules/
+.git/
+.ops-tmp/
+dist/
+target/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+**/src-tauri/gen/

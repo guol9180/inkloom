@@ -11,17 +11,11 @@ import {
   Paperclip,
   X
 } from "lucide-react";
-import {
-  extractHeadings,
-  type MarkdownHeading
-} from "@inkloom/editor";
+import { extractHeadings, type MarkdownHeading } from "@inkloom/editor";
 import type { DocumentSnapshot, WorkspaceId } from "@inkloom/core";
-import type {
-  CloudDocumentContext,
-  CloudDocumentLink
-} from "@inkloom/storage";
+import type { CloudDocumentContext, CloudDocumentLink } from "@inkloom/storage";
 import { cloudClient } from "../../cloud-workspace";
-import { Skeleton } from "../../components/ui/skeleton";
+import { Skeleton } from "@inkloom/ui";
 
 export function DocumentContextPanel({
   open,
@@ -219,8 +213,14 @@ function ContextContent({
       <ContextSection icon={<Info size={14} />} title="属性">
         <dl className="grid gap-2 px-2 text-[0.66rem]">
           <Property label="路径" value={context.document.path} />
-          <Property label="revision" value={String(context.document.revision)} />
-          <Property label="更新时间" value={formatDateTime(context.document.updatedAt)} />
+          <Property
+            label="revision"
+            value={String(context.document.revision)}
+          />
+          <Property
+            label="更新时间"
+            value={formatDateTime(context.document.updatedAt)}
+          />
           <Property
             label="内容哈希"
             value={String(context.document.contentHash).slice(0, 12)}
@@ -238,7 +238,8 @@ function Outline({
   headings: readonly MarkdownHeading[];
   onSelect: (index: number) => void;
 }) {
-  if (headings.length === 0) return <EmptyLine>添加标题后会生成大纲。</EmptyLine>;
+  if (headings.length === 0)
+    return <EmptyLine>添加标题后会生成大纲。</EmptyLine>;
   return (
     <nav className="grid gap-0.5">
       {headings.map((heading, index) => (
@@ -336,7 +337,10 @@ function Property({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2">
       <dt className="text-ink-400">{label}</dt>
-      <dd className="truncate text-right font-medium text-ink-600" title={value}>
+      <dd
+        className="truncate text-right font-medium text-ink-600"
+        title={value}
+      >
         {value}
       </dd>
     </div>
@@ -344,9 +348,7 @@ function Property({ label, value }: { label: string; value: string }) {
 }
 
 function EmptyLine({ children }: { children: ReactNode }) {
-  return (
-    <p className="px-2 py-2 text-xs leading-5 text-ink-400">{children}</p>
-  );
+  return <p className="px-2 py-2 text-xs leading-5 text-ink-400">{children}</p>;
 }
 
 function scrollToHeading(index: number) {

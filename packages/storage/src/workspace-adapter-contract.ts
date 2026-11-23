@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   InkLoomError,
   RevisionConflictError,
@@ -22,8 +16,7 @@ export type WorkspaceAdapterContractFixture = {
 };
 
 export type WorkspaceAdapterFactory = () =>
-  | WorkspaceAdapterContractFixture
-  | Promise<WorkspaceAdapterContractFixture>;
+  WorkspaceAdapterContractFixture | Promise<WorkspaceAdapterContractFixture>;
 
 export function defineWorkspaceAdapterContract(
   name: string,
@@ -46,7 +39,9 @@ export function defineWorkspaceAdapterContract(
       const tree = await fixture.adapter.listTree();
 
       expect(loaded).toEqual(document);
-      expect(findDocumentNode(tree, document.meta.path)?.id).toBe(document.meta.id);
+      expect(findDocumentNode(tree, document.meta.path)?.id).toBe(
+        document.meta.id
+      );
     });
 
     it("updates metadata and increments revision when baseRevision matches", async () => {
@@ -94,7 +89,9 @@ export function defineWorkspaceAdapterContract(
 
       expect(moved.id).toBe(document.meta.id);
       expect(moved.path).toBe(targetPath);
-      expect((await fixture.adapter.readDocument(document.meta.id)).meta.path).toBe(targetPath);
+      expect(
+        (await fixture.adapter.readDocument(document.meta.id)).meta.path
+      ).toBe(targetPath);
     });
 
     it("deletes a document and reports a typed not-found error", async () => {
@@ -104,7 +101,9 @@ export function defineWorkspaceAdapterContract(
         baseRevision: document.meta.revision
       });
 
-      await expect(fixture.adapter.readDocument(document.meta.id)).rejects.toMatchObject({
+      await expect(
+        fixture.adapter.readDocument(document.meta.id)
+      ).rejects.toMatchObject({
         code: "DOCUMENT_NOT_FOUND"
       } satisfies Partial<InkLoomError>);
     });

@@ -3,7 +3,9 @@ import { createStoreZip } from "./zip";
 
 describe("createStoreZip", () => {
   it("creates a UTF-8, uncompressed ZIP with stable entries", () => {
-    const markdown = Uint8Array.from([35, 32, 101, 120, 112, 111, 114, 116, 10]);
+    const markdown = Uint8Array.from([
+      35, 32, 101, 120, 112, 111, 114, 116, 10
+    ]);
     const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const zip = createStoreZip(
       [

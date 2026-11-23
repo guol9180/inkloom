@@ -34,6 +34,11 @@ the milestone state and verification evidence are recorded in
 T49 adds real workspace settings, resilient blank-canvas saving, and the clean
 empty-document layout. It is deployed in the production release above.
 
+T50–T55 add the source-preserving Markdown merge, API/authentication hardening,
+recent-document and atomic knowledge-base ordering fixes, shared UI cleanup,
+strict quality gates, and dependency security updates. These changes are
+verified in the local source tree but are not yet committed or deployed.
+
 ## Locked Product Decisions
 
 - M1.1 implements Web only.
@@ -60,8 +65,9 @@ empty-document layout. It is deployed in the production release above.
 
 ## Next Work
 
-There is no active product-development task after M1.1. The next milestone must
-be explicitly selected in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+There is no active development task after the T50–T55 quality remediation. The
+next step is user review, commit, and release authorization. The next milestone
+must be explicitly selected in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 Do not resume desktop, M2 synchronization, real-time collaboration or mobile
 work without explicit user confirmation.

@@ -369,7 +369,13 @@ function flattenLegacyDocumentPaths(
     usedPaths.set(row.workspace_id, workspacePaths);
     const migratedPath = allocateFlatPath(row.path, workspacePaths);
     updateDocument.run(migratedPath, row.id);
-    recordPath.run(row.id, row.workspace_id, row.path, migratedPath, migratedAt);
+    recordPath.run(
+      row.id,
+      row.workspace_id,
+      row.path,
+      migratedPath,
+      migratedAt
+    );
   }
 }
 

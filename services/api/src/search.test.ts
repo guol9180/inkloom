@@ -34,9 +34,7 @@ describe("Chinese-friendly FTS terms", () => {
   });
 
   it("creates a safe highlighted snippet around the original query", () => {
-    expect(
-      highlightSearchSnippet("数据库设计包含 API 文档。", "据库设")
-    ).toBe(
+    expect(highlightSearchSnippet("数据库设计包含 API 文档。", "据库设")).toBe(
       "数<mark>据库设</mark>计包含 API 文档。"
     );
   });

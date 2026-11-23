@@ -1,8 +1,4 @@
-import {
-  copyFileSync,
-  mkdtempSync,
-  rmSync
-} from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -105,10 +101,14 @@ describe("data model migrations", () => {
       );
 
       expect(
-        database.db.prepare("SELECT COUNT(*) AS count FROM document_revisions").get()
+        database.db
+          .prepare("SELECT COUNT(*) AS count FROM document_revisions")
+          .get()
       ).toEqual({ count: 3 });
       expect(
-        database.db.prepare("SELECT COUNT(*) AS count FROM knowledge_bases").get()
+        database.db
+          .prepare("SELECT COUNT(*) AS count FROM knowledge_bases")
+          .get()
       ).toEqual({ count: 0 });
       expect(
         database.db
@@ -126,7 +126,9 @@ describe("data model migrations", () => {
         { version: 5, name: "document-link-index" }
       ]);
       expect(
-        database.db.prepare("SELECT COUNT(*) AS count FROM document_search").get()
+        database.db
+          .prepare("SELECT COUNT(*) AS count FROM document_search")
+          .get()
       ).toEqual({ count: 3 });
 
       for (const table of [
@@ -170,7 +172,9 @@ describe("data model migrations", () => {
         reopened.db.prepare("SELECT COUNT(*) AS count FROM documents").get()
       ).toEqual({ count: 4 });
       expect(
-        reopened.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
+        reopened.db
+          .prepare("SELECT COUNT(*) AS count FROM schema_migrations")
+          .get()
       ).toEqual({ count: 5 });
       expect(
         reopened.db
@@ -207,7 +211,9 @@ describe("data model migrations", () => {
         revision: 3
       });
       expect(
-        restored.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
+        restored.db
+          .prepare("SELECT COUNT(*) AS count FROM schema_migrations")
+          .get()
       ).toEqual({ count: 5 });
     } finally {
       restored.close();
@@ -227,7 +233,7 @@ describe("data model migrations", () => {
           incompatible_schema TEXT
         );
       `);
-      expect(() => runMigrations(database)).toThrow();
+      expect(() => runMigrations(database)).toThrow(/.+/);
       expect(
         database
           .prepare(
@@ -238,7 +244,9 @@ describe("data model migrations", () => {
       const documentColumns = database
         .prepare("PRAGMA table_info(documents)")
         .all() as Array<{ name: string }>;
-      expect(documentColumns.map((column) => column.name)).not.toContain("lifecycle");
+      expect(documentColumns.map((column) => column.name)).not.toContain(
+        "lifecycle"
+      );
     } finally {
       database.close();
     }

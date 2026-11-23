@@ -4,6 +4,7 @@ import {
   findMarkdownSourceBlock,
   isMarkdownSourceLossless,
   parseMarkdownSource,
+  reconcileMarkdownSource,
   replaceMarkdownSourceBlock,
   serializeMarkdownSource
 } from "./markdown-source";
@@ -35,7 +36,7 @@ describe("Markdown source-slice model", () => {
       "",
       "第一段。",
       "",
-      "[reference]: https://example.com \"保留定义\"",
+      '[reference]: https://example.com "保留定义"',
       "",
       "第二段 [引用][reference]。",
       ""
@@ -76,16 +77,18 @@ describe("Markdown source-slice model", () => {
       ""
     ].join("\n");
     const document = parseMarkdownSource(source);
-    expect(document.blocks.find((block) => block.type === "frontmatter")).toMatchObject({
+    expect(
+      document.blocks.find((block) => block.type === "frontmatter")
+    ).toMatchObject({
       protected: true,
       source: "---\ntitle: 保留\n---\n"
     });
-    expect(document.blocks.find((block) => block.type === "code")?.protected).toBe(
-      true
-    );
-    expect(document.blocks.find((block) => block.type === "html")?.protected).toBe(
-      true
-    );
+    expect(
+      document.blocks.find((block) => block.type === "code")?.protected
+    ).toBe(true);
+    expect(
+      document.blocks.find((block) => block.type === "html")?.protected
+    ).toBe(true);
     expect(
       document.blocks.find((block) => block.type === "definition")?.protected
     ).toBe(true);
@@ -118,5 +121,66 @@ describe("Markdown source-slice model", () => {
       "whitespace",
       "paragraph"
     ]);
+  });
+
+  it("preserves untouched frontmatter and definitions while applying edits", () => {
+    const original = [
+      "---",
+      "title: Keep this frontmatter",
+      "unknown_field: keep",
+      "---",
+      "",
+      "# 源片段测试",
+      "",
+      "普通段落。",
+      "",
+      "```unknown-language",
+      "raw syntax that must survive",
+      "```",
+      "",
+      "<!-- comment that must survive -->",
+      "",
+      "[ref]: https://example.com",
+      ""
+    ].join("\n");
+    const baseline = [
+      "***",
+      "",
+      "title: Keep this frontmatter",
+      "unknown_field: keep",
+      "-------------------",
+      "",
+      "# 源片段测试",
+      "",
+      "普通段落。",
+      "",
+      "```unknown-language",
+      "raw syntax that must survive",
+      "```",
+      "",
+      "<!-- comment that must survive -->",
+      ""
+    ].join("\n");
+    const next = baseline.replace("普通段落。", "修改后的段落。");
+
+    const reconciled = reconcileMarkdownSource(original, baseline, next);
+
+    expect(reconciled).toContain("---\ntitle: Keep this frontmatter");
+    expect(reconciled).toContain("[ref]: https://example.com");
+    expect(reconciled).toContain("修改后的段落。");
+    expect(
+      reconciled.match(/title: Keep this frontmatter/gu) ?? []
+    ).toHaveLength(1);
+  });
+
+  it("applies inserted and removed canonical blocks without replaying source-only changes", () => {
+    const original = "# 标题\n\n正文\n";
+    const baseline = "# 标题\n\n正文\n";
+    const withInsertion = "# 标题\n\n正文\n\n新增段落。\n";
+
+    expect(reconcileMarkdownSource(original, baseline, withInsertion)).toBe(
+      withInsertion
+    );
+    expect(reconcileMarkdownSource(original, baseline, "")).toBe("");
   });
 });

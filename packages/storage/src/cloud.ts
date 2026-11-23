@@ -169,7 +169,8 @@ export class CloudClient {
       const response = await this.request<{ user: CloudUser }>("/api/auth/me");
       return response.user;
     } catch (error) {
-      if (error instanceof CloudRequestError && error.status === 401) return undefined;
+      if (error instanceof CloudRequestError && error.status === 401)
+        return undefined;
       throw error;
     }
   }
@@ -187,10 +188,13 @@ export class CloudClient {
   }
 
   async login(input: { email: string; password: string }): Promise<CloudUser> {
-    const response = await this.request<{ user: CloudUser }>("/api/auth/login", {
-      method: "POST",
-      body: input
-    });
+    const response = await this.request<{ user: CloudUser }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: input
+      }
+    );
     return response.user;
   }
 
@@ -319,6 +323,29 @@ export class CloudClient {
     return response.knowledgeBase;
   }
 
+  async reorderKnowledgeBases(
+    workspaceId: WorkspaceId,
+    knowledgeBases: readonly { id: string; baseRevision: number }[]
+  ): Promise<CloudKnowledgeBase[]> {
+    const response = await this.request<{
+      knowledgeBases: CloudKnowledgeBase[];
+    }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/knowledge-bases/order`,
+      {
+        method: "PUT",
+        body: {
+          knowledgeBases: knowledgeBases.map((item) => ({
+            id: item.id,
+            baseRevision: item.baseRevision
+          }))
+        }
+      }
+    );
+    return response.knowledgeBases;
+  }
+
   async deleteKnowledgeBase(
     workspaceId: WorkspaceId,
     knowledgeBaseId: string,
@@ -381,14 +408,13 @@ export class CloudClient {
 
   async markDocumentOpened(
     workspaceId: WorkspaceId,
-    documentId: DocumentId,
-    baseRevision: number
+    documentId: DocumentId
   ): Promise<DocumentSnapshot> {
     const response = await this.request<{ document: DocumentSnapshot }>(
       `/api/workspaces/${encodeURIComponent(
         workspaceId
       )}/documents/${encodeURIComponent(documentId)}/open`,
-      { method: "POST", body: { baseRevision } }
+      { method: "POST" }
     );
     return response.document;
   }
@@ -511,12 +537,15 @@ export class CloudClient {
               Accept: "application/json",
               "Content-Type": "application/json"
             },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      body:
+        options.body === undefined ? undefined : JSON.stringify(options.body)
     });
     let payload: unknown;
     try {
       payload =
-        response.status === 204 ? undefined : ((await response.json()) as unknown);
+        response.status === 204
+          ? undefined
+          : ((await response.json()) as unknown);
     } catch {
       throw new CloudRequestError(
         response.status,
@@ -571,7 +600,7 @@ export class CloudWorkspaceAdapter implements WorkspaceAdapter {
       sqlite: false,
       opfs: false,
       offline: false,
-      backgroundSync: true,
+      backgroundSync: false,
       versionHistory: true
     };
   }

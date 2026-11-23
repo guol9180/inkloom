@@ -2,13 +2,13 @@
 
 ## Domains
 
-| Host | Service | Notes |
-| --- | --- | --- |
-| `inkloom.imhgl.com` | Web static app | Internal `inkloom-web` service proxied by the shared `platform-edge` |
-| `api.inkloom.imhgl.com` | HTTP API | Internal `inkloom-api` service proxied by the shared `platform-edge` |
-| `api.imhgl.com` | workbench | Optional companion app; the route stays available when workbench rejoins `platform-edge` |
-| `sync.inkloom.imhgl.com` | WebSocket | Reserved for M2 collaboration |
-| `cdn.inkloom.imhgl.com` | Object storage/CDN | Reserved for diagram assets |
+| Host                     | Service            | Notes                                                                                    |
+| ------------------------ | ------------------ | ---------------------------------------------------------------------------------------- |
+| `inkloom.imhgl.com`      | Web static app     | Internal `inkloom-web` service proxied by the shared `platform-edge`                     |
+| `api.inkloom.imhgl.com`  | HTTP API           | Internal `inkloom-api` service proxied by the shared `platform-edge`                     |
+| `api.imhgl.com`          | workbench          | Optional companion app; the route stays available when workbench rejoins `platform-edge` |
+| `sync.inkloom.imhgl.com` | WebSocket          | Reserved for M2 collaboration                                                            |
+| `cdn.inkloom.imhgl.com`  | Object storage/CDN | Reserved for diagram assets                                                              |
 
 Create `A` records for the Web and API hosts pointing to the deployment server before starting Caddy. Caddy obtains and renews TLS certificates automatically. Keep cookies host-only; never scope an InkLoom session cookie to `.imhgl.com`.
 
@@ -53,9 +53,19 @@ INKLOOM_DATABASE_PATH=/data/inkloom.sqlite
 INKLOOM_ASSET_DIR=/data/assets
 INKLOOM_MAX_ASSET_BYTES=52428800
 INKLOOM_WEB_ORIGINS=https://inkloom.imhgl.com
+INKLOOM_TRUST_PROXY=true
+INKLOOM_AUTH_WINDOW_SECONDS=600
+INKLOOM_AUTH_IP_ATTEMPTS=30
+INKLOOM_AUTH_ACCOUNT_ATTEMPTS=10
+INKLOOM_PASSWORD_CONCURRENCY=4
 ```
 
 The private deployment control plane sets these values. Server-only variables must never use a `VITE_` prefix.
+
+Set `INKLOOM_TRUST_PROXY=true` only when the API is reachable exclusively
+through the controlled edge proxy. Authentication limits use the forwarded
+client address in that mode. Password work is asynchronous and capped by
+`INKLOOM_PASSWORD_CONCURRENCY`.
 
 ## Image Publishing
 
@@ -80,7 +90,7 @@ pnpm verify:production
 Expected API health:
 
 ```json
-{"ok":true,"service":"inkloom-api"}
+{ "ok": true, "service": "inkloom-api" }
 ```
 
 ## Updates
@@ -221,9 +231,9 @@ clean commit -> CI tests/E2E -> immutable images -> deploy exact SHA
 
 ## Local Development
 
-| Service | Local URL |
-| --- | --- |
-| Web | `http://127.0.0.1:4173` |
-| API | `http://127.0.0.1:3001` |
+| Service | Local URL               |
+| ------- | ----------------------- |
+| Web     | `http://127.0.0.1:4173` |
+| API     | `http://127.0.0.1:3001` |
 
 Local `.env` files are ignored by Git. Use `.env.example` as the key list.

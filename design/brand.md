@@ -24,18 +24,18 @@ The memorable visual moment is the editor itself:
 
 ## Palette
 
-| Token | Value | Use |
-| --- | --- | --- |
-| Canvas | `#F7F9F8` | Application background |
-| Surface | `#FFFFFF` | Document and primary panels |
-| Surface subtle | `#FCFDFC` | Rails and grouped surfaces |
-| Surface muted | `#F1F5F3` | Skeleton and quiet fills |
-| Text | `#17231D` | Primary text |
-| Text secondary | `#5F6D65` | Supporting copy |
-| Brand | `#2F7D5D` | Links and selected actions |
-| Brand soft | `#EAF6EF` | Active and hover fills |
-| Warning | `#B7791F` | Pending and warning |
-| Danger | `#C65353` | Destructive confirmation |
+| Token          | Value     | Use                         |
+| -------------- | --------- | --------------------------- |
+| Canvas         | `#F7F9F8` | Application background      |
+| Surface        | `#FFFFFF` | Document and primary panels |
+| Surface subtle | `#FCFDFC` | Rails and grouped surfaces  |
+| Surface muted  | `#F1F5F3` | Skeleton and quiet fills    |
+| Text           | `#17231D` | Primary text                |
+| Text secondary | `#5F6D65` | Supporting copy             |
+| Brand          | `#2F7D5D` | Links and selected actions  |
+| Brand soft     | `#EAF6EF` | Active and hover fills      |
+| Warning        | `#B7791F` | Pending and warning         |
+| Danger         | `#C65353` | Destructive confirmation    |
 
 Pine and mint are accents, not large background regions. The app must remain
 white/near-white at the page level.

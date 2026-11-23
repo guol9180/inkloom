@@ -6,10 +6,7 @@ import {
   type DocumentSnapshot,
   type WorkspaceNode
 } from "@inkloom/core";
-import {
-  createTauriFolderAdapter,
-  type TauriInvoke
-} from "./tauri-folder";
+import { createTauriFolderAdapter, type TauriInvoke } from "./tauri-folder";
 import { defineWorkspaceAdapterContract } from "./workspace-adapter-contract";
 
 class FakeTauriBackend {
@@ -85,7 +82,7 @@ class FakeTauriBackend {
         title:
           typeof request.title === "string"
             ? request.title
-            : markdown.match(/^#\s+(.+)$/m)?.[1] ?? current.meta.title,
+            : (markdown.match(/^#\s+(.+)$/m)?.[1] ?? current.meta.title),
         tags: Array.isArray(request.tags)
           ? request.tags.map(String)
           : current.meta.tags,

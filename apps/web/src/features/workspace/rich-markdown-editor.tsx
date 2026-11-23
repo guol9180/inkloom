@@ -7,11 +7,7 @@ import {
 } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import type { Ctx } from "@milkdown/kit/ctx";
-import {
-  commandsCtx,
-  editorViewCtx,
-  schemaCtx
-} from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, schemaCtx } from "@milkdown/kit/core";
 import {
   blockquoteSchema,
   bulletListSchema,
@@ -40,10 +36,13 @@ import {
 } from "@milkdown/kit/prose/tables";
 import { replaceAll } from "@milkdown/kit/utils";
 import type { MarkdownBlockType } from "./markdown-block-type";
-import { cn } from "../../lib/utils";
+import { cn } from "@inkloom/ui";
 import { createMermaidNodeViewPlugin } from "../editor/mermaid-node-view";
 import { createCanvasNodeViewPlugin } from "../editor/canvas-node-view";
-import type { CanvasBlockAttrs } from "@inkloom/editor";
+import {
+  reconcileMarkdownSource,
+  type CanvasBlockAttrs
+} from "@inkloom/editor";
 import {
   insertCallout,
   insertCanvasBlock,
@@ -95,6 +94,7 @@ export type RichMarkdownEditorHandle = {
   moveTopLevelBlock: (fromIndex: number, toIndex: number) => void;
   duplicateTopLevelBlock: (index: number) => void;
   deleteTopLevelBlock: (index: number) => void;
+  focusTopLevelBoundary: (index: number, side: "before" | "after") => void;
 };
 
 export type RichToolbarAction =
@@ -163,6 +163,8 @@ export const RichMarkdownEditor = forwardRef<
   const readyRef = useRef(false);
   const suppressChangeRef = useRef(false);
   const lastValueRef = useRef(value);
+  const sourceRef = useRef(value);
+  const canonicalBaselineRef = useRef<string | undefined>(undefined);
   const titleRef = useRef(title);
   const onChangeRef = useRef(onChange);
   const onBlockTypeChangeRef = useRef(onBlockTypeChange);
@@ -348,9 +350,7 @@ export const RichMarkdownEditor = forwardRef<
         return updated;
       },
       getMarkdown() {
-        return crepeRef.current
-          ? normalizeProductMarkdown(crepeRef.current.getMarkdown())
-          : lastValueRef.current;
+        return currentMarkdown();
       },
       isCurrentBlockEmpty() {
         const crepe = crepeRef.current;
@@ -395,9 +395,7 @@ export const RichMarkdownEditor = forwardRef<
       replaceImage(blockIndex, input) {
         const crepe = crepeRef.current;
         if (!crepe || !readyRef.current) return;
-        crepe.editor.action((ctx) =>
-          replaceImageBlock(ctx, blockIndex, input)
-        );
+        crepe.editor.action((ctx) => replaceImageBlock(ctx, blockIndex, input));
       },
       setImageAlignment(blockIndex, alignment) {
         const crepe = crepeRef.current;
@@ -449,6 +447,7 @@ export const RichMarkdownEditor = forwardRef<
             return;
           }
           const [moved] = nodes.splice(fromIndex, 1);
+          if (!moved) return;
           nodes.splice(toIndex, 0, moved);
           const transaction = view.state.tr.replaceWith(
             0,
@@ -496,6 +495,13 @@ export const RichMarkdownEditor = forwardRef<
           view.dispatch(view.state.tr.delete(start, end).scrollIntoView());
           view.focus();
         });
+      },
+      focusTopLevelBoundary(index, side) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) =>
+          focusTopLevelBoundaryParagraph(ctx, index, side)
+        );
       }
     }),
     []
@@ -530,9 +536,7 @@ export const RichMarkdownEditor = forwardRef<
       }
     });
     crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
-    crepe.editor.use(
-      createMermaidNodeViewPlugin(() => readOnlyRef.current)
-    );
+    crepe.editor.use(createMermaidNodeViewPlugin(() => readOnlyRef.current));
     crepe.editor.use(
       createCanvasNodeViewPlugin(
         () => workspaceIdRef.current,
@@ -544,7 +548,7 @@ export const RichMarkdownEditor = forwardRef<
     crepe.on((listener) => {
       listener.updated((ctx) => {
         if (!readyRef.current || suppressChangeRef.current) return;
-        const markdown = normalizeProductMarkdown(crepe.getMarkdown());
+        const markdown = currentMarkdown();
         lastValueRef.current = markdown;
         onChangeRef.current(markdown);
         syncTitleHeading(host, titleRef.current);
@@ -566,6 +570,10 @@ export const RichMarkdownEditor = forwardRef<
           return;
         }
         readyRef.current = true;
+        sourceRef.current = value;
+        canonicalBaselineRef.current = normalizeProductMarkdown(
+          crepe.getMarkdown()
+        );
         const editor = host.querySelector<HTMLElement>(".ProseMirror");
         editor?.setAttribute("aria-label", "Markdown 正文");
         editor?.setAttribute("role", "textbox");
@@ -586,7 +594,7 @@ export const RichMarkdownEditor = forwardRef<
     return () => {
       disposed = true;
       if (readyRef.current) {
-        const markdown = normalizeProductMarkdown(crepe.getMarkdown());
+        const markdown = currentMarkdown();
         if (markdown !== lastValueRef.current) {
           lastValueRef.current = markdown;
           onChangeRef.current(markdown);
@@ -625,10 +633,25 @@ export const RichMarkdownEditor = forwardRef<
     const crepe = crepeRef.current;
     if (!crepe || !readyRef.current || value === lastValueRef.current) return;
     suppressChangeRef.current = true;
+    sourceRef.current = value;
     lastValueRef.current = value;
     crepe.editor.action(replaceAll(value, true));
+    canonicalBaselineRef.current = normalizeProductMarkdown(
+      crepe.getMarkdown()
+    );
     suppressChangeRef.current = false;
   }, [value]);
+
+  function currentMarkdown() {
+    const crepe = crepeRef.current;
+    if (!crepe) return lastValueRef.current;
+    const canonical = normalizeProductMarkdown(crepe.getMarkdown());
+    return reconcileMarkdownSource(
+      sourceRef.current,
+      canonicalBaselineRef.current ?? canonical,
+      canonical
+    );
+  }
 
   return (
     <div className={cn("rich-markdown-shell relative min-h-0", className)}>
@@ -648,7 +671,8 @@ function syncTitleHeading(host: HTMLElement, title: string) {
   );
   if (!firstHeading) return;
   const isDocumentTitle =
-    firstHeading.textContent?.trim() === title.trim() && title.trim().length > 0;
+    firstHeading.textContent?.trim() === title.trim() &&
+    title.trim().length > 0;
   firstHeading.toggleAttribute("data-document-title", isDocumentTitle);
 }
 
@@ -711,6 +735,41 @@ function topLevelBoundary(
   return position;
 }
 
+function focusTopLevelBoundaryParagraph(
+  ctx: Ctx,
+  blockIndex: number,
+  side: "before" | "after"
+) {
+  const view = ctx.get(editorViewCtx);
+  const doc = view.state.doc;
+  if (blockIndex < 0 || blockIndex >= doc.childCount) return;
+  const adjacentIndex = side === "before" ? blockIndex - 1 : blockIndex + 1;
+  const adjacent =
+    adjacentIndex >= 0 && adjacentIndex < doc.childCount
+      ? doc.child(adjacentIndex)
+      : undefined;
+  const transaction = view.state.tr;
+  let cursorPosition: number;
+  if (
+    adjacent?.type.name === "paragraph" &&
+    adjacent.textContent.trim().length === 0
+  ) {
+    cursorPosition = topLevelBoundary(doc, adjacentIndex) + 1;
+  } else {
+    const boundary = topLevelBoundary(
+      doc,
+      side === "before" ? blockIndex : blockIndex + 1
+    );
+    transaction.insert(boundary, paragraphSchema.type(ctx).create());
+    cursorPosition = boundary + 1;
+  }
+  transaction
+    .setSelection(TextSelection.near(transaction.doc.resolve(cursorPosition)))
+    .scrollIntoView();
+  view.dispatch(transaction);
+  view.focus();
+}
+
 function insertDiagramBlock(
   ctx: Ctx,
   source: string,
@@ -765,7 +824,7 @@ function insertCanvasBlockAt(
   boundaryIndex: number
 ) {
   const view = ctx.get(editorViewCtx);
-  const node = ctx.get(schemaCtx).nodes.inkloom_canvas.create(canvas);
+  const node = ctx.get(schemaCtx).nodes.inkloom_canvas!.create(canvas);
   const position = topLevelBoundary(view.state.doc, boundaryIndex);
   const transaction = view.state.tr.insert(position, node);
   transaction.setSelection(

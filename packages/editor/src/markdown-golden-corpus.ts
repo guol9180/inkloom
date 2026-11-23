@@ -20,9 +20,9 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
   {
     name: "links images escapes and line endings",
     source: [
-      "[有标题的链接](https://example.com \"示例\") 与 <https://inkloom.example>。",
+      '[有标题的链接](https://example.com "示例") 与 <https://inkloom.example>。',
       "",
-      "![架构图](assets/architecture.png \"架构\")",
+      '![架构图](assets/architecture.png "架构")',
       "",
       "反斜杠转义 \\*不是斜体\\*。",
       "硬换行  ",
@@ -32,7 +32,12 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
       "连续空行之后。",
       ""
     ].join("\n"),
-    requiredFragments: ["https://example.com", "assets/architecture.png", "\\*不是斜体\\*", "\n\n\n"]
+    requiredFragments: [
+      "https://example.com",
+      "assets/architecture.png",
+      "\\*不是斜体\\*",
+      "\n\n\n"
+    ]
   },
   {
     name: "nested lists tasks quotes and tables",
@@ -71,7 +76,11 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
       "```",
       ""
     ].join("\n"),
-    requiredFragments: ["const answer = 42;", "unknown-language", "flowchart LR"]
+    requiredFragments: [
+      "const answer = 42;",
+      "unknown-language",
+      "flowchart LR"
+    ]
   },
   {
     name: "math footnotes and link definitions",
@@ -86,7 +95,7 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
       "",
       "[^note]: 保留脚注定义。",
       "",
-      "[reference]: https://example.com/reference \"引用标题\"",
+      '[reference]: https://example.com/reference "引用标题"',
       "",
       "使用 [引用][reference]。",
       ""
@@ -105,10 +114,14 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
       "",
       "</details>",
       "",
-      "<aside data-unknown=\"yes\">未知 HTML 结构</aside>",
+      '<aside data-unknown="yes">未知 HTML 结构</aside>',
       ""
     ].join("\n"),
-    requiredFragments: ["<!-- 这是必须保留的注释 -->", "<details>", "<aside data-unknown=\"yes\">"]
+    requiredFragments: [
+      "<!-- 这是必须保留的注释 -->",
+      "<details>",
+      '<aside data-unknown="yes">'
+    ]
   },
   {
     name: "InkLoom canvas and file blocks",
@@ -131,7 +144,11 @@ export const MARKDOWN_GOLDEN_CORPUS: readonly MarkdownGoldenCase[] = [
       "<!-- /inkloom:file -->",
       ""
     ].join("\n"),
-    requiredFragments: ["inkloom:canvas", "scene: assets/hash.excalidraw", "inkloom:file"]
+    requiredFragments: [
+      "inkloom:canvas",
+      "scene: assets/hash.excalidraw",
+      "inkloom:file"
+    ]
   },
   {
     name: "frontmatter and unknown fields",

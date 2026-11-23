@@ -18,10 +18,7 @@ import {
   toMermaidRenderError,
   type MermaidRenderError
 } from "@inkloom/diagrams";
-import {
-  Fragment,
-  type Node as ProseNode
-} from "@milkdown/kit/prose/model";
+import { Fragment, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type {
   EditorView as ProseEditorView,
@@ -38,20 +35,18 @@ import {
 
 const MERMAID_RENDER_DELAY_MS = 300;
 
-export function createMermaidNodeViewPlugin(
-  getReadOnly: () => boolean
-) {
+export function createMermaidNodeViewPlugin(getReadOnly: () => boolean) {
   return $prose(
     () =>
       new Plugin({
-      key: new PluginKey("INKLOOM_MERMAID_NODE_VIEW"),
-      props: {
-        nodeViews: {
-          inkloom_mermaid(node, view, getPos) {
-            return new MermaidNodeView(node, view, getPos, getReadOnly);
+        key: new PluginKey("INKLOOM_MERMAID_NODE_VIEW"),
+        props: {
+          nodeViews: {
+            inkloom_mermaid(node, view, getPos) {
+              return new MermaidNodeView(node, view, getPos, getReadOnly);
+            }
           }
         }
-      }
       })
   );
 }
@@ -121,9 +116,7 @@ class MermaidNodeView implements NodeView {
     if (position === undefined) return;
     const current = this.view.state.doc.nodeAt(position);
     if (!current) return;
-    const content = source
-      ? current.type.schema.text(source)
-      : Fragment.empty;
+    const content = source ? current.type.schema.text(source) : Fragment.empty;
     const transaction = this.view.state.tr.replaceWith(
       position + 1,
       position + current.nodeSize - 1,
@@ -252,6 +245,7 @@ function MermaidBlock({
             onClick={() => setFullscreen((current) => !current)}
           >
             {fullscreen ? <X size={14} /> : <Maximize2 size={14} />}
+            <span>{fullscreen ? "退出" : "编辑"}</span>
           </button>
         </div>
       </header>
@@ -260,10 +254,7 @@ function MermaidBlock({
         {!readOnly && (
           <div className="inkloom-mermaid-source">
             <span className="inkloom-mermaid-pane-label">源码</span>
-            <MermaidSourceEditor
-              value={source}
-              onChange={onSourceChange}
-            />
+            <MermaidSourceEditor value={source} onChange={onSourceChange} />
           </div>
         )}
         <div className="inkloom-mermaid-preview">

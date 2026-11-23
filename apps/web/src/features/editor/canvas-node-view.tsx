@@ -5,17 +5,9 @@ import { cloudClient } from "../../cloud-workspace";
 import type { WorkspaceId } from "@inkloom/core";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
-import type {
-  EditorView as ProseEditorView,
-  NodeView
-} from "@milkdown/kit/prose/view";
+import type { NodeView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import {
-  ImageOff,
-  LoaderCircle,
-  Pencil,
-  Shapes
-} from "lucide-react";
+import { ImageOff, LoaderCircle, Pencil, Shapes } from "lucide-react";
 
 export function createCanvasNodeViewPlugin(
   getWorkspaceId: () => string,
@@ -28,11 +20,9 @@ export function createCanvasNodeViewPlugin(
         key: new PluginKey("INKLOOM_CANVAS_NODE_VIEW"),
         props: {
           nodeViews: {
-            inkloom_canvas(node, view, getPos) {
+            inkloom_canvas(node, _view, _getPos) {
               return new CanvasNodeView(
                 node,
-                view,
-                getPos,
                 getWorkspaceId,
                 onOpen,
                 getReadOnly
@@ -51,8 +41,6 @@ class CanvasNodeView implements NodeView {
 
   constructor(
     node: ProseNode,
-    private readonly view: ProseEditorView,
-    private readonly getPos: () => number | undefined,
     private readonly getWorkspaceId: () => string,
     private readonly onOpen: (canvas: CanvasBlockAttrs) => void,
     private readonly getReadOnly: () => boolean
@@ -143,7 +131,10 @@ function CanvasBlock({
   }, [source]);
 
   return (
-    <section className="inkloom-canvas-card" aria-label={`Excalidraw 画布：${canvas.title}`}>
+    <section
+      className="inkloom-canvas-card"
+      aria-label={`Excalidraw 画布：${canvas.title}`}
+    >
       <header className="inkloom-canvas-toolbar">
         <div className="inkloom-canvas-title">
           <span className="inkloom-canvas-icon">
@@ -179,9 +170,7 @@ function CanvasBlock({
           >
             <ImageOff size={19} />
             <span>
-              {readOnly
-                ? "预览资产缺失"
-                : "预览资产缺失，点击重新绘制或上传"}
+              {readOnly ? "预览资产缺失" : "预览资产缺失，点击重新绘制或上传"}
             </span>
           </button>
         )}

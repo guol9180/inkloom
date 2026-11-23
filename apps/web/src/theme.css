@@ -1,73 +1,6 @@
 @import "tailwindcss";
-
-@theme {
-  --font-sans: "Geist Sans", "Aptos", "Segoe UI Variable", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  --font-display: "Iowan Old Style", "Baskerville", "Noto Serif SC", "Songti SC", serif;
-  --font-reading: "Noto Serif SC", "Songti SC", "STSong", serif;
-  --font-mono: "Geist Mono", "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-
-  --color-paper: #ffffff;
-  --color-paper-warm: #fafbf9;
-  --color-canvas: #f7f8f6;
-  --color-line: #e5e9e4;
-  --color-line-soft: #eef1ed;
-  --color-line-strong: #d4dbd4;
-  --color-surface-subtle: #f4f6f3;
-  --color-surface-hover: #f2f5f2;
-  --color-surface-selected: #eef3ef;
-
-  --color-ink-50: #f8f9f8;
-  --color-ink-100: #f0f2f0;
-  --color-ink-200: #e0e5e1;
-  --color-ink-300: #bdc6bf;
-  --color-ink-400: #87928a;
-  --color-ink-500: #68746c;
-  --color-ink-600: #4f5c54;
-  --color-ink-700: #39463e;
-  --color-ink-800: #29342d;
-  --color-ink-900: #1d2721;
-  --color-ink-950: #121a15;
-
-  --color-brand-50: #f0f7f3;
-  --color-brand-100: #dcefe6;
-  --color-brand-200: #bedfd0;
-  --color-brand-300: #90c8ae;
-  --color-brand-400: #5fab8b;
-  --color-brand-500: #3f8d6c;
-  --color-brand-600: #2f7457;
-  --color-brand-700: #285e49;
-  --color-brand-800: #234c3c;
-  --color-brand-900: #1f4034;
-  --color-brand-950: #10271f;
-
-  --color-sun-50: #fff9e9;
-  --color-sun-100: #ffefc4;
-  --color-sun-200: #f8dc8d;
-  --color-sun-300: #edc15b;
-  --color-sun-400: #dfa73b;
-  --color-sun-500: #d58d22;
-  --color-sun-600: #b96f14;
-  --color-sun-700: #965410;
-
-  --color-danger-50: #fff4f1;
-  --color-danger-100: #ffe4de;
-  --color-danger-200: #f7c7bd;
-  --color-danger-500: #d27667;
-  --color-danger-700: #a84f43;
-  --color-danger-800: #873b32;
-
-  --shadow-xs: 0 1px 2px rgb(31 64 52 / 0.06);
-  --shadow-popover: 0 18px 50px rgb(20 36 28 / 0.14);
-  --shadow-panel: 0 24px 80px rgb(18 35 27 / 0.08);
-  --shadow-dialog: 0 30px 90px rgb(20 40 32 / 0.2);
-  --radius-row: 0.625rem;
-  --radius-control: 0.75rem;
-  --radius-panel: 1rem;
-  --radius-dialog: 1.5rem;
-  --ease-fluid: cubic-bezier(0.2, 0.85, 0.28, 1);
-  --duration-fast: 140ms;
-  --duration-standard: 190ms;
-}
+@import "@inkloom/ui/theme.css";
+@source "../../../packages/ui/src";
 
 @layer base {
   * {
@@ -194,8 +127,12 @@
 }
 
 @keyframes orbit-drift {
-  from { transform: translate3d(-1.5%, -1%, 0) rotate(-3deg); }
-  to { transform: translate3d(2%, 2%, 0) rotate(4deg); }
+  from {
+    transform: translate3d(-1.5%, -1%, 0) rotate(-3deg);
+  }
+  to {
+    transform: translate3d(2%, 2%, 0) rotate(4deg);
+  }
 }
 
 .app-dialog-overlay[data-state="open"] {
@@ -207,7 +144,9 @@
 }
 
 @keyframes overlay-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes dialog-in {
@@ -222,7 +161,11 @@
 
 .document-canvas {
   background:
-    radial-gradient(circle at 12% 3%, rgb(190 223 208 / 0.28), transparent 28rem),
+    radial-gradient(
+      circle at 12% 3%,
+      rgb(190 223 208 / 0.28),
+      transparent 28rem
+    ),
     var(--color-canvas);
 }
 
@@ -306,10 +249,17 @@
 
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror {
   min-height: calc(100dvh - 10.5rem);
-  padding: 1.5rem clamp(2rem, 4vw, 3.5rem) 7rem;
+  padding: 1.5rem clamp(2rem, 4vw, 3.5rem) 7rem clamp(3.25rem, 5vw, 4.5rem);
   font-family: var(--font-reading);
   font-size: clamp(0.98rem, 0.2vw + 0.92rem, 1.08rem);
   line-height: 1.9;
+}
+
+.product-markdown-editor[data-empty-document="true"]
+  .rich-markdown-shell
+  .milkdown
+  .ProseMirror {
+  padding-left: clamp(2rem, 4vw, 3.5rem);
 }
 
 .product-markdown-editor[data-reading-scale="compact"]
@@ -338,16 +288,24 @@
   letter-spacing: -0.025em;
 }
 
-.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror > :first-child {
+.product-markdown-editor
+  .rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  > :first-child {
   margin-top: 0;
 }
 
-.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1:first-of-type {
+.product-markdown-editor
+  .rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  h1:first-of-type {
   display: block;
 }
 
 .product-markdown-editor .pm-block-handle {
-  left: 0.15rem;
+  left: 0.5rem;
   cursor: grab;
   touch-action: none;
 }
@@ -357,12 +315,13 @@
 }
 
 .product-markdown-editor .pm-block-handle[data-drop="true"] {
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-brand-300) 70%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--color-brand-300) 70%, transparent);
 }
 
 @media (min-width: 640px) {
   .product-markdown-editor .pm-block-handle {
-    left: clamp(0.35rem, calc(5vw - 2rem), 2.5rem);
+    left: 0.75rem;
   }
 }
 
@@ -444,110 +403,120 @@
   font-size: 1.04em;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  blockquote[data-callout] {
-  position: relative;
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout] {
+  display: block;
   overflow: hidden;
-  margin: 1.2rem 0;
+  margin: 0.95rem 0;
   border: 1px solid
-    color-mix(in oklab, var(--callout-accent) 22%, var(--color-line-soft));
+    color-mix(in oklab, var(--callout-accent) 26%, var(--color-line));
   border-left: 3px solid var(--callout-accent);
-  border-radius: 0.95rem;
-  background: color-mix(
-    in oklab,
-    var(--callout-accent) 5%,
-    var(--color-paper)
-  );
-  padding: 2rem 1rem 0.72rem;
-  color: var(--color-ink-600);
+  border-radius: 0.8rem;
+  background: color-mix(in oklab, var(--callout-accent) 3%, var(--color-paper));
+  padding: 0.7rem 0.9rem 0.75rem 1rem;
+  color: var(--color-ink-700);
   font-family: var(--font-sans);
-  font-size: 0.96em;
+  font-size: 0.92em;
+  line-height: 1.7;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  blockquote[data-callout]::before {
-  position: absolute;
-  top: 0.72rem;
-  left: 0.95rem;
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout]::before {
+  position: static;
   content: attr(data-callout-label);
+  display: flex;
+  width: 2.9rem;
+  min-height: 1.45rem;
+  min-width: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.45rem;
+  border-radius: 0.38rem;
+  background: color-mix(
+    in oklab,
+    var(--callout-accent) 10%,
+    var(--color-paper)
+  );
+  padding: 0.14rem 0.55rem;
   color: var(--callout-accent);
   font-size: 0.66rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  blockquote[data-callout]::after {
-  position: absolute;
-  top: 0.84rem;
-  left: 0.45rem;
-  width: 0.3rem;
-  height: 0.3rem;
-  border-radius: 999px;
-  background: var(--callout-accent);
-  content: "";
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout]::after {
+  display: none;
 }
 
 .rich-markdown-shell
   .milkdown
   .ProseMirror
-  blockquote[data-callout="note"] {
-  --callout-accent: #508a70;
+  blockquote[data-callout]
+  > .inkloom-callout-marker-line {
+  display: none;
 }
 
 .rich-markdown-shell
   .milkdown
   .ProseMirror
-  blockquote[data-callout="tip"] {
-  --callout-accent: #2c8a78;
+  blockquote[data-callout]
+  > :not(.inkloom-callout-marker-line) {
+  min-width: 0;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout] > p {
+  margin: 0 0 0.42rem;
+}
+
+.rich-markdown-shell
+  .milkdown
+  .ProseMirror
+  blockquote[data-callout]
+  > p:last-child {
+  margin-bottom: 0;
+}
+
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout="note"] {
+  --callout-accent: var(--color-callout-note);
+}
+
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout="tip"] {
+  --callout-accent: var(--color-callout-tip);
 }
 
 .rich-markdown-shell
   .milkdown
   .ProseMirror
   blockquote[data-callout="important"] {
-  --callout-accent: #6d69a8;
+  --callout-accent: var(--color-callout-important);
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  blockquote[data-callout="warning"] {
-  --callout-accent: #aa742e;
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout="warning"] {
+  --callout-accent: var(--color-callout-warning);
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  blockquote[data-callout="caution"] {
-  --callout-accent: #b05d59;
+.rich-markdown-shell .milkdown .ProseMirror blockquote[data-callout="caution"] {
+  --callout-accent: var(--color-callout-caution);
 }
 
 .callout-dot-note {
-  background: #508a70;
+  background: var(--color-callout-note);
 }
 
 .callout-dot-tip {
-  background: #2c8a78;
+  background: var(--color-callout-tip);
 }
 
 .callout-dot-important {
-  background: #6d69a8;
+  background: var(--color-callout-important);
 }
 
 .callout-dot-warning {
-  background: #aa742e;
+  background: var(--color-callout-warning);
 }
 
 .callout-dot-caution {
-  background: #b05d59;
+  background: var(--color-callout-caution);
 }
 
 .rich-markdown-shell .inkloom-callout-marker {
@@ -570,10 +539,7 @@
   padding: 0.15rem 0.95rem 0.55rem;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  details.inkloom-toggle[open] {
+.rich-markdown-shell .milkdown .ProseMirror details.inkloom-toggle[open] {
   padding-bottom: 0.7rem;
 }
 
@@ -596,17 +562,13 @@
   display: none;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  .inkloom-toggle-summary::before {
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-toggle-summary::before {
   content: "›";
   display: grid;
   width: 1.15rem;
   height: 1.15rem;
   place-items: center;
-  border-radius: 0.35rem;
-  background: var(--color-brand-100);
+  background: transparent;
   color: var(--color-brand-800);
   font-size: 0.9rem;
   line-height: 1;
@@ -638,7 +600,7 @@
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: 1rem;
-  background: #f8faf8;
+  background: var(--color-editor-subtle);
   padding: 1rem 1.1rem;
   color: var(--color-ink-700);
 }
@@ -650,11 +612,21 @@
 }
 
 .rich-markdown-shell .milkdown .ProseMirror hr {
-  width: min(8rem, 42%);
-  height: 1px;
-  margin: 2rem auto;
+  width: 100% !important;
+  height: 2px !important;
+  min-height: 2px;
+  margin: 2.1rem 0;
   border: 0;
-  background: var(--color-line-strong);
+  padding: 0 !important;
+  background-clip: border-box !important;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-line-strong) 12%,
+    var(--color-line-strong) 88%,
+    transparent
+  ) !important;
+  opacity: 1;
 }
 
 .rich-markdown-shell .milkdown .milkdown-table-block {
@@ -665,9 +637,9 @@
   border: 1px solid var(--color-line);
   border-radius: 0.95rem;
   background: var(--color-paper);
-  padding: 0.3rem;
+  padding: 0;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 
 .rich-markdown-shell .milkdown .milkdown-table-block .table-wrapper {
@@ -697,16 +669,8 @@
   border-right: 0;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .milkdown-table-block
-  tr:last-child
-  > th,
-.rich-markdown-shell
-  .milkdown
-  .milkdown-table-block
-  tr:last-child
-  > td {
+.rich-markdown-shell .milkdown .milkdown-table-block tr:last-child > th,
+.rich-markdown-shell .milkdown .milkdown-table-block tr:last-child > td {
   border-bottom: 0;
 }
 
@@ -719,16 +683,8 @@
   text-align: left;
 }
 
-.rich-markdown-shell
-  .milkdown
-  .milkdown-table-block
-  .cell-handle
-  .button-group,
-.rich-markdown-shell
-  .milkdown
-  .milkdown-table-block
-  .line-handle
-  .add-button {
+.rich-markdown-shell .milkdown .milkdown-table-block .cell-handle .button-group,
+.rich-markdown-shell .milkdown .milkdown-table-block .line-handle .add-button {
   border: 1px solid var(--color-line-soft);
   box-shadow: 0 8px 24px rgb(20 36 28 / 0.12);
 }
@@ -737,13 +693,33 @@
   margin: 1rem 0;
   border: 1px solid var(--color-line);
   border-radius: 0.95rem;
-  background: #f8faf8;
+  background: var(--color-editor-subtle);
   padding: 0.55rem 0.85rem 0.85rem;
 }
 
 .rich-markdown-shell .milkdown .milkdown-code-block .cm-editor,
 .rich-markdown-shell .milkdown .milkdown-code-block .cm-gutters {
   background: transparent;
+}
+
+.product-markdown-editor .milkdown .cm-editor {
+  background: transparent !important;
+}
+
+.product-markdown-editor .milkdown .cm-gutters {
+  border-right: 1px solid var(--color-line) !important;
+  background: var(--color-editor-subtle) !important;
+  color: var(--color-ink-400) !important;
+}
+
+.product-markdown-editor .milkdown .cm-lineNumbers .cm-gutterElement {
+  min-width: 2rem;
+  padding: 0 0.62rem !important;
+}
+
+.product-markdown-editor .milkdown .cm-activeLineGutter {
+  background: transparent !important;
+  color: var(--color-ink-700) !important;
 }
 
 .rich-markdown-shell .milkdown .milkdown-code-block .cm-scroller {
@@ -801,10 +777,7 @@
   font-family: var(--font-sans);
 }
 
-.rich-markdown-shell
-  .milkdown
-  .ProseMirror
-  .inkloom-file-block::before {
+.rich-markdown-shell .milkdown .ProseMirror .inkloom-file-block::before {
   display: grid;
   width: 2rem;
   height: 2rem;
@@ -827,6 +800,14 @@
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror > * {
+  margin-block: 0 !important;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror > * + * {
+  margin-block-start: var(--spacing-editor-block) !important;
 }
 
 .rich-markdown-shell
@@ -870,8 +851,12 @@
   overflow-wrap: anywhere;
 }
 
-.markdown-preview > :first-child { margin-top: 0; }
-.markdown-preview > :last-child { margin-bottom: 0; }
+.markdown-preview > :first-child {
+  margin-top: 0;
+}
+.markdown-preview > :last-child {
+  margin-bottom: 0;
+}
 
 .markdown-preview h1,
 .markdown-preview h2,
@@ -931,9 +916,15 @@
 }
 
 .markdown-preview ul,
-.markdown-preview ol { padding-left: 1.35rem; }
-.markdown-preview li { margin: 0.35rem 0; }
-.markdown-preview li::marker { color: var(--color-brand-500); }
+.markdown-preview ol {
+  padding-left: 1.35rem;
+}
+.markdown-preview li {
+  margin: 0.35rem 0;
+}
+.markdown-preview li::marker {
+  color: var(--color-brand-500);
+}
 
 .markdown-preview ul ul,
 .markdown-preview ul ol,
@@ -1059,9 +1050,9 @@
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: 1rem;
-  background: #1d3229;
+  background: var(--color-code-surface);
   padding: 1rem 1.1rem;
-  color: #e6f1eb;
+  color: var(--color-code-text);
   line-height: 1.7;
 }
 
@@ -1176,10 +1167,10 @@
 
 .inkloom-mermaid-panel {
   overflow: hidden;
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: 0.95rem;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(32 48 40 / 0.025);
+  background: var(--color-paper);
+  box-shadow: 0 1px 2px rgb(32 48 40 / 0.05);
   color: var(--color-ink-700);
   transition:
     border-color 160ms ease,
@@ -1188,7 +1179,8 @@
 
 .inkloom-mermaid-view[data-selected="true"] .inkloom-mermaid-panel {
   border-color: color-mix(in oklab, var(--color-brand-500) 48%, white);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-100) 68%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklab, var(--color-brand-100) 68%, transparent);
 }
 
 .inkloom-mermaid-toolbar {
@@ -1197,8 +1189,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border-bottom: 1px solid var(--color-line-soft);
-  background: color-mix(in oklab, var(--color-paper-warm) 45%, white);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface-subtle);
   padding: 0.4rem 0.55rem 0.4rem 0.7rem;
 }
 
@@ -1223,14 +1215,27 @@
   width: 1.65rem;
   height: 1.65rem;
   place-items: center;
-  border-radius: 0.45rem;
-  background: #edf2ee;
-  color: #536a5e;
+  background: transparent;
+  color: var(--color-muted-icon);
 }
 
 .inkloom-mermaid-actions {
   min-width: 0;
   gap: 0.3rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.inkloom-mermaid-panel:hover .inkloom-mermaid-actions,
+.inkloom-mermaid-panel:focus-within .inkloom-mermaid-actions,
+.inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .inkloom-mermaid-template {
@@ -1262,20 +1267,24 @@
 
 .inkloom-mermaid-template:hover,
 .inkloom-mermaid-template:focus-within {
-  background: #f1f4f0;
+  background: var(--color-editor-hover);
   color: var(--color-ink-800);
 }
 
 .inkloom-mermaid-icon-button {
-  display: grid;
-  width: 1.8rem;
+  display: inline-flex;
   height: 1.8rem;
   flex: 0 0 auto;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
+  padding: 0 0.48rem;
   color: var(--color-ink-400);
+  font-size: 0.64rem;
+  font-weight: 600;
   transition:
     background 140ms ease,
     color 140ms ease;
@@ -1283,7 +1292,7 @@
 
 .inkloom-mermaid-icon-button:hover,
 .inkloom-mermaid-icon-button:focus-visible {
-  background: #f1f4f0;
+  background: var(--color-editor-hover);
   color: var(--color-ink-800);
   outline: none;
 }
@@ -1310,8 +1319,8 @@
 }
 
 .inkloom-mermaid-source {
-  border-right: 1px solid var(--color-line-soft);
-  background: #fbfcfa;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-surface-subtle);
 }
 
 .inkloom-mermaid-pane-label {
@@ -1347,8 +1356,13 @@
 
 .inkloom-mermaid-preview {
   background:
-    radial-gradient(circle at 1px 1px, #e8ece7 0.7px, transparent 0) 0 0 / 14px 14px,
-    #fff;
+    radial-gradient(
+        circle at 1px 1px,
+        var(--color-editor-grid) 0.7px,
+        transparent 0
+      )
+      0 0 / 14px 14px,
+    var(--color-paper);
 }
 
 .inkloom-mermaid-canvas {
@@ -1409,7 +1423,7 @@
   flex-direction: column;
   border: 0;
   border-radius: 0;
-  background: #fff;
+  background: var(--color-paper);
 }
 
 .inkloom-mermaid-panel.is-fullscreen .inkloom-mermaid-toolbar {
@@ -1488,10 +1502,10 @@
 
 .inkloom-canvas-card {
   overflow: hidden;
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: 0.95rem;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(32 48 40 / 0.025);
+  background: var(--color-paper);
+  box-shadow: 0 1px 2px rgb(32 48 40 / 0.05);
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease;
@@ -1499,17 +1513,18 @@
 
 .inkloom-canvas-view[data-selected="true"] .inkloom-canvas-card {
   border-color: color-mix(in oklab, var(--color-brand-500) 48%, white);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-100) 68%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklab, var(--color-brand-100) 68%, transparent);
 }
 
 .inkloom-canvas-toolbar {
-  display: flex;
+  display: grid;
   min-height: 2.75rem;
   align-items: center;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
-  border-bottom: 1px solid var(--color-line-soft);
-  background: color-mix(in oklab, var(--color-paper-warm) 45%, white);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface-subtle);
   padding: 0.4rem 0.55rem 0.4rem 0.7rem;
 }
 
@@ -1535,9 +1550,8 @@
   height: 1.65rem;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 0.45rem;
-  background: #edf2ee;
-  color: #536a5e;
+  background: transparent;
+  color: var(--color-muted-icon);
 }
 
 .inkloom-canvas-edit {
@@ -1548,15 +1562,30 @@
   gap: 0.34rem;
   border: 1px solid var(--color-line);
   border-radius: 0.55rem;
-  background: white;
+  background: var(--color-paper);
   padding: 0.3rem 0.58rem;
   color: var(--color-ink-600);
   font-size: 0.64rem;
   font-weight: 600;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
   transition:
     border-color 140ms ease,
     background 140ms ease,
-    color 140ms ease;
+    color 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.inkloom-canvas-view:hover .inkloom-canvas-edit,
+.inkloom-canvas-view:focus-within .inkloom-canvas-edit {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .inkloom-canvas-edit:hover,
@@ -1572,8 +1601,13 @@
   min-height: 15rem;
   place-items: center;
   background:
-    radial-gradient(circle at 1px 1px, #e8ece7 0.7px, transparent 0) 0 0 / 14px 14px,
-    #fff;
+    radial-gradient(
+        circle at 1px 1px,
+        var(--color-editor-grid) 0.7px,
+        transparent 0
+      )
+      0 0 / 14px 14px,
+    var(--color-paper);
   padding: clamp(0.8rem, 2vw, 1.35rem);
 }
 
@@ -1703,7 +1737,9 @@
 }
 
 @media (max-width: 639px) {
-  .canvas-save-note { display: none; }
+  .canvas-save-note {
+    display: none;
+  }
 }
 
 @media (pointer: coarse) {
@@ -1721,7 +1757,9 @@
 }
 
 @media (min-width: 2000px) {
-  html { font-size: 18px; }
+  html {
+    font-size: 18px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

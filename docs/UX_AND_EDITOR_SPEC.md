@@ -194,12 +194,12 @@ Menu  InkLoom  chevron          Save status   Help   Account
 
 ### 6.2 Responsive Structure
 
-| 范围 | 模式 | 左侧栏 | 文档信息栏 |
-| --- | --- | --- | --- |
-| `<640px` | 手机单栏 | 抽屉 | 抽屉 |
-| `640–1023px` | 平板单栏 | 抽屉 | 抽屉 |
-| `1024–1439px` | 桌面双栏 | 常驻 | 抽屉 |
-| `>=1440px` | 宽屏三栏 | 常驻 | 默认展开 |
+| 范围          | 模式     | 左侧栏 | 文档信息栏 |
+| ------------- | -------- | ------ | ---------- |
+| `<640px`      | 手机单栏 | 抽屉   | 抽屉       |
+| `640–1023px`  | 平板单栏 | 抽屉   | 抽屉       |
+| `1024–1439px` | 桌面双栏 | 常驻   | 抽屉       |
+| `>=1440px`    | 宽屏三栏 | 常驻   | 默认展开   |
 
 - 根容器使用 `100dvh` 和安全区域。
 - 不同区域独立滚动。
@@ -386,22 +386,22 @@ Asset Layer
 
 ### 8.5 Shortcuts
 
-| 操作 | Windows/Linux | macOS |
-| --- | --- | --- |
-| Search | `Ctrl+J` | `Cmd+J` |
-| Save | `Ctrl+S` | `Cmd+S` |
-| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` | `Cmd+Z` / `Cmd+Shift+Z` |
-| Bold | `Ctrl+B` | `Cmd+B` |
-| Italic | `Ctrl+I` | `Cmd+I` |
-| Underline | `Ctrl+U` | `Cmd+U` |
-| Strikethrough | `Ctrl+Shift+X` | `Cmd+Shift+X` |
-| Link | `Ctrl+K` | `Cmd+K` |
-| Inline code | `Ctrl+E` | `Cmd+E` |
-| Paragraph / H1-H6 | `Ctrl+Alt+0-6` | `Cmd+Option+0-6` |
-| Bullet / Ordered / Task | `Ctrl+Shift+8/7/9` | `Cmd+Shift+8/7/9` |
-| Move block | `Alt+Up/Down` | `Option+Up/Down` |
-| Block menu | `Alt+F10` | `Option+F10` |
-| Toggle preview/edit | `Ctrl+Shift+E` | `Cmd+Shift+E` |
+| 操作                    | Windows/Linux       | macOS                   |
+| ----------------------- | ------------------- | ----------------------- |
+| Search                  | `Ctrl+J`            | `Cmd+J`                 |
+| Save                    | `Ctrl+S`            | `Cmd+S`                 |
+| Undo / Redo             | `Ctrl+Z` / `Ctrl+Y` | `Cmd+Z` / `Cmd+Shift+Z` |
+| Bold                    | `Ctrl+B`            | `Cmd+B`                 |
+| Italic                  | `Ctrl+I`            | `Cmd+I`                 |
+| Underline               | `Ctrl+U`            | `Cmd+U`                 |
+| Strikethrough           | `Ctrl+Shift+X`      | `Cmd+Shift+X`           |
+| Link                    | `Ctrl+K`            | `Cmd+K`                 |
+| Inline code             | `Ctrl+E`            | `Cmd+E`                 |
+| Paragraph / H1-H6       | `Ctrl+Alt+0-6`      | `Cmd+Option+0-6`        |
+| Bullet / Ordered / Task | `Ctrl+Shift+8/7/9`  | `Cmd+Shift+8/7/9`       |
+| Move block              | `Alt+Up/Down`       | `Option+Up/Down`        |
+| Block menu              | `Alt+F10`           | `Option+F10`            |
+| Toggle preview/edit     | `Ctrl+Shift+E`      | `Cmd+Shift+E`           |
 
 ## 9. Markdown Fidelity
 
@@ -426,27 +426,27 @@ Source Markdown
 
 ### 9.2 Standard Mappings
 
-| Block | Markdown |
-| --- | --- |
-| Paragraph | plain Markdown |
-| Heading | `#` through `######` |
-| Bold / Italic / Strike | `**`, `*`, `~~` |
-| Inline code | backticks |
-| Lists | GFM lists |
-| Task | `- [ ]` / `- [x]` |
-| Quote | `>` |
-| Divider | `---` |
-| Link | `[text](url)` |
-| Code | fenced code block |
-| Table | GFM table |
-| Image | `![alt](assets/hash.ext)` |
-| Mermaid | fenced `mermaid` block |
-| Formula | standard inline/block LaTeX |
-| Underline | `<u>text</u>` |
-| Text style | `<span data-inkloom-color="...">` |
-| Highlight | `<span data-inkloom-highlight="...">` |
-| Callout | GitHub alert `[!NOTE]` and variants |
-| Toggle | native `<details><summary>` |
+| Block                  | Markdown                              |
+| ---------------------- | ------------------------------------- |
+| Paragraph              | plain Markdown                        |
+| Heading                | `#` through `######`                  |
+| Bold / Italic / Strike | `**`, `*`, `~~`                       |
+| Inline code            | backticks                             |
+| Lists                  | GFM lists                             |
+| Task                   | `- [ ]` / `- [x]`                     |
+| Quote                  | `>`                                   |
+| Divider                | `---`                                 |
+| Link                   | `[text](url)`                         |
+| Code                   | fenced code block                     |
+| Table                  | GFM table                             |
+| Image                  | `![alt](assets/hash.ext)`             |
+| Mermaid                | fenced `mermaid` block                |
+| Formula                | standard inline/block LaTeX           |
+| Underline              | `<u>text</u>`                         |
+| Text style             | `<span data-inkloom-color="...">`     |
+| Highlight              | `<span data-inkloom-highlight="...">` |
+| Callout                | GitHub alert `[!NOTE]` and variants   |
+| Toggle                 | native `<details><summary>`           |
 
 ### 9.3 Extended Blocks
 
@@ -461,6 +461,7 @@ title: 系统边界
 scene: assets/hash.excalidraw
 preview: assets/hash.svg
 -->
+
 ![系统边界](assets/hash.svg)
 <!-- /inkloom:canvas -->
 ```
@@ -473,6 +474,7 @@ id: file_01JABC
 mime: application/pdf
 size: 2481920
 -->
+
 [产品架构.pdf](assets/hash.pdf)
 <!-- /inkloom:file -->
 ```
@@ -759,14 +761,12 @@ Pine green is an accent only. No large green background panels.
 
 ```css
 --font-ui:
-  "Geist Sans", -apple-system, BlinkMacSystemFont,
-  "PingFang SC", "Hiragino Sans GB",
-  "HarmonyOS Sans SC", "Microsoft YaHei",
+  "Geist Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+  "Hiragino Sans GB", "HarmonyOS Sans SC", "Microsoft YaHei",
   "Noto Sans CJK SC", sans-serif;
 
 --font-code:
-  "Geist Mono", "SFMono-Regular", Consolas,
-  "Liberation Mono", monospace;
+  "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 ```
 
 - Geist Sans and Geist Mono are self-hosted WOFF2 assets.

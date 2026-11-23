@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-#[cfg(not(test))]
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -11,9 +10,7 @@ use std::{
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-#[cfg(not(test))]
 use std::sync::Mutex;
-#[cfg(not(test))]
 use tauri::{AppHandle, Emitter, State};
 use tempfile::Builder;
 
@@ -214,14 +211,12 @@ impl WorkspaceSession {
     }
 }
 
-#[cfg(not(test))]
 #[derive(Default)]
 struct AppState {
     session: Mutex<Option<WorkspaceSession>>,
     watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn open_workspace(
     app: AppHandle,
@@ -244,7 +239,6 @@ fn open_workspace(
     Ok(info)
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn current_workspace(state: State<'_, AppState>) -> CommandResult<Option<WorkspaceInfo>> {
     let mut guard = state
@@ -254,7 +248,6 @@ fn current_workspace(state: State<'_, AppState>) -> CommandResult<Option<Workspa
     Ok(guard.as_mut().map(|session| session.info()))
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn list_tree(state: State<'_, AppState>) -> CommandResult<WorkspaceNode> {
     let mut guard = state
@@ -267,7 +260,6 @@ fn list_tree(state: State<'_, AppState>) -> CommandResult<WorkspaceNode> {
     build_tree(&session.root, &session.index)
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn read_document(
     state: State<'_, AppState>,
@@ -282,7 +274,6 @@ fn read_document(
     snapshot_for_path(&session.root, &path, &session.index)
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn create_document(
     state: State<'_, AppState>,
@@ -332,7 +323,6 @@ fn create_document(
     )
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn write_document(
     state: State<'_, AppState>,
@@ -370,7 +360,6 @@ fn write_document(
     snapshot_for_path(&session.root, &path, &session.index)
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn move_node(
     state: State<'_, AppState>,
@@ -415,7 +404,6 @@ fn move_node(
     })
 }
 
-#[cfg(not(test))]
 #[tauri::command]
 fn delete_node(
     state: State<'_, AppState>,
@@ -454,7 +442,6 @@ fn delete_node(
     Ok(())
 }
 
-#[cfg(not(test))]
 fn require_session(
     guard: &mut Option<WorkspaceSession>,
 ) -> CommandResult<&mut WorkspaceSession> {
@@ -853,7 +840,6 @@ fn system_time(value: SystemTime) -> CommandResult<String> {
     Ok(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
 }
 
-#[cfg(not(test))]
 fn watch_workspace(root: &Path, app: AppHandle) -> CommandResult<RecommendedWatcher> {
     let root_for_callback = root.to_path_buf();
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
@@ -880,7 +866,6 @@ fn watch_workspace(root: &Path, app: AppHandle) -> CommandResult<RecommendedWatc
     Ok(watcher)
 }
 
-#[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

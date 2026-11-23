@@ -133,22 +133,22 @@ Dashboard routes, save state and default mode derive from these values.
 
 ## 4. Technical Stack
 
-| Area | Choice |
-| --- | --- |
-| Web | React 19, TypeScript, Vite, React Router |
-| Styling | Tailwind CSS 4, semantic design tokens |
-| UI primitives | Radix Dialog, Dropdown Menu, accessible custom components |
-| Server state | TanStack Query |
-| Forms | React Hook Form, Zod |
-| Local transient state | Zustand |
-| Editor | Milkdown / ProseMirror / Remark |
-| Code editing | CodeMirror 6 only inside code and diagram source nodes |
-| Diagrams | Mermaid, Excalidraw |
-| Icons | Lucide |
-| API | Node.js 22 using `node:http` |
-| Data | SQLite with WAL |
-| Search | SQLite FTS5 |
-| Assets | Content-addressed files on a persistent volume; S3-compatible adapter later |
+| Area                  | Choice                                                                      |
+| --------------------- | --------------------------------------------------------------------------- |
+| Web                   | React 19, TypeScript, Vite, React Router                                    |
+| Styling               | Tailwind CSS 4, semantic design tokens                                      |
+| UI primitives         | Radix Dialog, Dropdown Menu, accessible custom components                   |
+| Server state          | TanStack Query                                                              |
+| Forms                 | React Hook Form, Zod                                                        |
+| Local transient state | Zustand                                                                     |
+| Editor                | Milkdown / ProseMirror / Remark                                             |
+| Code editing          | CodeMirror 6 only inside code and diagram source nodes                      |
+| Diagrams              | Mermaid, Excalidraw                                                         |
+| Icons                 | Lucide                                                                      |
+| API                   | Node.js 22 using `node:http`                                                |
+| Data                  | SQLite with WAL                                                             |
+| Search                | SQLite FTS5                                                                 |
+| Assets                | Content-addressed files on a persistent volume; S3-compatible adapter later |
 
 The editor decision is intentional:
 
@@ -343,6 +343,7 @@ GET    /api/workspaces/:workspaceId/notes/recent
 GET    /api/workspaces/:workspaceId/knowledge-bases
 POST   /api/workspaces/:workspaceId/knowledge-bases
 PATCH  /api/workspaces/:workspaceId/knowledge-bases/:knowledgeBaseId
+PUT    /api/workspaces/:workspaceId/knowledge-bases/order
 DELETE /api/workspaces/:workspaceId/knowledge-bases/:knowledgeBaseId
 GET    /api/workspaces/:workspaceId/knowledge-bases/:knowledgeBaseId/documents
 ```
@@ -357,9 +358,14 @@ DELETE /api/workspaces/:workspaceId/documents/:documentId
 
 POST   /api/workspaces/:workspaceId/documents/:documentId/archive
 POST   /api/workspaces/:workspaceId/documents/:documentId/restore-to-notes
+POST   /api/workspaces/:workspaceId/documents/:documentId/open
 ```
 
 All writes include a `baseRevision`.
+
+The metadata-only `open` route updates `lastOpenedAt` without advancing the
+document content revision. Knowledge-base ordering is submitted as one
+revision-checked array and committed atomically.
 
 ### 8.3 Search and History
 
@@ -457,6 +463,8 @@ Milkdown and ProseMirror remain the lowest-risk choice because:
 ## 11. Security
 
 - Passwords use scrypt with per-user salts.
+- Password hashing runs asynchronously with bounded concurrency; login and
+  registration attempts are rate-limited by client address and account.
 - Session tokens are hashed in storage and sent only in HttpOnly, SameSite=Lax,
   Secure cookies in production.
 - CORS allows only configured Web origins.
@@ -471,15 +479,15 @@ Milkdown and ProseMirror remain the lowest-risk choice because:
 
 ## 12. Performance Targets
 
-| Operation | Target |
-| --- | --- |
-| First workspace shell | under 1s on a warm API |
-| Document switch | P95 under 150ms after selection |
-| Autosave network start | within 800ms after input stops |
-| Search | P95 under 120ms for 1,000 documents |
-| Mermaid initial render | under 500ms for typical diagrams |
-| Excalidraw first open | lazy-loaded, under 1.5s on a normal connection |
-| UI interaction | visually stable near 60fps |
+| Operation              | Target                                         |
+| ---------------------- | ---------------------------------------------- |
+| First workspace shell  | under 1s on a warm API                         |
+| Document switch        | P95 under 150ms after selection                |
+| Autosave network start | within 800ms after input stops                 |
+| Search                 | P95 under 120ms for 1,000 documents            |
+| Mermaid initial render | under 500ms for typical diagrams               |
+| Excalidraw first open  | lazy-loaded, under 1.5s on a normal connection |
+| UI interaction         | visually stable near 60fps                     |
 
 Engineering requirements:
 

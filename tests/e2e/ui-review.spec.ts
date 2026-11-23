@@ -58,7 +58,9 @@ for (const viewport of viewports) {
         await page.getByRole("button", { name: "打开导航" }).click();
         await page.waitForFunction(() => {
           const sidebar = document.querySelector<HTMLElement>("aside");
-          return sidebar ? Math.abs(sidebar.getBoundingClientRect().left) < 1 : false;
+          return sidebar
+            ? Math.abs(sidebar.getBoundingClientRect().left) < 1
+            : false;
         });
         await expectNoHorizontalOverflow(page);
         await page.screenshot({
@@ -98,10 +100,7 @@ test.describe("interaction accessibility", () => {
 
     await page.keyboard.press("Control+j");
     await expect(page.getByPlaceholder("搜索")).toBeFocused();
-    await page
-      .locator("aside")
-      .getByRole("button", { name: "关闭导航" })
-      .tap();
+    await page.locator("aside").getByRole("button", { name: "关闭导航" }).tap();
 
     const reducedMotion = await page.evaluate(() => {
       const skeleton = document.createElement("span");

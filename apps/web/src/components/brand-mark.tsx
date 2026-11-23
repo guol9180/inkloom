@@ -1,5 +1,5 @@
 import { PenLine } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn } from "@inkloom/ui";
 
 export function BrandMark({ className }: { className?: string }) {
   return (

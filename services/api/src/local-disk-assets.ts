@@ -15,11 +15,7 @@ export class LocalDiskAssetStore implements AssetBlobStore {
       `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
   ) {}
 
-  async put(
-    workspaceId: string,
-    source: AssetBlobSource,
-    maxBytes: number
-  ) {
+  async put(workspaceId: string, source: AssetBlobSource, maxBytes: number) {
     const workspaceKey = createHash("sha256")
       .update(workspaceId)
       .digest("hex")

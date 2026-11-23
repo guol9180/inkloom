@@ -56,9 +56,14 @@ export function workspacePath(value: string): WorkspacePath {
     /^\/|^[A-Za-z]:\//.test(normalized) ||
     /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) ||
     normalized.length === 0 ||
-    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
+    segments.some(
+      (segment) => segment.length === 0 || segment === "." || segment === ".."
+    )
   ) {
-    throw new InkLoomError("INVALID_WORKSPACE_PATH", `Invalid workspace path: ${value}`);
+    throw new InkLoomError(
+      "INVALID_WORKSPACE_PATH",
+      `Invalid workspace path: ${value}`
+    );
   }
   return normalized as WorkspacePath;
 }

@@ -2,14 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  renderMarkdown,
-  renderMermaidBlocks
-} from "@inkloom/diagrams";
-import {
-  countWords,
-  type MarkdownViewMode
-} from "@inkloom/editor";
+import { renderMarkdown, renderMermaidBlocks } from "@inkloom/diagrams";
+import { countWords, type MarkdownViewMode } from "@inkloom/editor";
 import {
   workspacePath,
   type DocumentSnapshot,
@@ -107,7 +101,9 @@ export default function App() {
         await refreshTree();
       } catch (error) {
         const failure = error as { code?: string };
-        setSaveState(failure.code === "REVISION_CONFLICT" ? "conflict" : "error");
+        setSaveState(
+          failure.code === "REVISION_CONFLICT" ? "conflict" : "error"
+        );
         setMessage(
           failure.code === "REVISION_CONFLICT"
             ? "文件已被外部修改。请刷新后再继续，当前草稿仍保留在编辑区。"
@@ -164,7 +160,10 @@ export default function App() {
 
   async function createDocument() {
     if (!workspace) return;
-    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[-:TZ.]/g, "")
+      .slice(0, 14);
     const title = "未命名文档";
     try {
       const next = await adapter.createDocument({
@@ -207,7 +206,10 @@ export default function App() {
         <div className="welcome-card">
           <span className="eyebrow">{brand.productName}</span>
           <h1>把普通文件夹变成可编辑的知识库</h1>
-          <p>选择一个文件夹。每篇正文都会以 UTF-8 Markdown 保存，数据库以后只负责索引与版本。</p>
+          <p>
+            选择一个文件夹。每篇正文都会以 UTF-8 Markdown
+            保存，数据库以后只负责索引与版本。
+          </p>
           <button className="primary" type="button" onClick={selectWorkspace}>
             打开工作区
           </button>
@@ -226,17 +228,28 @@ export default function App() {
         </div>
         <div className="top-actions">
           <span className={`save-state state-${saveState}`}>
-            {saveState === "saving" ? "保存中" : saveState === "saved" ? "已写入磁盘" : "需要处理"}
+            {saveState === "saving"
+              ? "保存中"
+              : saveState === "saved"
+                ? "已写入磁盘"
+                : "需要处理"}
           </span>
-          <button type="button" onClick={createDocument}>新建文档</button>
-          <button type="button" onClick={selectWorkspace}>切换工作区</button>
+          <button type="button" onClick={createDocument}>
+            新建文档
+          </button>
+          <button type="button" onClick={selectWorkspace}>
+            切换工作区
+          </button>
         </div>
       </header>
 
       {externalChange && (
         <div className="notice">
           检测到磁盘中的文件发生变化。当前草稿尚未覆盖。
-          <button type="button" onClick={() => document && loadDocument(document.meta.id)}>
+          <button
+            type="button"
+            onClick={() => document && loadDocument(document.meta.id)}
+          >
             刷新当前文档
           </button>
         </div>
@@ -251,7 +264,12 @@ export default function App() {
               node={tree}
               activeId={document?.meta.id}
               onSelect={(id) => {
-                if (dirty && !window.confirm("当前草稿尚未保存，切换文档会丢弃草稿。继续？")) {
+                if (
+                  dirty &&
+                  !window.confirm(
+                    "当前草稿尚未保存，切换文档会丢弃草稿。继续？"
+                  )
+                ) {
                   return;
                 }
                 void loadDocument(id);
@@ -346,7 +364,10 @@ function Tree({
   return (
     <section className="tree-folder">
       {depth > 0 && (
-        <div className="tree-folder-label" style={{ paddingLeft: `${14 + (depth - 1) * 14}px` }}>
+        <div
+          className="tree-folder-label"
+          style={{ paddingLeft: `${14 + (depth - 1) * 14}px` }}
+        >
           {node.name}
         </div>
       )}

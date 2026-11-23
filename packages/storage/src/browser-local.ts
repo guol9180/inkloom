@@ -55,7 +55,9 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
       (() => `document-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   }
 
-  loadWorkspace(fallback: readonly DocumentSnapshot[] = []): BrowserWorkspaceState {
+  loadWorkspace(
+    fallback: readonly DocumentSnapshot[] = []
+  ): BrowserWorkspaceState {
     const persisted = this.readPersisted();
     if (!persisted || persisted.documents.length === 0) {
       return { documents: fallback };
@@ -71,7 +73,9 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
   }
 
   saveWorkspace(state: BrowserWorkspaceState): void {
-    const documents = state.documents.map((document) => cloneSnapshot(document));
+    const documents = state.documents.map((document) =>
+      cloneSnapshot(document)
+    );
     const persisted: PersistedWorkspace = {
       version: 1,
       documents,
@@ -82,10 +86,16 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
   saveActiveDocument(documentId: DocumentId): void {
     const persisted = this.readPersisted();
-    if (!persisted?.documents.some((document) => document.meta.id === documentId)) return;
+    if (
+      !persisted?.documents.some((document) => document.meta.id === documentId)
+    )
+      return;
     this.storage.setItem(
       this.stateKey,
-      JSON.stringify({ ...persisted, activeDocumentId: documentId } satisfies PersistedWorkspace)
+      JSON.stringify({
+        ...persisted,
+        activeDocumentId: documentId
+      } satisfies PersistedWorkspace)
     );
   }
 
@@ -146,7 +156,9 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
   async writeDocument(input: WriteDocumentInput): Promise<DocumentSnapshot> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
-    const current = persisted.documents.find((document) => document.meta.id === input.documentId);
+    const current = persisted.documents.find(
+      (document) => document.meta.id === input.documentId
+    );
     if (!current) throw documentNotFound(input.documentId);
     if (current.meta.revision !== input.baseRevision) {
       throw new RevisionConflictError(
@@ -179,10 +191,16 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
   async moveNode(input: MoveNodeInput): Promise<WorkspaceNode> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
-    const current = persisted.documents.find((document) => document.meta.id === input.nodeId);
+    const current = persisted.documents.find(
+      (document) => document.meta.id === input.nodeId
+    );
     if (!current) throw documentNotFound(input.nodeId);
     if (current.meta.revision !== input.baseRevision) {
-      throw new RevisionConflictError(input.nodeId, input.baseRevision, current.meta.revision);
+      throw new RevisionConflictError(
+        input.nodeId,
+        input.baseRevision,
+        current.meta.revision
+      );
     }
 
     const next: DocumentSnapshot = {
@@ -211,17 +229,27 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
 
   async deleteNode(input: DeleteNodeInput): Promise<void> {
     const persisted = this.readPersisted() ?? { version: 1, documents: [] };
-    const current = persisted.documents.find((document) => document.meta.id === input.nodeId);
+    const current = persisted.documents.find(
+      (document) => document.meta.id === input.nodeId
+    );
     if (!current) throw documentNotFound(input.nodeId);
     if (current.meta.revision !== input.baseRevision) {
-      throw new RevisionConflictError(input.nodeId, input.baseRevision, current.meta.revision);
+      throw new RevisionConflictError(
+        input.nodeId,
+        input.baseRevision,
+        current.meta.revision
+      );
     }
 
     this.writePersisted({
       ...persisted,
-      documents: persisted.documents.filter((document) => document.meta.id !== input.nodeId),
+      documents: persisted.documents.filter(
+        (document) => document.meta.id !== input.nodeId
+      ),
       activeDocumentId:
-        persisted.activeDocumentId === input.nodeId ? undefined : persisted.activeDocumentId
+        persisted.activeDocumentId === input.nodeId
+          ? undefined
+          : persisted.activeDocumentId
     });
   }
 
@@ -259,7 +287,9 @@ export class BrowserLocalAdapter implements WorkspaceAdapter {
   }
 
   private findDocument(documentId: DocumentId): DocumentSnapshot | undefined {
-    return this.readPersisted()?.documents.find((document) => document.meta.id === documentId);
+    return this.readPersisted()?.documents.find(
+      (document) => document.meta.id === documentId
+    );
   }
 }
 
@@ -268,7 +298,10 @@ function cloneSnapshot(snapshot: DocumentSnapshot): DocumentSnapshot {
 }
 
 function documentNotFound(documentId: string): InkLoomError {
-  return new InkLoomError("DOCUMENT_NOT_FOUND", `Document not found: ${documentId}`);
+  return new InkLoomError(
+    "DOCUMENT_NOT_FOUND",
+    `Document not found: ${documentId}`
+  );
 }
 
 function isDocumentSnapshot(value: unknown): value is DocumentSnapshot {
@@ -291,7 +324,10 @@ function buildTree(documents: readonly DocumentSnapshot[]): WorkspaceNode {
     path: workspacePath("workspace"),
     children: []
   };
-  const folders = new Map<string, WorkspaceNode & { children: WorkspaceNode[] }>();
+  const folders = new Map<
+    string,
+    WorkspaceNode & { children: WorkspaceNode[] }
+  >();
 
   for (const document of documents) {
     const segments = document.meta.path.split("/");

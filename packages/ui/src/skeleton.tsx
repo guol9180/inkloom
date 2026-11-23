@@ -1,4 +1,4 @@
-import { cn } from "../../lib/utils";
+import { cn } from "./lib/cn";
 
 export function Skeleton({ className }: { className?: string }) {
   return (
@@ -20,10 +20,7 @@ export function WorkspaceSkeleton() {
         <Skeleton className="mt-5 h-10 w-full rounded-xl" />
         <div className="mt-6 grid gap-2">
           {Array.from({ length: 8 }, (_, index) => (
-            <Skeleton
-              className="h-10 w-full rounded-xl"
-              key={String(index)}
-            />
+            <Skeleton className="h-10 w-full rounded-xl" key={String(index)} />
           ))}
         </div>
       </aside>
@@ -41,7 +38,11 @@ export function WorkspaceSkeleton() {
                 <Skeleton
                   className={cn(
                     "h-4 rounded-md",
-                    index % 3 === 0 ? "w-11/12" : index % 3 === 1 ? "w-full" : "w-4/5"
+                    index % 3 === 0
+                      ? "w-11/12"
+                      : index % 3 === 1
+                        ? "w-full"
+                        : "w-4/5"
                   )}
                   key={String(index)}
                 />

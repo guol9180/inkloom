@@ -18,12 +18,7 @@ const LEGACY_DRAFT_PREFIX = "inkloom.draft.";
 const draftStore = new IndexedDbDraftStore();
 
 export type AutosaveStatus =
-  | "saved"
-  | "draft"
-  | "saving"
-  | "offline"
-  | "error"
-  | "conflict";
+  "saved" | "draft" | "saving" | "offline" | "error" | "conflict";
 
 export type ConflictCopy = {
   id: string;
@@ -125,12 +120,7 @@ export function useDocumentAutosave({
       };
       await draftStore.put(draft);
     },
-    [
-      scope.documentId,
-      scope.userId,
-      scope.workspaceId,
-      userId
-    ]
+    [scope.documentId, scope.userId, scope.workspaceId, userId]
   );
 
   const preserveConflictCopy = useCallback(
@@ -139,9 +129,7 @@ export function useDocumentAutosave({
         documentRef.current.meta.id === scope.documentId
           ? documentRef.current
           : document;
-      const adapter = cloudClient.workspace(
-        scope.workspaceId as WorkspaceId
-      );
+      const adapter = cloudClient.workspace(scope.workspaceId as WorkspaceId);
       const notes = await cloudClient.listNotes(
         scope.workspaceId as WorkspaceId
       );
@@ -171,7 +159,9 @@ export function useDocumentAutosave({
         setTagsState(server.meta.tags);
         setConflictCopy({ id: copy.meta.id, title: copy.meta.title });
         setStatus("conflict");
-        setError("云端已有更新。当前文档已载入最新版本，你的修改已保存为冲突副本。");
+        setError(
+          "云端已有更新。当前文档已载入最新版本，你的修改已保存为冲突副本。"
+        );
       }
       await draftStore.remove(scope);
       onSavedRef.current(server);
@@ -189,7 +179,10 @@ export function useDocumentAutosave({
         while (pendingRef.current) {
           const pending = pendingRef.current;
           pendingRef.current = undefined;
-          if (pending.checkpoint && maxCheckpointTimerRef.current !== undefined) {
+          if (
+            pending.checkpoint &&
+            maxCheckpointTimerRef.current !== undefined
+          ) {
             window.clearTimeout(maxCheckpointTimerRef.current);
             maxCheckpointTimerRef.current = undefined;
           }
@@ -414,10 +407,7 @@ export function useDocumentAutosave({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (
-        (event.ctrlKey || event.metaKey) &&
-        event.key.toLowerCase() === "s"
-      ) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void flush(true);
       }
@@ -544,10 +534,7 @@ export function useDocumentAutosave({
   };
 }
 
-function tagsEqual(
-  left: readonly string[],
-  right: readonly string[]
-): boolean {
+function tagsEqual(left: readonly string[], right: readonly string[]): boolean {
   return (
     left.length === right.length &&
     left.every((tag, index) => tag === right[index])
@@ -578,10 +565,7 @@ async function hashMarkdown(value: string) {
     .join("");
 }
 
-async function migrateLegacyDraft(
-  document: DocumentSnapshot,
-  userId: string
-) {
+async function migrateLegacyDraft(document: DocumentSnapshot, userId: string) {
   const key = `${LEGACY_DRAFT_PREFIX}${document.meta.id}`;
   const raw = localStorage.getItem(key);
   if (!raw) return;
@@ -604,9 +588,7 @@ async function migrateLegacyDraft(
         workspaceId: document.meta.workspaceId,
         documentId: document.meta.id,
         title:
-          typeof value.title === "string"
-            ? value.title
-            : document.meta.title,
+          typeof value.title === "string" ? value.title : document.meta.title,
         markdown: value.content,
         tags:
           Array.isArray(value.tags) &&

@@ -1,22 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Clock3,
-  FileClock,
-  RotateCcw,
-  TriangleAlert,
-  X
-} from "lucide-react";
+import { Clock3, FileClock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { diffMarkdownBlocks } from "@inkloom/editor";
 import type { DocumentSnapshot, WorkspaceId } from "@inkloom/core";
 import type { CloudDocumentRevision } from "@inkloom/storage";
 import { cloudClient } from "../../cloud-workspace";
-import { AppDialog } from "../../components/ui/app-dialog";
-import { Button, IconButton } from "../../components/ui/button";
-import { Skeleton } from "../../components/ui/skeleton";
-import {
-  ProductMarkdownEditor
-} from "../editor/product-markdown-editor";
+import { AppDialog, Button, IconButton, Skeleton } from "@inkloom/ui";
+import { ProductMarkdownEditor } from "../editor/product-markdown-editor";
 
 export function RevisionHistoryDrawer({
   open,
@@ -41,10 +31,7 @@ export function RevisionHistoryDrawer({
   const revisions = useQuery({
     queryKey: ["revisions", workspaceId, document.meta.id],
     queryFn: () =>
-      cloudClient.listRevisions(
-        workspaceId as WorkspaceId,
-        document.meta.id
-      ),
+      cloudClient.listRevisions(workspaceId as WorkspaceId, document.meta.id),
     enabled: open,
     staleTime: 10_000
   });
@@ -68,9 +55,7 @@ export function RevisionHistoryDrawer({
   );
   const diff = useMemo(
     () =>
-      selected
-        ? diffMarkdownBlocks(selected.markdown, currentMarkdown)
-        : [],
+      selected ? diffMarkdownBlocks(selected.markdown, currentMarkdown) : [],
     [currentMarkdown, selected]
   );
   if (!open) return null;
@@ -311,11 +296,7 @@ function RevisionList({
   );
 }
 
-function BlockDiff({
-  diff
-}: {
-  diff: ReturnType<typeof diffMarkdownBlocks>;
-}) {
+function BlockDiff({ diff }: { diff: ReturnType<typeof diffMarkdownBlocks> }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
       <p className="mb-3 text-[0.62rem] text-ink-400">

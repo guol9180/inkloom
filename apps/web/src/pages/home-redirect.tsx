@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "react-router";
 import { BrandMark } from "../components/brand-mark";
-import { Button } from "../components/ui/button";
-import { WorkspaceSkeleton } from "../components/ui/skeleton";
+import { Button, WorkspaceSkeleton } from "@inkloom/ui";
 import { workspacesQuery } from "../queries";
 
 export function HomeRedirect() {

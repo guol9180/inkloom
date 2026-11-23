@@ -27,7 +27,10 @@ const preflight = await fetch(`${apiUrl}/api/auth/me`, {
     "Access-Control-Request-Method": "GET"
   }
 });
-assert(preflight.status === 204, `Preflight returned HTTP ${preflight.status}.`);
+assert(
+  preflight.status === 204,
+  `Preflight returned HTTP ${preflight.status}.`
+);
 assert(
   preflight.headers.get("access-control-allow-origin") === webUrl,
   "API did not allow the production Web origin."

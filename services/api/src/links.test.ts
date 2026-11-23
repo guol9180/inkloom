@@ -12,4 +12,14 @@ describe("document link extraction", () => {
       { targetPath: "架构", linkText: "系统架构" }
     ]);
   });
+
+  it("keeps malformed percent escapes as literal anchors", () => {
+    expect(extractDocumentLinks("[损坏锚点](文档/目标.md#%E0%A4%A)")).toEqual([
+      {
+        targetPath: "文档/目标.md",
+        linkText: "损坏锚点",
+        anchor: "%E0%A4%A"
+      }
+    ]);
+  });
 });

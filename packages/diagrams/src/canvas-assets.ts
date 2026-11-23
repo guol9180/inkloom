@@ -108,9 +108,7 @@ export function normalizeCanvasElements(
   });
 }
 
-export function canvasEditorData(
-  scene?: CanvasEditorData
-): {
+export function canvasEditorData(scene?: CanvasEditorData): {
   elements: readonly Record<string, unknown>[];
   appState: Record<string, unknown>;
   files: Record<string, unknown>;
@@ -132,8 +130,6 @@ export async function exportCanvasAssets(
 ): Promise<CanvasAssetExport> {
   const module = await loadExcalidrawModule();
   const data = canvasEditorData(scene);
-  const elements = data.elements as never;
-  const appState = data.appState as never;
   const files = data.files as never;
   const sceneJson = serializeSceneJson(module, data);
   let serialized: string;
@@ -223,9 +219,7 @@ function renderFallbackElement(
   const y = finiteNumber(element.y, 40 + index * 18);
   const width = Math.max(1, finiteNumber(element.width, 140));
   const height = Math.max(1, finiteNumber(element.height, 90));
-  const stroke = escapeXmlAttribute(
-    String(element.strokeColor ?? "#26332d")
-  );
+  const stroke = escapeXmlAttribute(String(element.strokeColor ?? "#26332d"));
   const fill = escapeXmlAttribute(
     String(element.backgroundColor ?? "transparent")
   );

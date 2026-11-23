@@ -59,7 +59,8 @@ export function createTauriFolderAdapter(
 
     openWorkspace: (path: string) =>
       invoke<TauriWorkspaceInfo>("open_workspace", { path }),
-    currentWorkspace: () => invoke<TauriWorkspaceInfo | null>("current_workspace"),
+    currentWorkspace: () =>
+      invoke<TauriWorkspaceInfo | null>("current_workspace"),
 
     async subscribeWorkspaceChanges(listener: () => void): Promise<() => void> {
       return listen("workspace-changed", listener);

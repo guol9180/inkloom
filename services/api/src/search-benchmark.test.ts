@@ -17,7 +17,7 @@ describe("FTS5 search budget", () => {
         passwordHash: "hash",
         passwordSalt: "salt"
       });
-      const workspace = database.listWorkspaces(user.id)[0];
+      const workspace = database.listWorkspaces(user.id)[0]!;
       for (let index = 0; index < 1_000; index += 1) {
         const label = String(index).padStart(4, "0");
         database.createDocument(user.id, workspace.id, {
@@ -46,7 +46,7 @@ describe("FTS5 search budget", () => {
       }
       durations.sort((left, right) => left - right);
       const p95 = durations[Math.ceil(durations.length * 0.95) - 1];
-      expect(p95).toBeLessThan(120);
+      expect(p95!).toBeLessThan(120);
     } finally {
       database.close();
     }

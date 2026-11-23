@@ -4,10 +4,12 @@ packages:
   - services/*
 
 allowBuilds:
-  '@parcel/watcher': true
+  "@parcel/watcher": true
 
 overrides:
+  katex: 0.19.1
   lodash-es@<4.18.1: 4.18.1
+  mermaid: 12.3.0
   nanoid@<3.3.18: 3.3.18
   "nanoid@>=4.0.0 <5.1.16": 5.1.16
   sass@1.51.0: 1.108.2
