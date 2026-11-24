@@ -719,9 +719,12 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
 
         <main className="min-w-0 flex-1 overflow-hidden">
           {documentId ? (
-            document.isPending ? (
+            document.isPending ||
+            (document.data && document.data.meta.id !== documentId) ? (
               <DocumentSkeleton />
-            ) : document.isError || !document.data ? (
+            ) : document.isError ||
+              !document.data ||
+              document.data.meta.id !== documentId ? (
               <RouteError
                 title="文档暂时无法打开"
                 message={
@@ -733,6 +736,7 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
               />
             ) : (
               <DocumentSurface
+                key={document.data.meta.id}
                 document={document.data}
                 userId={session.data?.id ?? ""}
                 mode={mode}
@@ -1887,9 +1891,7 @@ function DocumentSurface({
     document,
     userId,
     active: editorActive,
-    onSaved: (saved) => {
-      void onSaved(saved);
-    },
+    onSaved: (saved) => onSaved(saved),
     onConflictCopy: () => {
       void queryClient.invalidateQueries({
         queryKey: ["notes", document.meta.workspaceId]
@@ -2098,24 +2100,27 @@ function DocumentSurface({
       });
       const removeDeleted = (documents: CloudDocumentSummary[] | undefined) =>
         documents?.filter((item) => item.id !== document.meta.id);
-      queryClient.setQueryData<CloudDocumentSummary[]>(
-        ["notes", document.meta.workspaceId],
-        removeDeleted
-      );
-      queryClient.setQueryData<CloudDocumentSummary[]>(
-        ["notes", document.meta.workspaceId, "recent"],
-        removeDeleted
-      );
-      if (document.meta.knowledgeBaseId) {
+      const removeDeletedFromCaches = () => {
         queryClient.setQueryData<CloudDocumentSummary[]>(
-          [
-            "knowledge-documents",
-            document.meta.workspaceId,
-            document.meta.knowledgeBaseId
-          ],
+          ["notes", document.meta.workspaceId],
           removeDeleted
         );
-      }
+        queryClient.setQueryData<CloudDocumentSummary[]>(
+          ["notes", document.meta.workspaceId, "recent"],
+          removeDeleted
+        );
+        if (document.meta.knowledgeBaseId) {
+          queryClient.setQueryData<CloudDocumentSummary[]>(
+            [
+              "knowledge-documents",
+              document.meta.workspaceId,
+              document.meta.knowledgeBaseId
+            ],
+            removeDeleted
+          );
+        }
+      };
+      removeDeletedFromCaches();
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ["notes", document.meta.workspaceId]
@@ -2124,6 +2129,7 @@ function DocumentSurface({
           queryKey: ["knowledge-documents", document.meta.workspaceId]
         })
       ]);
+      removeDeletedFromCaches();
       closeDeleteDialog();
       showToast("文档已删除");
       navigate(

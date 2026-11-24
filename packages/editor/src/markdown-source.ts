@@ -183,13 +183,7 @@ export function reconcileMarkdownSource(
   const sourceHunks = diffBlockHunks(baselineBlocks, originalBlocks);
   const userHunks = diffBlockHunks(baselineBlocks, nextBlocks);
 
-  const hunks = [
-    ...sourceHunks.filter(
-      (sourceHunk) =>
-        !userHunks.some((userHunk) => hunksOverlap(sourceHunk, userHunk))
-    ),
-    ...userHunks
-  ].sort((left, right) => left.start - right.start || left.end - right.end);
+  const hunks = mergeSourceAndUserHunks(sourceHunks, userHunks);
 
   if (hunks.length === 0) return originalSource;
 
@@ -340,4 +334,33 @@ function diffBlockHunks(
 
 function hunksOverlap(left: SourceMergeHunk, right: SourceMergeHunk): boolean {
   return left.start < right.end && right.start < left.end;
+}
+
+function mergeSourceAndUserHunks(
+  sourceHunks: readonly SourceMergeHunk[],
+  userHunks: readonly SourceMergeHunk[]
+): SourceMergeHunk[] {
+  const ordered = [
+    ...sourceHunks.map((hunk) => ({ hunk, sourceOnly: true })),
+    ...userHunks.map((hunk) => ({ hunk, sourceOnly: false }))
+  ].sort(
+    (left, right) =>
+      left.hunk.start - right.hunk.start ||
+      Number(right.sourceOnly) - Number(left.sourceOnly) ||
+      left.hunk.end - right.hunk.end
+  );
+  const merged: SourceMergeHunk[] = [];
+  for (const entry of ordered) {
+    const previous = merged.at(-1);
+    if (!previous || !hunksOverlap(previous, entry.hunk)) {
+      merged.push({
+        ...entry.hunk,
+        replacement: [...entry.hunk.replacement]
+      });
+      continue;
+    }
+    previous.end = Math.max(previous.end, entry.hunk.end);
+    previous.replacement = [...previous.replacement, ...entry.hunk.replacement];
+  }
+  return merged;
 }

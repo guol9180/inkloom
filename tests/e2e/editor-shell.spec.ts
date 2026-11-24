@@ -124,6 +124,7 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
 
   await taggedNote.click();
   await expect(page).toHaveURL(new RegExp(`/notes/${noteId}$`));
+  await expect(page.getByLabel("Markdown 正文")).toContainText("产品随记内容");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出" }).click();
   const download = await downloadPromise;

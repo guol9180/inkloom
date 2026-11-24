@@ -39,7 +39,7 @@ export function useDocumentAutosave({
   document: DocumentSnapshot;
   userId: string;
   active: boolean;
-  onSaved: (snapshot: DocumentSnapshot) => void;
+  onSaved: (snapshot: DocumentSnapshot) => void | Promise<void>;
   onConflictCopy: (snapshot: DocumentSnapshot) => void;
 }) {
   const [title, setTitleState] = useState(document.meta.title);
@@ -164,7 +164,7 @@ export function useDocumentAutosave({
         );
       }
       await draftStore.remove(scope);
-      onSavedRef.current(server);
+      await onSavedRef.current(server);
       return copy;
     },
     [scope]
@@ -253,7 +253,7 @@ export function useDocumentAutosave({
               setLastSavedAt(saved.meta.updatedAt);
               setError("");
             }
-            onSavedRef.current(saved);
+            await onSavedRef.current(saved);
           } catch (saveError) {
             await persistDraft(markdownRef.current).catch(() => undefined);
             if (saveError instanceof RevisionConflictError) {

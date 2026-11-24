@@ -173,6 +173,39 @@ describe("Markdown source-slice model", () => {
     ).toHaveLength(1);
   });
 
+  it("preserves protected frontmatter when the canonical leading block changes", () => {
+    const original = [
+      "---",
+      "title: Keep this frontmatter",
+      "unknown_field: keep",
+      "---",
+      "",
+      "# 源片段测试",
+      ""
+    ].join("\n");
+    const baseline = [
+      "***",
+      "",
+      "title: Keep this frontmatter",
+      "unknown_field: keep",
+      "-------------------",
+      "",
+      "# 源片段测试",
+      ""
+    ].join("\n");
+    const next = baseline.replace("***", "&#x20;CHANGED");
+
+    const reconciled = reconcileMarkdownSource(original, baseline, next);
+
+    expect(reconciled.startsWith("---\ntitle: Keep this frontmatter")).toBe(
+      true
+    );
+    expect(reconciled).toContain("&#x20;CHANGED");
+    expect(
+      reconciled.match(/title: Keep this frontmatter/gu) ?? []
+    ).toHaveLength(1);
+  });
+
   it("applies inserted and removed canonical blocks without replaying source-only changes", () => {
     const original = "# 标题\n\n正文\n";
     const baseline = "# 标题\n\n正文\n";
