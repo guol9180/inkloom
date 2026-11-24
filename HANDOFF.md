@@ -18,7 +18,7 @@
 - API: `https://api.inkloom.imhgl.com`.
 - Repository: `https://github.com/guol9180/inkloom`, branch `main`.
 - Production application release:
-  `cc67f89aa7c751d044944595f257d5e36b6dad9f`.
+  `5824e4691a3498fb2c1967a190f5a602ec968116`.
 - Current production is the completed M1.1 product-grade editor and knowledge
   workflow.
 - The current release update preserved the existing production data and did not
@@ -26,8 +26,7 @@
 - The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
   and must not enter the Web release image.
 
-M1.1 and the post-release editor refinements are complete. T25–T49 are closed
-in the source tree;
+M1.1 and the post-release editor refinements are complete. T25–T61 are closed;
 the milestone state and verification evidence are recorded in
 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
@@ -36,8 +35,9 @@ empty-document layout. It is deployed in the production release above.
 
 T50–T55 add the source-preserving Markdown merge, API/authentication hardening,
 recent-document and atomic knowledge-base ordering fixes, shared UI cleanup,
-strict quality gates, and dependency security updates. These changes are
-verified in the local source tree but are not yet committed or deployed.
+strict quality gates, and dependency security updates. T56–T61 add the final
+editor layout, visual hierarchy, deletion consistency and frontmatter fidelity
+fixes. These changes are deployed in the production release above.
 
 ## Locked Product Decisions
 
@@ -65,9 +65,9 @@ verified in the local source tree but are not yet committed or deployed.
 
 ## Next Work
 
-There is no active development task after the T50–T55 quality remediation. The
-next step is user review, commit, and release authorization. The next milestone
-must be explicitly selected in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+There is no active development task after the T50–T61 quality remediation. The
+next milestone must be explicitly selected in
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
 
 Do not resume desktop, M2 synchronization, real-time collaboration or mobile
 work without explicit user confirmation.
