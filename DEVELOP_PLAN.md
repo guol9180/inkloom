@@ -5,78 +5,27 @@
 - 当前生产：M1.1 Web 产品级编辑器与知识流已上线，运行 release `5824e46`。
 - 当前开发目标：M1.1 已交付；M1D 与后续里程碑等待用户确认。
 - 当前实现模式：只开发 Web；保留桌面、移动、HarmonyOS 和同步的领域/adapter 接入口，不实现对应 host。
-- 当前任务：无进行中的 M1.1 开发任务；T50-T61 代码质量与 UI 整改已完成并部署。
-- 桌面端 T4 保持 `in-progress` 但暂停；M1D、M2、M3、M4 未获确认不得开始。
+- 当前任务：无；T63 文档分层与 ADR 契约修正已完成。
+- 桌面端 T4 与跨平台契约 T9 因 M1.1 范围暂停而标记 blocked；M1D、M2、M3、M4 未获确认不得开始。
 
 ## 任务清单
 
-### T1: 开源仓库与品牌整理（P0）
+### 执行中
 
-- 目标：统一项目名、仓库结构、域名约定和交接文档。
+### T64: 提交并推送文档治理改动（P1）
+
+- 目标：将 T62–T63 产生的文档重组与 ADR 修正按仓库门禁提交并推送到远端 `main`。
 - 验收标准：
-  - 仓库根目录包含 README、AGENTS、DEVELOP_PLAN 和 HANDOFF。
-  - 所有用户可见品牌统一为 InkLoom / 墨织。
-  - 包作用域统一为 `@inkloom/*`。
-  - 浏览器主域明确为 `inkloom.imhgl.com`。
-- 边界：本任务不改生产存储和同步实现。
-- 状态：done
+  - 暂存内容只包含文档及其重命名，不包含 `.ops-tmp/` 或运行时代码。
+  - `typecheck`、测试、构建与格式检查通过。
+  - 使用 Conventional Commits 创建提交并推送到 `origin/main`。
+  - 本地与远端 SHA 一致，T64 终态和验证证据同步回计划。
+- 边界：不修改应用行为、不部署生产、不清理 `.ops-tmp/`。
+- 状态：in-progress
 - 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 建立开源仓库整理任务卡。
-  - 2026-11-13 执行 完成 monorepo 骨架、品牌替换和交接材料。
-  - 2026-11-13 验证 Web 生产构建通过，Mermaid 与 Excalidraw 实机验证通过。
-  - 2026-11-13 交付 产出 `apps/web`、产品方案、部署说明和仓库交接文档；剩余差距：GitHub 远端尚未创建。
+  - 2026-11-25 计划 建立文档治理改动提交与推送任务卡。
 
-### T2: Web 交互原型基线（P0）
-
-- 目标：验证 Markdown、Mermaid、Excalidraw 和文件树的核心交互。
-- 验收标准：
-  - 可新建、搜索、切换和删除文档。
-  - 源码、分栏和阅读模式可切换。
-  - Mermaid 可渲染 SVG。
-  - Excalidraw 可打开、编辑并保存场景。
-  - `pnpm build` 成功。
-- 边界：使用 localStorage，不实现真实文件系统和云同步。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 建立浏览器交互原型任务卡。
-  - 2026-11-13 执行 完成编辑器、图表和文档树原型。
-  - 2026-11-13 验证 TypeScript + Vite 构建通过，浏览器实机验证通过。
-  - 2026-11-13 交付 产出 `apps/web`；剩余差距：正式存储 adapter 尚未接入。
-
-### T3: 抽取 core、editor、diagrams、storage 包（P0）
-
-- 目标：把单页原型拆成可复用 workspace 包，为 Web 与 Tauri 共用。
-- 验收标准：
-  - `@inkloom/core` 定义文档、逻辑路径、revision、能力声明、adapter 和 Bridge 类型。
-  - `@inkloom/editor` 提供 Markdown 视图与源码视图接口。
-  - `@inkloom/diagrams` 懒加载 Mermaid 与 Excalidraw。
-  - `@inkloom/storage` 至少实现 BrowserLocalAdapter。
-  - Web 不直接访问 localStorage，而是通过 adapter。
-  - Web 行为与当前原型一致。
-- 边界：不接入真实磁盘和云 API。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 创建任务卡，等待开始。
-  - 2026-11-18 计划 按交接顺序启动 T3；以当前 Web 原型行为为回归基线，先抽取 core 文档记录、BrowserLocalAdapter 和 diagrams 按需加载边界，再切换 Web 依赖。验收范围固化为 typecheck、test、build 与浏览器交互回归。
-  - 2026-11-18 执行 `@inkloom/core` 增加文档扩展 JSON 与可更新标题/标签契约；`@inkloom/editor` 提供 Markdown 视图、标题提取和字数统计；`@inkloom/diagrams` 接管 DOMPurify/Mermaid 安全渲染与 Excalidraw 懒加载；`@inkloom/storage` 新增可注入介质的 `BrowserLocalAdapter`，Web 通过 adapter 持久化工作区。
-  - 2026-11-18 验证 `pnpm typecheck`、`pnpm test`（11 项）与 `pnpm build` 全部通过；浏览器实际验证 Mermaid 输出 SVG，Excalidraw 新增加一个图元后从 11 变为 12，关闭重开及整页刷新后场景仍为 12 个图元。
-  - 2026-11-18 交付 产出共享包实现、Web composition root、storage/editor 测试和 lockfile；原单页渲染与存储逻辑已移出 `App.tsx`，剩余差距：无。
-
-### T4: Tauri 桌面本地工作区（P0）
-
-- 目标：实现打开普通文件夹、读写 `.md`、附件和 Excalidraw 场景。
-- 验收标准：
-  - 用户选择工作区后可列出目录树。
-  - 新建文档后磁盘出现 UTF-8 `.md` 文件。
-  - 保存使用临时文件 + 原子替换。
-  - 外部修改可被监听并刷新。
-  - 越界路径和符号链接被拒绝。
-- 边界：不实现团队权限和实时协作。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 创建任务卡，等待开始。
-  - 2026-11-18 计划 启动 T4；桌面壳复用共享 React 编辑器与 `@inkloom/storage` adapter，Rust 仅负责工作区选择、目录枚举、UTF-8 读写、原子替换、文件监听和路径/符号链接安全。验收以 Rust 单元/集成测试、adapter contract、Tauri 构建和本机文件夹回归为准。
-  - 2026-11-19 进度 用户要求先提交当前桌面端代码；本提交按 WIP 处理，T4 保持 in-progress，不宣称完整磁盘工作区验收完成。
+### 待执行（自上而下即执行顺序）
 
 ### T5: SQLite 索引与版本历史（P0）
 
@@ -129,29 +78,6 @@
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-13 计划 创建任务卡，等待开始。
 
-### T9: 移动端就绪契约与 Adapter 测试（P0）
-
-- 目标：在任何新平台壳出现前，先固化文档、路径、revision、能力和 Bridge 契约。
-- 验收标准：
-  - `WorkspaceAdapter` 覆盖 tree/read/create/write/move/delete，并强制 `baseRevision`。
-  - `PlatformCapabilities` 能区分 Web、Tauri desktop、Tauri mobile 和 Harmony。
-  - `PlatformBridge` 请求包含版本、request id、白名单 method 和 JSON-safe payload。
-  - 文件系统、OPFS、Tauri、Harmony、Cloud adapter 共用同一套 contract tests。
-  - 路径标准化拒绝空段、`.`、`..` 和越界绝对路径。
-  - 未支持 Bridge 方法时 UI 可读取缓存并给出明确降级状态。
-- 边界：本任务不创建 HarmonyOS 或 Tauri mobile 工程。
-- 状态：in-progress
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 建立移动就绪基础任务卡。
-  - 2026-11-13 执行 新增 core 文档、错误、能力、adapter 和平台 Bridge 契约；建立 Harmony 与 Tauri mobile composition-root 占位。
-  - 2026-11-13 验证 待运行 package typecheck；adapter contract tests 尚未实现。
-  - 2026-11-13 验证 `pnpm typecheck` 与 `pnpm build` 通过；adapter contract tests 仍未实现，任务保持 in-progress。
-  - 2026-11-13 验证 新增 core/storage 基础契约测试，`pnpm test` 共 4 项通过；完整跨 adapter contract suite 仍待实现。
-  - 2026-11-18 执行 从 T3 提交 `d34716f` 后继续 T9；本轮补齐可复用 WorkspaceAdapter contract suite、绝对路径/Bridge payload 运行时校验，以及 `BRIDGE_UNSUPPORTED` 的只读缓存降级状态。
-  - 2026-11-18 执行 `@inkloom/storage/contract-tests` 导出统一 create/read/tree/revision conflict/move/delete 套件并接入 BrowserLocalAdapter；`@inkloom/core` 拒绝 POSIX、Windows drive、UNC、URI 绝对路径，新增 Bridge request 创建/解析、method 白名单、JSON-safe/循环引用校验和 cached-only 降级模型。
-  - 2026-11-18 验证 `pnpm typecheck`、`pnpm test`（22 项）与 `pnpm build` 通过；BrowserLocalAdapter 通过 5 项统一 adapter contract tests，Bridge 与路径校验共 6 项通过。
-  - 2026-11-18 进度 契约基础可用于后续 adapter，但 OPFS、Tauri、Harmony、Cloud 实现尚不存在，尚未接入同一 suite；T9 保持 in-progress，待 T4/T5/T7/T10 对应 adapter 落地后关闭。
-
 ### T10: HarmonyOS ArkUI + ArkWeb MVP（P2）
 
 - 目标：提供可安装的 HarmonyOS 客户端，复用共享编辑器和云端工作区。
@@ -180,910 +106,86 @@
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-13 计划 创建 Tauri mobile 验证任务卡。
 
-### T12: 初始化 GitHub 仓库并推送首个版本（P0）
+### 受阻
 
-- 目标：初始化 Git 仓库，在 GitHub 创建 InkLoom 远程仓库，并推送当前开源基线。
+### T4: Tauri 桌面本地工作区（P0）
+
+- 目标：实现打开普通文件夹、读写 `.md`、附件和 Excalidraw 场景。
 - 验收标准：
-  - 本地仓库完成 Git 初始化，默认分支为 `main`。
-  - 远程仓库创建成功且 `origin` 指向该项目。
-  - 提交内容不包含 `node_modules/`、密钥或真实用户文档。
-  - 推送前完成 `pnpm typecheck`、`pnpm build` 和 `pnpm test` 验证。
-  - `main` 分支及首个提交已推送到 GitHub。
-- 边界：本任务仅完成仓库初始化与代码托管，不配置生产部署、域名或 GitHub Secrets。
+  - 用户选择工作区后可列出目录树。
+  - 新建文档后磁盘出现 UTF-8 `.md` 文件。
+  - 保存使用临时文件 + 原子替换。
+  - 外部修改可被监听并刷新。
+  - 越界路径和符号链接被拒绝。
+- 边界：不实现团队权限和实时协作。
+- 状态：blocked
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-13 计划 创建任务卡，等待开始。
+  - 2026-11-18 计划 启动 T4；桌面壳复用共享 React 编辑器与 `@inkloom/storage` adapter，Rust 仅负责工作区选择、目录枚举、UTF-8 读写、原子替换、文件监听和路径/符号链接安全。验收以 Rust 单元/集成测试、adapter contract、Tauri 构建和本机文件夹回归为准。
+  - 2026-11-19 进度 用户要求先提交当前桌面端代码；本提交按 WIP 处理，T4 保持 in-progress，不宣称完整磁盘工作区验收完成。
+  - 2026-11-24 执行 状态校正为 blocked：桌面端仍为 WIP，用户明确要求 M1.1 期间只交付 Web；待 M1D 获准后可恢复。
+
+### T9: 移动端就绪契约与 Adapter 测试（P0）
+
+- 目标：在任何新平台壳出现前，先固化文档、路径、revision、能力和 Bridge 契约。
+- 验收标准：
+  - `WorkspaceAdapter` 覆盖 tree/read/create/write/move/delete，并强制 `baseRevision`。
+  - `PlatformCapabilities` 能区分 Web、Tauri desktop、Tauri mobile 和 Harmony。
+  - `PlatformBridge` 请求包含版本、request id、白名单 method 和 JSON-safe payload。
+  - 文件系统、OPFS、Tauri、Harmony、Cloud adapter 共用同一套 contract tests。
+  - 路径标准化拒绝空段、`.`、`..` 和越界绝对路径。
+  - 未支持 Bridge 方法时 UI 可读取缓存并给出明确降级状态。
+- 边界：本任务不创建 HarmonyOS 或 Tauri mobile 工程。
+- 状态：blocked
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-13 计划 建立移动就绪基础任务卡。
+  - 2026-11-13 执行 新增 core 文档、错误、能力、adapter 和平台 Bridge 契约；建立 Harmony 与 Tauri mobile composition-root 占位。
+  - 2026-11-13 验证 待运行 package typecheck；adapter contract tests 尚未实现。
+  - 2026-11-13 验证 `pnpm typecheck` 与 `pnpm build` 通过；adapter contract tests 仍未实现，任务保持 in-progress。
+  - 2026-11-13 验证 新增 core/storage 基础契约测试，`pnpm test` 共 4 项通过；完整跨 adapter contract suite 仍待实现。
+  - 2026-11-18 执行 从 T3 提交 `d34716f` 后继续 T9；本轮补齐可复用 WorkspaceAdapter contract suite、绝对路径/Bridge payload 运行时校验，以及 `BRIDGE_UNSUPPORTED` 的只读缓存降级状态。
+  - 2026-11-18 执行 `@inkloom/storage/contract-tests` 导出统一 create/read/tree/revision conflict/move/delete 套件并接入 BrowserLocalAdapter；`@inkloom/core` 拒绝 POSIX、Windows drive、UNC、URI 绝对路径，新增 Bridge request 创建/解析、method 白名单、JSON-safe/循环引用校验和 cached-only 降级模型。
+  - 2026-11-18 验证 `pnpm typecheck`、`pnpm test`（22 项）与 `pnpm build` 通过；BrowserLocalAdapter 通过 5 项统一 adapter contract tests，Bridge 与路径校验共 6 项通过。
+  - 2026-11-18 进度 契约基础可用于后续 adapter，但 OPFS、Tauri、Harmony、Cloud 实现尚不存在，尚未接入同一 suite；T9 保持 in-progress，待 T4/T5/T7/T10 对应 adapter 落地后关闭。
+  - 2026-11-24 执行 状态校正为 blocked：共享契约基础已完成，但 OPFS、Tauri、Harmony、Cloud adapter 均由后续 paused 里程碑承接；待对应 host 获准后可恢复。
+
+### 最近完成 / 已取消（新在上）
+
+### T63: 文档分层与 ADR 契约修正（P0）
+
+- 目标：按最新版 `init-project-docs` 规范修正 ADR 路径与状态头，收敛 AGENTS 主文件职责，拆分过载的架构专题，并同步所有引用。
+- 验收标准：
+  - ADR 全部位于 `docs/adr/`，每份文件状态头同时包含状态和日期。
+  - ADR 0004 的当前偏差由新 ADR 0007 明确承接，旧 ADR 只因状态变化而更新。
+  - AGENTS 只保留必建五条、流程、短红线和专题索引；代码风格与仓库边界细节移入 `docs/agents/`。
+  - 产品架构、数据/API、编辑器、安全与性能分别归入职责明确的专题文档，不再由单个大文件混合维护。
+  - 所有 ADR、AGENTS 和架构文档引用可达，核心文档预算、任务状态和 Prettier 检查通过。
+- 边界：只调整文档结构、状态头、引用和归属；不改运行时代码、数据库、部署配置或生产数据，不重写 accepted ADR 的决策正文和已完成任务历史。
 - 状态：done
 - 进度（只追加新行，不修改旧行）：
-  - 2026-11-13 计划 建立 GitHub 仓库初始化与首次推送任务卡。
-  - 2026-11-13 执行 初始化本地 `main` 分支；确认忽略依赖、构建产物和环境变量，常见密钥模式扫描无命中。
-  - 2026-11-13 验证 `pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 全部通过；构建仅有图表 chunk 过大警告。
-  - 2026-11-13 交付 创建公开仓库 `https://github.com/guol9180/inkloom`，首个提交 `9cae0f2` 已推送到 `origin/main`。
+  - 2026-11-24 计划 根据最新版 `init-project-docs` 复审结论建立文档分层与 ADR 契约修正卡。
+  - 2026-11-24 执行 将 7 份 ADR 统一迁入 `docs/adr/`，补全状态日期，并新增 ADR 0007 承接 ADR 0004 的桌面 scaffold 时序例外；accepted ADR 仅调整状态头及迁移后的相对链接目标。
+  - 2026-11-24 执行 将产品架构拆分为产品/仓库、数据/API、编辑器、安全/性能四个专题；AGENTS 从 112 行收敛到 96 行，详细代码风格移入独立专题。
+  - 2026-11-24 验证 24 个核心与专题 Markdown 文件无失效文件链接和标题锚点；7 份 ADR 编号连续且状态头均含日期；Prettier 与 `git diff --check` 通过。
+  - 2026-11-24 交付 README 156 行、AGENTS 96 行、DEVELOP_PLAN 低于 300 行；最大 AGENTS 单节 17 行，剩余差距：无。
 
-### T13: 复核项目三文档结构（P0）
+### T62: 项目文档治理与归档（P0）
 
-- 目标：按 init-project-docs skill 复核 README、AGENTS 和 DEVELOP_PLAN 的职责边界，并同步最新开发规范。
-- 动机：AGENTS 通用规范已从四条升级为五条，需确保项目文档与权威规范一致。
+- 目标：按 `init-project-docs` 规范修正三份核心文档及专题文档的职责、状态、容量和交叉引用，消除过期与冲突信息。
 - 验收标准：
-  - `AGENTS.md` 标题为“通用规范（必建五条）”。
-  - 五条标准条目完整包含“精准修改”，语义与 skill 标准条目一致。
-  - README、AGENTS、DEVELOP_PLAN 内容按既有单一事实源分工，重复事实改为链接引用。
-  - DEVELOP_PLAN 状态值均在状态枚举内，进度区只追加。
-- 边界：只调整三件套文档，不改运行时代码、产品方案、部署文档和交接文档。
+  - 核心文档内的任务状态均使用约定枚举，生命周期分区与状态字段一致。
+  - `DEVELOP_PLAN.md` 不超过 300 行，done / canceled 卡不超过 15 张，超出的历史卡整卡归档并保留索引。
+  - `README.md`、`AGENTS.md`、`HANDOFF.md` 与 `docs/` 之间的当前事实、导航和下一步不存在冲突或重复副本。
+  - 专题文档归入 `docs/agents/`，历史验收与任务卡归入 `docs/archive/`，所有相对链接与锚点可达。
+  - `AGENTS.md` 保留完整必建五条，README、AGENTS、DEVELOP_PLAN 均在容量预算内。
+- 边界：只整理文档归属、状态、容量、入口和过期事实；不改运行时代码、数据库、部署配置或生产数据，不重写已归档任务的历史进度。
 - 状态：done
 - 进度（只追加新行，不修改旧行）：
-  - 2026-11-16 计划 用户明确要求再次执行 init-project-docs skill，任务卡确认。
-  - 2026-11-16 执行 AGENTS 通用规范升级为必建五条并新增“精准修改”；README 部署与技术栈重复清单改为链接；DEVELOP_PLAN 当前基线移除归属 README 与部署文档的重复事实。
-  - 2026-11-16 验证 `rg` 确认五条规范存在且 README 不再复制域名；脚本核对 13 个任务状态全部在枚举内；`git diff --check` 无输出。
-  - 2026-11-16 交付 产出 `README.md`、`AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
-  - 2026-11-16 验证 `pnpm typecheck` 通过；`pnpm test` 4 项通过；`pnpm build` 成功，仍仅存在图表大 chunk 警告。
-
-### T14: 同步 init-project-docs 注释规范（P0）
-
-- 目标：将 init-project-docs skill 新增的注释约束同步到 AGENTS 通用规范第 5 条。
-- 动机：权威“精准修改”条目已扩展注释写作边界，项目规范需保持一致。
-- 验收标准：
-  - `AGENTS.md` 第 5 条与 skill 标准条目语义一致。
-  - 注释约束只写入 AGENTS，不在 README 或 DEVELOP_PLAN 复制。
-  - README、AGENTS、DEVELOP_PLAN 职责分工不因本次同步发生变化。
-  - DEVELOP_PLAN 状态值均在状态枚举内，进度区只追加。
-- 边界：只改 AGENTS 和 DEVELOP_PLAN，不改运行时代码、README 或其他文档。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-16 计划 用户明确要求再次执行 init-project-docs skill，任务卡确认。
-  - 2026-11-16 执行 AGENTS 第 5 条追加注释写作边界；README 与其他文档未复制该规范。
-  - 2026-11-16 验证 第 5 条与 skill 标准条目逐字一致；14 个任务状态全部在枚举内；`git diff --check` 无输出；`pnpm typecheck`、`pnpm test`（4 项）与 `pnpm build` 通过，构建仅有既存图表大 chunk 警告。
-  - 2026-11-16 交付 产出 `AGENTS.md`、`DEVELOP_PLAN.md`；剩余差距：无。
-
-### T15: Web 云工作区可上线 MVP（P0）
-
-- 目标：把现有 Web 原型升级为带账号、后端 API 和真实持久化的可用 MVP，用户刷新或更换浏览器后仍能读取自己的文档。
-- 验收标准：
-  - 用户可注册、登录、退出；密码使用强哈希保存，会话 Cookie 为 HttpOnly、SameSite=Lax，生产环境启用 Secure。
-  - 每个用户拥有独立工作区；文档、标题、标签、Markdown 与画布场景持久化到服务端 SQLite。
-  - Web 的创建、读取、自动保存、移动、删除、Markdown 导入导出继续可用，且不直接把 localStorage 当生产数据源。
-  - 每次写入携带 `baseRevision`；过期 revision 返回明确冲突，禁止静默覆盖。
-  - 自动保存失败或 revision 冲突在界面明确提示；本地仅保留临时草稿用于恢复，不作为正文事实源。
-  - API 校验会话、工作区归属、路径、请求体大小和 Origin，并对 Web 域名执行最小 CORS。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 通过；API 契约测试覆盖认证、跨用户隔离、CRUD、刷新恢复和 revision 冲突。
-- 边界：不实现跨设备离线队列、实时协作、团队权限、对象存储、评论或分享；不继续 T4 桌面开发。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-18 计划 用户确认先交付可真实保存数据的 Web 端；复用现有原型 UI，以账号会话、SQLite API、Cloud adapter 和 revision 安全为 M1 上线范围，完成后暂停后续开发等待确认。
-  - 2026-11-18 执行 `@inkloom/api` 增加 scrypt 账号、HttpOnly 会话、最小 CORS、用户隔离、SQLite 文档/历史 revision、移动与删除；`@inkloom/storage` 增加 Cloud adapter；Web 切换为云端工作区并补齐登录页、草稿恢复、冲突副本、真实版本历史和移动路径入口。
-  - 2026-11-18 验证 `pnpm typecheck` 通过；`pnpm test` 31 项通过，其中 API 4 项覆盖注册登录刷新、CRUD、跨用户隔离、revision 冲突、历史恢复、移动、越界路径和 Origin 限制；`pnpm build` 通过。
-  - 2026-11-18 验证 浏览器完成登录、Markdown 自动保存 revision 1→2、整页刷新恢复、Mermaid 渲染、Excalidraw 场景持久化；模拟另一会话写入后，本地冲突内容保存为独立副本，云端内容保持 `SERVER_CONFLICT_20261118` 未被覆盖。
-  - 2026-11-18 交付 产出可本地运行的 Web + API MVP、Cloud adapter、API 集成测试和运行文档；剩余差距：生产域名尚未部署，由 T16 关闭。
-
-### T16: Web 端到端测试与生产部署（P0）
-
-- 目标：在 T15 完成后执行自动化与浏览器回归，将 Web 和 API 部署到约定生产域名并验证真实账号和持久化。
-- 验收标准：
-  - 单元、API 集成、浏览器端到端测试覆盖注册登录、刷新恢复、编辑保存、删除、导出和冲突提示。
-  - 生产构建、健康检查、安全响应头、CORS 和 Cookie 配置在目标域名验证通过。
-  - `https://inkloom.imhgl.com` 可访问 Web，`https://api.inkloom.imhgl.com/api/health` 返回健康状态。
-  - 部署步骤、环境变量、备份与回滚方式同步到 `docs/DEPLOYMENT.md`。
-- 边界：不进行 M2 离线同步、桌面或移动端发布。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-18 计划 跟随 T15 建立生产发布与上线验证任务卡。
-  - 2026-11-18 执行 启动 T16；补齐生产运行镜像、反向代理、数据库持久化与备份/回滚说明，运行全量自动化和浏览器回归后准备部署约定域名。
-  - 2026-11-18 执行 新增 Playwright 端到端流程、Caddy/Docker 生产配置、GitHub Actions 手动部署与生产健康检查脚本；安全覆盖后审计从 8 high/3 moderate/1 low 收敛到 1 high/1 low，剩余 high 仅在 Excalidraw 的 Sass 构建链且不在生产 Web bundle 中。
-  - 2026-11-18 验证 `pnpm typecheck` 通过；`pnpm test` 31 项通过；`pnpm build` 通过；Playwright 1 项完整流程通过，覆盖注册、编辑保存、刷新恢复、导出、删除、冲突隔离和退出；`apps/web/dist` 扫描确认不含 `@parcel/watcher`、`chokidar` 或 `picomatch`。
-  - 2026-11-18 等待 生产域名尚未解析、目标服务器未提供可用部署凭据；用户要求部署前等待指令，因此不执行 DNS、SSH、容器或线上变更，T16 保持 in-progress。
-  - 2026-11-18 计划 用户授权部署 `3afe1c7` 并建立生产规范；移除旧 workbench 容器但保留其镜像和数据卷，统一 Caddy 为 Inkloom Web/Edge 容器，API 仅在内网 `inkloom-edge` 网络暴露，沿用现有证书卷并补齐内存、日志与健康检查约束。
-  - 2026-11-18 执行 用户要求禁止生产服务器构建应用；Compose 改为仅拉取 GHCR 中带 commit SHA 的 `inkloom-api` 与 `inkloom-edge` 镜像，GitHub Actions 负责测试、构建、推送、部署和生产验证。
-  - 2026-11-18 执行 删除旧 workbench 容器并保留镜像与 `workbench_workbench-docs` 数据卷；Docker 全局启用 `10m × 3` 日志轮转；创建专用 `inkloom-deploy` 用户，部署密钥、固定 host key 与 GHCR 凭据仅存放在 GitHub Secrets。
-  - 2026-11-18 执行 修复 release checkout 的 lockfile/悬空导出问题，并将 API 容器监听地址改为可配置 `HOST`；生产设置为 `0.0.0.0`，Caddy 通过 `inkloom-edge` 内网访问 API。
-  - 2026-11-18 验证 干净 release worktree 通过 frozen install、`pnpm typecheck`、26 项单元/集成测试与 `pnpm build`；GitHub Actions run `44280666039` 通过 Playwright E2E、外部构建、GHCR 推送、自动部署和生产验证。
-  - 2026-11-18 验证 `https://inkloom.imhgl.com` 返回 HTTP/2 200，`https://api.inkloom.imhgl.com/api/health` 返回 `{"ok":true,"service":"inkloom-api"}`；CSP、HSTS、frame、MIME 和 referrer 安全头生效，容器无 OOM，系统无 failed unit。
-  - 2026-11-18 交付 Inkloom API 与共享 Caddy Edge 已部署到生产，release SHA 为 `f71fe4e4308713ec2852541371b91426ac50631d`；workbench 当前停止，镜像和数据卷保留供后续重新部署。剩余差距：无。
-  - 2026-11-18 执行 清理 1Panel 安装包与解压目录、`.zai` 日志、旧 OpenClaw dashboard/ClawHub/mcporter、空 acme.sh、主机 Node/npm 和编译缓存；撤销 1Panel 遗留的 root SSH 公钥，仅保留仍在使用的 Workbench 管理公钥。
-  - 2026-11-18 交付 `docs/DEPLOYMENT.md` 增补发布前检查、外部构建、固定 SHA、共享 Edge、容器监听、资源与日志上限、秘密管理和回滚规范；文档不记录主机地址、密钥、令牌或用户数据。
-  - 2026-11-18 验证 排查并终止残留的交互式 `1pctl uninstall` 脚本及 `sed` 子进程；CPU 用户态占用由约 47% 降至约 0.3%，1 秒采样空闲率约 99.3%，容器 CPU 为 0%，API 健康且无 failed unit。
-
-### T17: 集中生产部署凭据到私有控制面（P0）
-
-- 目标：把生产部署从公开 Inkloom 仓库迁出，公开仓库只负责测试、构建和推送镜像，部署由私有 `imhgl-ops` 控制面执行。
-- 验收标准：
-  - 公开仓库 workflow 不再包含 SSH、服务器路径、GHCR 读取令牌或部署步骤。
-  - 公开仓库的五项 `INKLOOM_DEPLOY_*` Secrets 被删除。
-  - 私有 `imhgl-ops` 的 `verify` workflow 已通过 GitHub Actions 验证新凭据。
-  - 服务器旧 Actions 公钥撤销，仅保留 `imhgl-ops` 新公钥。
-  - 部署、回滚和凭据管理文档指向私有控制面，且不记录真实秘密。
-- 边界：本任务不发布新应用版本、不重启生产容器、不修改数据卷；T4 与后续产品功能开发不在范围内。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-18 计划 关闭公开仓库双部署入口，切换为私有控制面唯一持有部署凭据
-  - 2026-11-18 执行 公开仓库改为仅测试、构建和推送镜像；删除 SSH、服务器路径、GHCR 读取令牌与部署步骤，公开仓库五项 `INKLOOM_DEPLOY_*` Secrets 已删除
-  - 2026-11-18 验证 私有 `imhgl-ops` verify run `44291541583` 成功；服务器撤旧公钥后新 Ed25519 密钥仍可只读登录并看到健康的 `inkloom-api`
-  - 2026-11-18 验证 临时干净 worktree 通过 `pnpm typecheck`、26 项测试和 Web/API 生产构建；本地 T4 未提交文件未进入验证补丁或提交
-  - 2026-11-18 交付 公开仓库提交 `3affe4b` 已推送，私有控制面提交 `61d73a8` 已推送；剩余差距：无
-
-### T18: Web 工作区交互闭环与保存可靠性（P0）
-
-- 目标：把已上线的 Web 云端工作区从“原型直连后端”完善为可日常使用的产品界面，补齐当前 MVP 内可见但未完成的操作，并消除切换和离开页面时的保存风险。
-- 验收标准：
-  - 工作区切换/创建/重命名、账号设置、标签增删、文档移动/重命名和删除保护都有真实交互，不保留无响应按钮、仅提示“未实现”的入口或依赖浏览器 prompt 的核心操作。
-  - 自动保存、连续切换文档、刷新和离开页面时不会丢失已编辑内容；失败、冲突和恢复状态有明确且可操作的反馈。
-  - 文档创建、搜索、移动/重命名、标签管理、删除、Markdown 导入导出、历史恢复、Mermaid 与 Excalidraw 流程通过自动化测试。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 通过。
-- 边界：只完善现有 Web 云工作区与支撑它的 API，不开发 M2 离线同步、实时协作、桌面 Tauri、移动原生或对象存储；不改生产部署和线上数据。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 用户指出当前前端仍是原型半成品；重新审阅后先关闭可见交互和保存可靠性缺口，再进入响应式与逐项截图验收。
-  - 2026-11-19 执行 工作区支持创建、切换和重命名；账号设置、标签增删、文档移动/重命名、删除确认、历史恢复和退出登录改为可键盘操作的弹窗流程；文件树支持多层目录；自动保存改为串行队列并在切换前落盘。
-  - 2026-11-19 验证 `@inkloom/web`、`@inkloom/api`、`@inkloom/storage` typecheck 通过；API 5 项测试通过；Chrome 中 2 项 E2E 通过，覆盖工作区管理、标签、导入、移动、刷新、导出、历史恢复、重新登录、revision 冲突和冲突副本删除。
-  - 2026-11-19 交付 产出 Web/API 工作区产品化交互、保存队列与扩展 E2E；响应式和逐视口截图由 T19/T20 继续。
-
-### T19: Web 连续分辨率自适应（P0）
-
-- 目标：让 Web 工作区从 320px 手机到 2560px 桌面宽度都能连续、无横向溢出地完成写作和文件管理。
-- 验收标准：
-  - 桌面、笔记本、平板横竖屏和手机布局使用可收放侧栏/信息栏，不互相遮挡，不出现不可达的关键操作。
-  - 编辑、分栏、阅读、工具栏、标签、弹窗、画布、认证页和错误页在各目标宽度下均可用。
-  - 可见焦点、键盘关闭抽屉/弹窗、触控目标尺寸、`prefers-reduced-motion` 和安全区域适配完整。
-  - `pnpm typecheck`、`pnpm build` 通过。
-- 边界：不改变云端功能和数据模型；仅调整 Web 组合层、样式与必要的可访问交互。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立响应式任务卡，等待 T18 的功能结构稳定后执行。
-  - 2026-11-19 计划 T18 已完成并提交为 `8dba537`；开始统一视口高度、抽屉互斥、桌面信息栏收放和手机端关键操作可达性。
-  - 2026-11-19 执行 Web 统一使用 `100dvh` 与安全区域；笔记本和平板的信息栏、手机的侧栏改为带遮罩的互斥抽屉；桌面信息栏折叠后正确回收栅格；手机工具栏收敛为图标、关键操作进入更多菜单；登录页、弹窗、画布和超宽稿纸重新适配。
-  - 2026-11-19 验证 `@inkloom/web` typecheck 与生产构建通过；Chrome 在 320×720、375×812、768×1024、1024×768、1440×960、2560×1440 六档视口全部通过横向溢出检查并完成首轮截图复核。
-  - 2026-11-19 交付 响应式组合层与样式已就绪；逐图结论和正式截图清单由 T20 固化。
-
-### T20: Web 多视口截图与真实流程验收（P0）
-
-- 目标：在真实 Chrome 中以多个桌面和移动视口逐项验证注册登录、文档工作区、编辑模式、抽屉、弹窗、画布与错误状态，并保存可追溯截图。
-- 验收标准：
-  - Playwright 覆盖 320×720、375×812、768×1024、1024×768、1440×960、2560×1440 六档视口。
-  - 每个视口检查页面无横向溢出、关键控件可见可操作；核心流程截图输出到 `artifacts/ui-review/`。
-  - 截图逐张人工检查后记录文件名、视口、操作路径和结论到 `artifacts/ui-review/REPORT.md`。
-  - `pnpm test:e2e` 全部通过。
-- 边界：只做本地测试与截图验收，不部署、不修改生产、不收集真实用户数据。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立多分辨率验收卡，等待 T18/T19 完成后执行。
-  - 2026-11-19 计划 T19 已完成并提交为 `4f6b3d5`；启动六档 Chrome 截图与逐图记录。
-  - 2026-11-19 执行 新增六视口 Playwright 截图用例，覆盖登录页、工作区、文件栏、信息栏、文档菜单、工作区/标签/设置弹窗、阅读模式和已加载 Excalidraw；每个视口执行 `scrollWidth <= clientWidth` 检查。
-  - 2026-11-19 执行 首轮截图定位并修正登录页小屏裁切、超宽稿纸未撑满、手机工具栏文字挤排、抽屉动画中途截屏和文档菜单层级问题，随后全量重拍。
-  - 2026-11-19 验证 `pnpm test:e2e` 中 8 项 Chrome 测试全部通过（6 项多视口 + 2 项完整业务流）；`pnpm test` 32 项通过；输出 26 张截图和逐图报告。
-  - 2026-11-19 交付 产出 `tests/e2e/ui-review.spec.ts`、`artifacts/ui-review/REPORT.md` 与全部截图；本轮不部署，M1 新版本等待用户指令发布。
-
-### T21: Web 清新视觉与品牌 Logo 重设计（P0）
-
-- 目标：把现有深色书脊式界面改造成更轻、更清新的写作工作台，并同步重做 Logo、登录页、应用主界面和品牌资产。
-- 验收标准：
-  - Logo 改为简约矢量交织符号，工作区、登录页、加载页和仓库品牌图统一使用。
-  - 色彩改为低压力雾青、薄荷、深绿与少量杏色；侧栏、顶栏、编辑器、信息栏、弹窗和图表区域形成统一的新主题。
-  - 登录页重新设计为明亮双栏入口，品牌说明、登录表单和移动端布局均保持清晰可用。
-  - 保留现有功能、真实保存流程、键盘焦点、冻结的前端交互契约和 320–2560px 响应式能力。
-  - `pnpm test`、Web/API 构建与 `pnpm test:e2e` 通过，并重新生成多视口截图。
-- 边界：只调整 Web 品牌、视觉、文案层级和不影响领域行为的组件结构；不改 API、数据库、存储语义、部署配置或线上环境。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 用户要求更清新舒服的 UI、简约 Logo 和登录页调整；建立独立视觉改版任务，完成后再等待用户确认部署。
-  - 2026-11-19 执行 Logo 最终采用折页与穿行线符号，移除中文品牌混排；Web 顶栏、登录页、浏览器标题、欢迎文档和品牌 SVG 统一使用 `InkLoom`。
-  - 2026-11-19 执行 主界面切换为雾青、薄荷、深绿和杏色体系；浅色文件栏替换深色书脊，编辑稿纸、信息栏、弹窗、图表区与登录页统一为明亮低压力视觉。
-  - 2026-11-19 验证 `pnpm test` 32 项通过；非桌面工作区 typecheck 通过；`pnpm test:e2e` 8 项通过；六档视口重新生成 26 张截图且无横向溢出。
-  - 2026-11-19 交付 产出新版 `BrandMark`、Logo SVG、favicon、登录页、全局主题、README 展示图和截图报告；新版本尚未部署。
-
-### T22: Web 正式前端技术栈重构（P0）
-
-- 目标：脱离原型前端结构，按 React 19、TypeScript、Vite、React Router、Tailwind CSS 4、TanStack Query、Milkdown Crepe 和可访问组件原语重建 Web 应用，在保留现有云端业务闭环的同时实现类语雀/Typora 的单区所见即所得编辑体验。
-- 验收标准：
-  - 登录、注册、工作区、文档、标签、历史、画布和账号操作全部保留，并由 React Router 提供可刷新、可后退的稳定 URL。
-  - 设计 Token、组件变体和页面样式统一迁入 Tailwind CSS 4；复杂编辑器与画布样式只保留必要的专用 CSS。
-  - 文档正文由 Milkdown Crepe 管理，编辑和排版结果处于同一区域；不提供源码/预览切换，正文持续序列化回 Markdown。
-  - 编辑器提供单行完整格式工具栏，覆盖撤销重做、段落类型、行内格式、列表、任务、链接、引用、分隔线、代码块、表格和图表入口。
-  - 默认新账号、新工作区和新文档使用干净空白文档，不再注入欢迎稿或演示正文。
-  - 服务端状态使用 TanStack Query，文档和列表的加载、失效与失败状态具有明确反馈。
-  - 品牌图标直接使用 Lucide 图标，不生成或保留自绘 Logo 资产；品牌文本只显示英文 `InkLoom`。
-  - 320×720、375×812、768×1024、1024×768、1440×960、2560×1440 六档视口无横向溢出，关键操作可达。
-  - `pnpm test`、非桌面 workspace typecheck、Web/API 构建与 `pnpm test:e2e` 通过，并重新生成逐张截图验收报告。
-- 边界：不改 API、数据库、认证 Cookie、revision、存储语义或部署配置；不开发 M2、实时协作、桌面和移动端功能；不推送、不部署，发布继续等待用户指令。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 用户确认放弃原型前端的无约束实现，按正式前端基线重做；视觉方向采用纸白工作台、松针绿和日光黄强调，Logo 从图标库选取。
-  - 2026-11-19 执行 完成 React Router URL、Tailwind 4 Token、TanStack Query 服务端状态、Radix 弹窗/菜单、Zustand 瞬时状态和 Lucide 品牌图标迁移；移除原型单文件页面与自绘 Logo。
-  - 2026-11-19 执行 根据用户实机反馈把编辑方案由源码/分栏预览改为 Milkdown Crepe 单区所见即所得，加入撤销重做、正文/H1/H2/H3、加粗、斜体、删除线、行内代码、列表、任务、链接、引用、分隔线、代码块、表格和标签工具栏；清除未加载公共样式导致的底部裸控件。
-  - 2026-11-19 执行 内容区增加语雀式加号菜单，按“图表”和“内容”分类插入 Mermaid、Excalidraw、代码块和表格；图表继续以围栏代码块写入 Markdown。
-  - 2026-11-19 执行 Web 文档区移除大标题、标签头部和视图切换，标题改名进入文档菜单；API 默认文档改为 `个人/未命名文档.md` 空白正文，新建文档同样不再添加欢迎模板。
-  - 2026-11-19 验证 非桌面 workspace typecheck 通过；`pnpm test` 32 项通过；`pnpm build` 的 Web/API 构建通过；Playwright 10 项通过，覆盖空白默认文档、Milkdown 编辑、快捷格式、图表菜单插入、工作区往返、刷新恢复、冲突副本、历史恢复和六档视口。
-  - 2026-11-19 交付 产出正式路由与前端分层、Milkdown 编辑器、响应式完整工具栏、图表插入菜单、Tailwind 设计系统、`artifacts/ui-review/REPORT.md` 和 27 张截图；剩余差距：尚未部署，发布继续等待用户指令。
-
-### T23: 共享边缘拆分与最新版生产发布（P0）
-
-- 目标：按多项目生产架构把全局 Caddy、Inkloom 静态 Web 和 Inkloom API 拆成独立运行单元，并把当前 `main` 的最新代码部署到生产。
-- 验收标准：
-  - 公开仓库只构建并发布 `inkloom-api` 与 `inkloom-web`，不再发布包含全局 Caddy 的 `inkloom-edge`。
-  - `platform-edge` 由私有控制面管理，只负责 TLS、安全头和多项目路由。
-  - `inkloom-web` 与 `inkloom-api` 只加入共享外部网络，不公开宿主机业务端口。
-  - 迁移前生成并验证 SQLite 备份，迁移后保留原数据卷和回滚材料。
-  - `https://inkloom.imhgl.com`、`https://api.inkloom.imhgl.com/api/health`、安全响应头和容器健康检查全部通过。
-  - 新代码使用公开仓库完整 commit SHA，不在服务器构建。
-- 边界：不恢复 Workbench，不改业务数据模型，不删除 `workbench_workbench-docs`，不在服务器运行包管理或容器构建。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 拆分共享边缘、静态 Web 和 API，备份后以短维护窗口迁移并发布最新 main
-  - 2026-11-19 执行 公开镜像改为 `inkloom-api` 与无公网端口的 `inkloom-web`；全局 Caddy 改由私有控制面独立发布，网络切换为 `platform-edge`
-  - 2026-11-19 执行 修复格式化快捷键 E2E 的键盘选区竞态；修复 `inkloom-web` 只读根文件系统下 Caddy 无法写临时状态的问题
-  - 2026-11-19 验证 最新提交自动 CI run `44487148562` 成功；外部镜像构建 run `44487180919` 成功；迁移 run `44488275293` 成功，临时 Caddy 配置语法校验通过
-  - 2026-11-19 验证 迁移前 SQLite 归档已通过 gzip 与 tar 校验，包含 `inkloom.sqlite`、WAL 和 SHM；三个容器均 healthy、无 OOM，公网 Web 200、API 200
-  - 2026-11-19 验证 `pnpm verify:production` 返回 Web 200、API 200、CORS 204、securityHeaders true；非桌面 typecheck、32 项测试、Web/API 构建和 10 项 Playwright 通过
-  - 2026-11-19 交付 生产运行 SHA 为 `68578214d526c132c0b8ee9af4d744b2004ea45d`；三容器架构、迁移备份、回滚旧栈材料和部署文档已就绪，剩余差距：无
-
-### T24: 产品规范与 Web-first M1.1 计划重排（P0）
-
-- 目标：把随记、扁平知识库、产品级编辑器、白色主题、字体、动效、Markdown 保真和 Web-first 接入边界写入单一事实源，并建立 M1.1 可执行任务序列。
-- 验收标准：
-  - README、AGENTS、PRODUCT_AND_ARCHITECTURE、UX_AND_EDITOR_SPEC、HANDOFF 和子应用说明不再保留冲突的固定文件夹、知识库分组或旧桌面状态。
-  - 本文包含 T25–T44 的目标、验收标准、边界、状态和依赖顺序。
-  - 明确 M1.1 只实现 Web，保留 host-neutral 领域、adapter、revision、asset 和 editor command 接入口。
-  - 文档交叉链接无循环复制，AGENTS 五条必建规范保持完整。
-  - Markdown 检索不存在旧模式下会被误执行的现行指令；历史任务进度保留。
-- 边界：只改文档和计划，不改运行时代码、数据库、部署配置或生产数据。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 用户确认重新整理全部产品和交互规范，并建立 Web-only、保留其余端接入口的 M1.1 计划。
-  - 2026-11-19 执行 新增 UX 与编辑器单一事实源和 ADR 0006，重写产品架构、README、AGENTS、HANDOFF、START_HERE、CONTRIBUTING、Web/Desktop 子说明和品牌基线，并建立 T25–T44。
-  - 2026-11-19 验证 `git diff --check` 无输出；本地文档链接全部解析；T1–T44 连续无缺号；计划状态均在枚举内；AGENTS 必建五条完整；旧固定文件夹、分栏工作流和过期桌面描述检索无命中。
-  - 2026-11-19 验证 `pnpm typecheck` 通过；`pnpm test` 32 项通过；`pnpm build` Web/API 构建通过，保留既有大 chunk 警告。
-  - 2026-11-19 交付 产出 `docs/UX_AND_EDITOR_SPEC.md`、`docs/PRODUCT_AND_ARCHITECTURE.md`、`docs/adr/0006-notes-knowledge-base-and-editor-shell.md`、README/AGENTS/计划/交接与子应用文档；剩余差距：M1.1 运行时代码尚未开始，下一任务为 T25。
-
-### T25: 随记、扁平知识库与资产数据结构迁移（P0）
-
-- 目标：为随记生命周期、独立知识库、文档平铺归属、资产和链接索引增加可回滚的增量数据库迁移。
-- 验收标准：
-  - 新增 `knowledge_bases`、`assets`、`document_asset_refs`、`document_links` 和 `schema_migrations`。
-  - `documents` 增加 lifecycle、knowledgeBaseId、archivedAt 和 lastOpenedAt；知识库文档无组层级。
-  - 现有文档迁移为平铺随记，保留 ID、标题、正文、标签、revision 和历史；旧目录层级仅作为迁移映射记录，不自动创建知识库或固定文件夹。
-  - 平铺路径冲突时生成唯一文件名，绝不覆盖正文。
-  - 迁移在事务中执行，重复运行幂等，并支持生产备份恢复演练。
-- 边界：不改 Web UI；不删除现有列和用户数据；不启动 M2。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立增量迁移任务卡，依赖 T24。
-  - 2026-11-19 执行 开始 T25：建立版本化事务迁移、旧路径映射与迁移/恢复演练测试。
-  - 2026-11-20 执行 新增 `schema_migrations`、`knowledge_bases`、`assets`、`document_asset_refs`、`document_links` 与旧路径映射表；`documents` 增量加入 lifecycle、knowledgeBaseId、archivedAt 和 lastOpenedAt，活动文档优先压平并稳定避让同名路径，全部旧内容仅更新归属元数据。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 34 项通过；`pnpm build` 通过，保留既有大 chunk 警告；迁移测试覆盖旧库迁移、幂等重开、备份恢复、失败事务回滚、正文/标签/revision/历史/扩展保留；Playwright 首轮 9/10 通过，唯一删除确认动效竞态单测重跑通过，其余 6 个分辨率与编辑器工作流均通过。
-  - 2026-11-20 交付 产出 `services/api/src/migrations.ts` 与迁移测试，更新核心文档生命周期契约、服务端行映射和浏览器旧草稿兼容；剩余差距：无。
-
-### T26: 随记与知识库工作区 API（P0）
-
-- 目标：提供 M1.1 信息架构所需的随记、知识库、归档、移回、最近打开和排序 API。
-- 验收标准：
-  - API 覆盖随记列表、知识库 CRUD、知识库平铺文档列表、归档和移回随记。
-  - 所有写操作校验工作区归属和 `baseRevision`；冲突返回稳定错误码。
-  - 删除知识库只移回文档，不删除 Markdown、资产或历史。
-  - API 契约测试覆盖跨用户隔离、归档、移回、知识库删除、并发冲突和路径更新。
-- 边界：不实现全文搜索、版本 UI、API v2 或团队权限。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立工作流 API 任务卡，依赖 T25。
-  - 2026-11-20 执行 开始 T26：实现随记、知识库、归档、移回、最近打开与排序 API。
-  - 2026-11-20 执行 新增知识库 revision 增量迁移和随记/最近/知识库文档摘要、知识库 CRUD、归档、移回、打开记录接口；删除知识库在事务中把全部文档移回随记并写入历史快照，移回或删除时自动避让随记同名路径。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 35 项通过；`pnpm build` 通过；工作区 Playwright 4 项全部通过，覆盖保存、刷新、恢复、冲突副本、标题样式和图表入口。
-  - 2026-11-20 交付 API 契约测试覆盖跨用户隔离、随记/知识库平铺列表、标题排序、归档、最近打开、知识库重命名与删除、revision 冲突和移回路径避让；剩余差距：无。
-
-### T27: Markdown 源码保真与未知语法保护（P0）
-
-- 目标：建立 source-slice 混合序列化模型，保证未修改或未知 Markdown 不被重写。
-- 验收标准：
-  - 文档解析保留源码位置，未修改块保存时使用原始 source slice。
-  - 未知围栏、HTML、frontmatter、注释、链接定义和脚注定义不丢失。
-  - 建立覆盖中文、嵌套列表、表格、公式、Mermaid、InkLoom 扩展块和异常语法的 golden corpus。
-  - 只有 corpus、API 回读和刷新恢复测试全部通过后才允许声明 Markdown 无损。
-- 边界：不实现主编辑器 UI；不引入新的自创 Markdown 容器。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立保真内核任务卡，依赖 T26。
-  - 2026-11-20 执行 开始 T27：建立保留源码位置的 source-slice 模型、golden corpus 与 API 回读验证。
-  - 2026-11-20 执行 在 `@inkloom/editor` 新增基于 mdast/GFM/数学语法的 source-slice 模型，记录块类型、源码偏移、行号和保护状态；未修改块始终拼接原始切片，frontmatter、HTML、未知围栏、链接定义、脚注定义与异常语法保留原文。
-  - 2026-11-20 验证 10 组 golden corpus 覆盖中文、内联样式、链接图片、嵌套列表、任务、引用、表格、代码围栏、Mermaid、公式、脚注、定义、HTML、InkLoom canvas/file 块、frontmatter、异常语法、CRLF 和无末尾换行；`pnpm typecheck` 通过；`pnpm test` 50 项通过；`pnpm build` 通过；API 回读、更新、历史恢复均逐字节保持复杂 Markdown。
-  - 2026-11-20 交付 source-slice 保真内核与 API 回读/历史恢复证据；剩余差距：全局“Markdown 无损”声明仍需 T29–T43 的主编辑器接入、真实刷新恢复和完整验收后确认。
-
-### T28: 白色应用壳、路由与认证页（P0）
-
-- 目标：按新信息架构重建 Web 应用壳、认证页和路由，并统一白色主题。
-- 验收标准：
-  - 登录和注册使用居中近白面板，不铺满全屏双栏内容。
-  - 顶部栏为 `Logo + 向下箭头`，不显示工作区名称。
-  - 随记、知识库和预览优先路由可刷新、可后退并有认证保护。
-  - 未选中文档时显示模式对应的快捷创建空状态。
-  - 骨架屏、空状态和错误页使用统一应用壳。
-- 边界：暂不实现新编辑器命令和知识库业务流程。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立应用壳任务卡，依赖 T27 的领域接口。
-  - 2026-11-20 执行 重建近白应用壳与居中认证页；新增 `/notes`、`/knowledge` 可刷新路由、旧文档链接兼容重定向、认证保护、顶部 `Logo + 向下箭头` 工作区菜单、随记/知识库导航、搜索框右侧统一 `+` 菜单和模式化空状态。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 50 项通过；`pnpm build` 通过且首屏 chunk 从原型编辑器的 MB 级降至 Web 主包约 461 kB；Playwright 路由/保存/刷新/退出登录/认证回跳 3 项通过；六档分辨率 6 项通过，320 移动抽屉等待动画结束后无裁切或横向溢出。
-  - 2026-11-20 交付 产出 `product-workspace-page.tsx`、骨架屏、近白 token、认证页与路由验收；剩余差距：正文编辑器仍使用临时文本编辑面，下一任务 T29 替换为产品级 Milkdown Editor Shell。
-
-### T29: 产品级 Milkdown Editor Shell（P0）
-
-- 目标：保留 Milkdown/ProseMirror 内核，建立统一工具栏、斜杠菜单、块手柄、快捷键和上下文工具栏。
-- 验收标准：
-  - 工具栏、斜杠菜单和快捷键共享 Command Registry。
-  - 行首只显示 `⠿`；单击打开菜单，拖动调整顺序。
-  - `Ctrl+J` 聚焦文档搜索，`Ctrl+K` 在编辑器中添加链接。
-  - 固定工具栏单行横向滚动，移动端无页面横向溢出。
-  - 选区悬浮工具条、焦点返回和 reduced-motion 行为通过测试。
-- 边界：不实现图表、资产和知识库预览。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立 Editor Shell 任务卡，依赖 T27/T28。
-  - 2026-11-20 执行 新增统一 Editor Command Registry，工具栏、斜杠菜单、快捷键和选区工具条共享命令定义；固定单行工具栏支持横向滚动，正文块 gutter 仅显示 `⠿`，点击打开块菜单、指针拖动排序、复制与删除。
-  - 2026-11-20 执行 接入 `Ctrl+J` 文档搜索、`Ctrl+K` 链接命令、选区悬浮格式条、焦点回到编辑器及 reduced-motion；撤销原型“隐藏首个 H1”规则，并让 `⠿` 按手柄图层坐标和块首行行高居中对齐。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 50 项通过；`pnpm build` 通过；Playwright 12 项全部通过，覆盖命令注册表、工具栏、斜杠菜单、Ctrl+J、Ctrl+K、选区工具条、块手柄拖动、新建空白随记、真实保存/刷新、知识库路由与 320–2560 六档无横向溢出截图。
-  - 2026-11-20 交付 产出 `command-registry.ts`、`product-markdown-editor.tsx` 和编辑器 E2E；剩余差距：更完整的表格/块操作属于 T30，知识库预览编辑属于 T38。
-
-### T30: 正文块与表格完整能力（P0）
-
-- 目标：完成标题、列表、任务、引用、代码、分割线、表格、高亮、折叠和公式块。
-- 验收标准：
-  - 各块符合 UX 规范的视觉、Markdown 映射和快捷键。
-  - 表格支持表头、对齐、增删行列、TSV/HTML 粘贴和内部滚动。
-  - 表格第一版不提供合并单元格，未知 HTML 表格保留。
-  - callout、toggle、代码块和引用完成往返与键盘验收。
-- 边界：不实现 Mermaid、Excalidraw、图片和附件。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立基础块任务卡，依赖 T29。
-  - 2026-11-20 执行 开始 T30：补齐基础文本块、表格交互和 Markdown 往返，并保留 T29 的 `⠿` 首行中线对齐。
-  - 2026-11-20 执行 补齐 H1–H6、列表、任务、引用、代码、分割线、公式、GitHub 风格提示块和原生 `details` 折叠块；表格增加专用上下文工具栏、增删行列、对齐、内部滚动及 TSV/HTML 粘贴，表头行禁止直接删除以避免破坏 GFM 结构。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 50 项通过；`pnpm build` 通过；Playwright 15 项通过，覆盖结构化块保存/刷新恢复、粘贴、键盘任务列表、引用与代码往返以及 320–2560 六档视口无页面横向溢出。
-  - 2026-11-20 交付 产出共享块插件、表格上下文工具栏、Markdown 标记规范化与编辑器 E2E；1440 和 320 截图保存在已忽略的 `test-results/ui-review/`；剩余差距：手动保存按钮按用户确认保留到 T31 自动保存链路完成后移除。
-
-### T31: 草稿、自动保存、检查点与冲突（P0）
-
-- 目标：把保存链路升级为 IndexedDB 草稿、串行保存、历史检查点和安全冲突恢复。
-- 验收标准：
-  - localStorage 只保留 UI 偏好和 active ID，完整草稿与画布快照进入 IndexedDB。
-  - 保存请求串行、合并旧快照并在内容哈希未变时跳过。
-  - 停止输入约 2 秒或连续编辑满 30 秒生成历史检查点。
-  - revision 冲突创建云端副本；失败时草稿不丢失。
-  - 多标签页只允许一个编辑所有者。
-- 边界：不实现跨设备离线队列。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立保存可靠性任务卡，依赖 T26/T30。
-  - 2026-11-20 计划 用户确认内容区全部走自动保存，不保留手动“保存”按钮；该交互在自动保存链路完成后一并移除。
-  - 2026-11-20 执行 开始 T31：梳理现有保存状态、浏览器草稿 adapter 与 revision 冲突接口，随后接入自动保存和单编辑所有者。
-  - 2026-11-20 执行 新增 IndexedDB 草稿仓库与旧 localStorage 草稿迁移；内容变化立即写入本机草稿，800ms 后串行自动保存，2 秒空闲或连续编辑满 30 秒生成检查点，内容哈希未变时跳过写入。
-  - 2026-11-20 执行 移除手动“保存”按钮；接入保存状态指示、离线/失败重试、revision 冲突副本、服务器版本重载，以及 Web Locks + BroadcastChannel 单标签页编辑所有权。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 51 项通过；`pnpm build` 通过；Playwright 19 项通过，覆盖自动保存、2 秒检查点、IndexedDB 断网恢复、冲突副本、哈希跳过、多标签接管及 320–2560 六档视口无页面横向溢出。
-  - 2026-11-20 交付 产出 IndexedDB 草稿 adapter、自动保存 hook、编辑所有权 hook、检查点 API 开关和保存 UI；剩余差距：资产上传等待属于 T32/T33。
-
-### T32: Content-addressed 资产服务（P0）
-
-- 目标：提供工作区隔离、内容哈希和可替换对象存储的图片、附件、Excalidraw 场景和 SVG 资产能力。
-- 验收标准：
-  - 支持二进制流式上传、SHA-256、MIME/文件头/大小校验和秒传。
-  - 资产读取校验工作区权限；不可变内容地址不覆盖旧资产。
-  - 生产持久卷实现与 S3-compatible adapter 契约分离。
-  - 引用失效和孤儿清理不会删除仍被文档使用的资产。
-- 边界：不把 Base64 或大 JSON 写入正文；不接 CDN。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立资产服务任务卡，依赖 T25/T26。
-  - 2026-11-20 执行 开始 T32：盘点现有 asset 数据表、API 路由和部署持久卷，建立内容寻址存储 adapter 与工作区权限校验。
-  - 2026-11-20 执行 新增独立 `AssetBlobStore` 契约与本地持久卷实现；原始二进制流按 SHA-256 写入不可变内容地址，并完成 MIME、魔数、大小、工作区权限和同哈希秒传校验。
-  - 2026-11-20 执行 接入资产上传、HEAD/GET、信息查询与引用感知的孤儿清理；文档创建和保存会同步 `document_asset_refs`，仍被 Markdown 引用的资产不会被删除。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 52 项通过；`pnpm build` 通过；API 集成测试覆盖超过 2 MiB 的流式上传、SHA-256、秒传、MIME 魔数拒绝、缓存头、HEAD、工作区隔离、引用保留和无引用清理。
-  - 2026-11-20 交付 产出资产存储契约、本地持久卷 adapter、资产 API、SQLite 引用同步和部署环境变量；剩余差距：图片/附件编辑器接入属于 T33。
-
-### T33: 图片与附件块（P0）
-
-- 目标：完成粘贴、拖入、上传、显示、下载和导出全链路。
-- 验收标准：
-  - 图片和附件支持上传进度、取消、重试和内容去重。
-  - 图片支持对齐、宽度、alt、说明、大图和替换。
-  - 附件使用可移植注释加普通下载链接。
-  - ZIP 导出包含 Markdown、图片、附件、画布场景和 SVG。
-- 边界：不实现对危险文件的内联执行或第三方嵌入。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立资产块任务卡，依赖 T32。
-  - 2026-11-20 执行 开始 T33：接入图片/附件上传命令、编辑器粘贴与拖入入口，并定义可移植 Markdown 注释包装。
-  - 2026-11-20 执行 接入图片选择、剪贴板粘贴、拖放、上传进度、取消、重试与替换；图片复用 Milkdown 的说明、比例缩放和尺寸能力，并补充左/中/右对齐与大图预览。
-  - 2026-11-20 执行 附件使用 `inkloom:file` HTML 注释包装和普通 Markdown 下载链接往返；新增单文件导出按钮，生成包含 Markdown、图片、附件和画布场景的无损 ZIP。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 53 项通过；`pnpm build` 通过；Playwright 22 项通过，覆盖图片/附件上传、失败重试、进度取消、粘贴、拖放、替换、对齐、刷新恢复、双击大图与 ZIP 下载内容。
-  - 2026-11-20 交付 产出图片/附件上传命令、资产上传 UI、附件 NodeView、图片块菜单、ZIP 写入器和导出链路；剩余差距：Mermaid 和 Excalidraw 独立块分别属于 T34/T35。
-
-### T34: Mermaid 独立图表块（P0）
-
-- 目标：把 Mermaid 从普通围栏占位升级为源码与实时预览同屏的 NodeView。
-- 验收标准：
-  - 桌面左右分栏，移动端上下排列，支持块级全屏。
-  - 使用 CodeMirror 6、约 300ms 防抖、模板和错误行提示。
-  - 语法错误不清空源码，Markdown 只保存标准 `mermaid` fence。
-  - Mermaid strict 安全级别、唯一 ID 和懒加载生效。
-- 边界：不加入 PlantUML、Flowchart 或 Graphviz 渲染器。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立 Mermaid 任务卡，依赖 T29/T30。
-  - 2026-11-20 执行 开始 T34：盘点现有 diagrams 包与 Mermaid 依赖，接入懒加载块渲染和安全错误边界。
-  - 2026-11-20 执行 新增独立 `inkloom_mermaid` ProseMirror 节点与 Markdown remark 往返，围栏仍序列化为标准 `mermaid` code fence；实现 CodeMirror 6 源码编辑、约 300ms 防抖预览、常用模板、错误行提示、全屏和桌面左右/移动上下布局。
-  - 2026-11-20 执行 Mermaid 保持 strict 安全级别并继续经过 DOMPurify；关闭 HTML label 以输出原生 SVG 文本，避免安全清洗后节点文字丢失。图表包仅在节点首次渲染时动态加载，并接入工具栏与斜杠菜单的新增入口。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 57 项通过；`pnpm build` 通过；Playwright 23 项全部通过，覆盖 Mermaid 插入、源码/预览同屏、语法错误保留源码、标准围栏自动保存、全屏 Esc、刷新恢复和 320px 单列无横向溢出。构建仍有既有大 chunk 告警，Mermaid 已按按需 chunk 输出。
-  - 2026-11-20 交付 产出 Mermaid 安全渲染器、模板与错误解析、独立编辑器节点、CodeMirror 源码面板、全屏和响应式样式；剩余差距：Excalidraw 独立画布资产块属于 T35。
-
-### T35: Excalidraw 画布资产块（P0）
-
-- 目标：实现 SVG 预览卡、场景资产和块级全屏编辑。
-- 验收标准：
-  - 文档首屏只加载 SVG，不加载 Excalidraw bundle。
-  - 编辑保存生成独立 scene 与 SVG 资产，Markdown 保存 portable 注释块。
-  - 现有 `extensions.canvas` 中的画布数据迁移为 scene、SVG 和 portable 注释块，迁移失败时保留原扩展数据。
-  - 2 秒临时快照、关闭保存、刷新恢复和 revision 冲突流程通过。
-  - 资产缺失不清空引用，允许重新上传或删除。
-- 边界：不实现多人同时绘制。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立画布任务卡，依赖 T32/T33。
-  - 2026-11-20 执行 开始 T35：盘点 `extensions.canvas`、资产 API、文档 revision 与现有 Excalidraw 占位实现，确定 SVG 预览、scene 资产和可移植注释块的迁移路径。
-  - 2026-11-20 执行 新增独立 `inkloom_canvas` 原子节点和 `inkloom:canvas` 便携 Markdown 块；正文保存标准 SVG 图片引用、scene/preview 内容寻址路径，不把 Excalidraw elements JSON 写入正文。
-  - 2026-11-20 执行 接入 `.excalidraw` 场景与 SVG 预览双资产上传，首屏仅渲染 SVG；Excalidraw 引擎和样式仅在编辑/迁移时动态加载。实现每 2 秒本地临时快照、取消后恢复、“保存并关闭”、缺失资产提示与重新编辑入口。
-  - 2026-11-20 执行 现有 `extensions.canvas` 自动导出 scene/SVG、上传资产并插入便携块；迁移失败不删除原扩展数据。资产响应支持 Web/API 子域分离的 CORS/CORP，并按图片用途区分 SVG inline 预览与直接下载；下载读取使用独立缓存键，避免复用无 CORS 的图片缓存。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 62 项通过；`pnpm build` 通过；Playwright 25 项全部通过，覆盖真实绘制、双资产上传、标准 Markdown 往返、2 秒快照、保存/刷新、旧扩展迁移保留、普通图片附件导出、自动保存冲突和六档视口。构建仍有既有大 chunk 告警，Excalidraw 保持按需 chunk。
-  - 2026-11-20 交付 产出 Canvas 便携块协议、scene/SVG 导出助手、Excalidraw 编辑器动态加载、画布网络与卡片、旧画布迁移、快照恢复和端到端测试；剩余差距：无。
-
-### T36: 随记工作流（P0）
-
-- 目标：完成扁平随记导航、标签、最近文档、导入导出和归档入口。
-- 验收标准：
-  - 左侧随记无固定文件夹、无重复新建按钮，所有新建入口在搜索框右侧 `+`。
-  - 新建随记直接创建空白 Markdown 并进入编辑。
-  - 标签筛选、最近文档、删除和导出可用。
-  - 归档前保存成功，失败则保留在随记和本地草稿。
-- 边界：不实现知识库预览和搜索索引。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立随记工作流任务卡，依赖 T26/T31/T33。
-  - 2026-11-20 执行 开始 T36：盘点现有随记列表、`+` 菜单、标签、最近文档和归档入口，先补齐随记边界内工作流。
-  - 2026-11-20 执行 随记新建改为直接创建空白 Markdown 并进入编辑，标题弹窗只保留给知识库；搜索框右侧 `+` 继续统一承载随记、知识库与 Markdown 导入入口。
-  - 2026-11-20 执行 标签纳入自动保存状态机，正文与标签共用草稿、串行写入、冲突副本和 revision；补充侧栏标签筛选、最近文档刷新、标签编辑弹窗、导出、删除确认和归档入口。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 62 项通过；`pnpm build` 通过；Playwright 27 项全部通过，覆盖随记无弹窗新建、标签保存与刷新、标签筛选、最近文档、导出、删除、归档前保存、冲突恢复和六档视口。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出扁平随记创建/导航/标签/最近/导出/删除/归档流程；剩余差距：知识库内平铺管理、移回与删除库属于 T37。
-
-### T37: 扁平知识库工作流（P0）
-
-- 目标：完成知识库创建、平铺文档、归档、移回和删除知识库。
-- 验收标准：
-  - 知识库是顶层容器，内部无分组或嵌套；文档直接平铺。
-  - 归档弹窗直接选择知识库，不出现二次确认。
-  - 删除知识库移回全部文档，不删除正文或历史。
-  - 移动和排序携带 revision，冲突不静默覆盖。
-- 边界：不允许在知识库中直接新建文档。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立知识库任务卡，依赖 T26/T36。
-  - 2026-11-20 执行 开始 T37：核对现有平铺知识库列表、归档、移回和删除知识库 API，补齐 revision 安全与界面操作。
-  - 2026-11-20 执行 知识库侧栏新增重命名、上移、下移和删除知识库入口；排序交换分别携带两个知识库的 `baseRevision`，冲突时不静默覆盖。
-  - 2026-11-20 执行 知识库文档新增“移回随记”；移回前先 flush 自动保存并读取最新 revision。删除知识库前同样使用知识库 revision 校验，文档正文、标签、资产引用和版本历史全部保留并回到随记。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 62 项通过；`pnpm build` 通过；Playwright 29 项全部通过，覆盖平铺知识库、归档、移回、删除库保留文档、重命名、revision 排序、自动保存和六档视口。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出完整扁平知识库管理、文档往返与删除保护；剩余差距：知识库文档默认只读预览属于 T38。
-
-### T38: 知识库预览优先与编辑切换（P0）
-
-- 目标：知识库文档默认只读预览，显式进入编辑并在完成后返回预览。
-- 验收标准：
-  - 预览隐藏工具栏和块手柄，允许选择、复制、链接、图片和图表查看。
-  - 点击编辑后不重载文档、不跳滚动位置、不改变阅读排版。
-  - 完成前保存成功；失败保持编辑状态和草稿。
-  - 刷新后恢复只读预览；可恢复草稿需要显式操作。
-- 边界：不改变知识库归属或权限语义。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立预览切换任务卡，依赖 T37。
-  - 2026-11-20 执行 知识库文档改为在同一个 Milkdown/ProseMirror 内容区中预览；默认关闭编辑能力并隐藏格式栏、块手柄、Mermaid 源码编辑和画布编辑入口。
-  - 2026-11-20 执行 显式“编辑/完成”切换不卸载文档，切换时补偿工具栏高度以保持当前滚动位置；保存失败保持编辑状态，完成成功后返回与编辑时相同的阅读排版。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 62 项通过；`pnpm build` 通过；Playwright 30 项全部通过，覆盖默认只读、无工具栏/手柄、滚动保持、保存失败留编辑态、刷新回预览、单编辑所有权降级为只读及六档视口。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出统一预览/编辑内容区、只读图表和画布视图、所有权只读降级与保存失败保护；剩余差距：无。
-
-### T39: SQLite FTS5 文档搜索（P0）
-
-- 目标：用服务端全文索引替代下载整个工作区后的客户端搜索。
-- 验收标准：
-  - 索引标题、正文、标签、路径和文件名。
-  - 中文搜索策略、结果摘要、随记/知识库分类和分页通过测试。
-  - 1,000 篇文档基准满足 P95 目标。
-  - 搜索失败只影响搜索区域。
-- 边界：不引入独立搜索引擎或 AI 语义搜索。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立搜索任务卡，依赖 T25/T36/T37。
-  - 2026-11-20 执行 开始 T39：盘点 SQLite migration、文档写入事务、列表摘要和 Web 搜索入口，确定 FTS5 表与中文分词回退策略。
-  - 2026-11-20 执行 新增 SQLite FTS5 migration 与索引同步；标题、正文、标签、路径、文件名进入索引，生命周期和知识库归属用于结果分类。应用层为中文生成单字与相邻二元组词项，单字、双字和英文查询均可命中。
-  - 2026-11-20 执行 Web 搜索改为服务端无限分页查询，增加 250ms 防抖、随记/知识库分组、原始正文高亮摘要、标签和分类跳转；搜索失败仅在侧栏显示，不阻塞正文。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 68 项通过，其中 1,000 篇文档搜索基准强制断言 P95 小于 120ms；`pnpm build` 通过；Playwright 31 项全部通过，覆盖中文检索、跨随记/知识库结果、高亮摘要、跳转、自动保存和六档视口。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出 FTS5 schema 与迁移、索引同步、中文词项/查询/摘要工具、搜索 API、CloudClient 无限分页和 Web 搜索结果界面；剩余差距：大纲、反向链接与文档信息栏属于 T40。
-
-### T40: 大纲、真实反向链接与文档信息栏（P0）
-
-- 目标：补齐知识库阅读页需要的上下文信息。
-- 验收标准：
-  - 大纲由 AST 节点位置驱动并可准确定位标题。
-  - 反向链接来自服务端链接索引，支持命中摘要和断链。
-  - 信息栏展示资产、标签、最近版本和高级属性。
-  - 局部加载失败不阻塞正文。
-- 边界：不实现知识图谱、标签网络或 AI 推荐。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立信息栏任务卡，依赖 T39。
-  - 2026-11-20 执行 开始 T40：盘点 AST 标题位置、document_links 同步、资产引用和现有文档信息组件，先补齐服务端反向链接契约。
-  - 2026-11-20 执行 大纲改为 mdast AST 提取，记录标题 offset/line/column，并处理重复标题 ID；信息栏按 AST 顺序定位 ProseMirror 标题，不依赖正则扫描代码围栏。
-  - 2026-11-20 执行 新增内部 Markdown/Wiki 链接解析与 `document_links` 同步，保存、创建、移动、删除和知识库迁移都会维护反向链接、目标路径与断链状态。
-  - 2026-11-20 执行 新增文档上下文 API 与右侧信息栏，聚合出链、真实反链、命中摘要、断链、资产、最近版本和高级属性；上下文独立加载，失败仅在栏内提示。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 70 项通过；`pnpm build` 通过；Playwright 33 项全部通过，覆盖 AST 大纲定位、真实反链、断链、路径迁移、信息栏加载和局部失败隔离。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出 AST 大纲位置、链接解析/回填/同步、文档上下文 API、CloudClient 契约和响应式信息栏；剩余差距：历史版本交互属于 T41。
-
-### T41: 版本历史预览、差异与恢复（P0）
-
-- 目标：提供只读历史预览、块级差异和安全恢复。
-- 验收标准：
-  - 历史抽屉按日期和检查点类型展示。
-  - 历史预览使用同一 Markdown NodeView，Mermaid、画布和附件状态正确。
-  - 恢复先保存当前状态，再追加新 revision。
-  - 缺失资产保留引用并明确提示。
-- 边界：不做旧版本直接编辑或多版本合并。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立历史任务卡，依赖 T31/T40。
-  - 2026-11-20 执行 新增历史抽屉与只读历史预览，历史 Markdown 复用同一 ProductMarkdownEditor/NodeView；支持内容预览与顶层块差异切换。
-  - 2026-11-20 执行 恢复前先 flush 当前自动保存并读取最新 revision，再调用服务端恢复接口追加新 revision；自动保存状态机通过 `replaceDocument` 原子替换基线，避免恢复后下一次编辑产生伪冲突。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 72 项通过；`pnpm build` 通过；Playwright 34 项全部通过，覆盖历史 Mermaid 预览、块差异、恢复前保存、追加 revision、刷新持久化和六档视口。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出 revision 列表/抽屉、块差异算法、NodeView 历史预览、资产缺失提示和安全恢复链路；剩余差距：无。
-
-### T42: 全局视觉、字体、动效与响应式收口（P0）
-
-- 目标：把白色主题、Geist 字体、圆润组件、骨架屏和丝滑动效统一应用到全站。
-- 验收标准：
-  - 颜色、字体、圆角、阴影、间距和动效全部使用语义 token。
-  - 320、375、768、1024、1440、2560 六档视口无页面横向溢出。
-  - 所有内容加载使用尺寸稳定的骨架屏；按钮保留文字加载状态。
-  - hover、focus、pressed、disabled、loading 和 reduced-motion 完整。
-  - 200% 浏览器缩放、键盘、触控和安全区域通过。
-- 边界：不新增业务能力。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立视觉收口任务卡，依赖 T28–T41。
-  - 2026-11-20 执行 开始 T42：用现有六档截图和源码审计统一语义色、浮层阴影、触控与 reduced-motion 行为，并补 200% 缩放和键盘验收。
-  - 2026-11-20 执行 增加 surface、shadow、radius、easing 和 duration 语义 token，统一登录页、工作区、编辑器、信息栏、历史抽屉和弹窗常用表面；提高过小元信息字号，并补齐粗指针 44px 触控目标。
-  - 2026-11-20 执行 保留用户明确要求的单一白色主题，不引入暗色翻转；2560 宽屏保持受控阅读列宽，320 到 2560 六档均无横向溢出。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 72 项通过；`pnpm build` 通过；Playwright 35 项全部通过，包含触控、键盘、200% 缩放、reduced-motion、骨架屏、弹窗动效和六档截图。视觉预检评分：工艺 4.5、需求契合 5、系统一致性 4.5、无障碍 4.5、文案 4.5。构建仍有既有大 chunk 告警。
-  - 2026-11-20 交付 产出统一白色视觉 token、响应式与触控/动效收口；剩余差距：无。
-
-### T43: M1.1 全链路测试与视觉验收（P0）
-
-- 目标：用自动化与逐图验收证明编辑器、工作流和数据安全达到发布条件。
-- 验收标准：
-  - Markdown golden corpus、API 集成、资产、保存冲突、归档、预览编辑和搜索全部通过。
-  - Playwright 覆盖六档视口和主要业务流，截图输出到已忽略的 `test-results/ui-review/`，不提交版本库。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 和 `pnpm test:e2e` 通过。
-  - 性能、无横向溢出、200% 缩放、键盘和 reduced-motion 有实机记录。
-  - 所有未解决风险如实写入报告。
-- 边界：不部署生产，不收集真实用户数据。
-- 状态：completed
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立全链路验收任务卡，依赖 T42。
-  - 2026-11-20 执行 开始 T43：补关键功能截图，汇总自动化、性能、跨视口和已知风险；T44 部署不启动。
-  - 2026-11-20 执行 增加 Mermaid、画布、搜索、信息栏和历史版本关键功能截图；截图仍写入已忽略的 `test-results/ui-review/`。
-  - 2026-11-20 验证 `pnpm typecheck` 通过；`pnpm test` 72 项通过；`pnpm build` 通过；Playwright 35 项通过；1,000 篇 FTS5 查询 P95 小于 120ms；六档视口、触控、键盘、200% 缩放和 reduced-motion 全部通过。
-  - 2026-11-20 交付 产出 [M1.1 验收报告](./docs/M1_1_ACCEPTANCE.md)，记录核心链路、截图索引、构建告警、浏览器覆盖、SQLite experimental API 等发布风险；T44 等待用户授权。
-  - 2026-11-20 验证 最终再次执行 `pnpm typecheck`、`pnpm test`（72 项）、`pnpm build`、Playwright（35 项）全部通过；修复画布缓存命中时 loading 状态竞态，并确认历史 Mermaid、画布、搜索、信息栏和历史抽屉截图均为就绪状态。
-
-### T44: M1.1 生产发布与全新数据初始化（P0）
-
-- 目标：在用户明确授权后发布 M1.1 Web 与 API 镜像，并按要求清空旧生产数据、以空数据结构完成上线验证。
-- 验收标准：
-  - 发布前记录当前 release SHA；用户确认旧生产数据无需保留，不执行旧数据迁移。
-  - 仅在 GitHub Actions 外部构建，私有控制面按完整 SHA 部署。
-  - 生产 Web/API、Cookie/CORS、安全头、空库初始化、注册登录、随记/知识库、归档和预览编辑通过。
-  - 发布后检查容器健康、资源和日志，不删除旧 release 回滚材料。
-- 边界：不发布桌面、移动、M2 或协作能力；不迁移旧文档与资产，清空操作仅针对 InkLoom 生产数据卷。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 建立生产迁移任务卡，依赖 T43 和用户明确授权。
-  - 2026-11-21 计划 用户明确授权发布，并说明生产环境数据不重要、可直接删除；将任务调整为不迁移旧数据，部署后从空库初始化。
-  - 2026-11-21 执行 镜像发布门禁发现自动保存竞态：保存成功后的父级快照更新会重建 autosave effect，可能丢失连续编辑期间待提交的内容；开始修复后重新执行完整发布验证。
-  - 2026-11-21 执行 `useDocumentAutosave` 改用文档 ref 读取最新快照，effect 仅绑定用户、工作区和文档 ID；新增“首次保存响应被延迟时继续输入”端到端回归，确保后续输入不会被保存成功后的父级快照覆盖。
-  - 2026-11-21 验证 `pnpm typecheck`、`pnpm test`（72 项）、`pnpm build` 与 Playwright（36 项）全部通过；构建仍仅有既存大 chunk 告警。
-  - 2026-11-21 执行 GitHub Linux CI 暴露历史版本用例依赖编辑器中心点击和按键输入时序；改为直接定位文档末尾段落并使用 `insertText`，移除对 Mermaid NodeView 命中位置和平台按键行为的依赖。
-  - 2026-11-21 验证 历史版本用例连续运行 3 次全部通过。
-  - 2026-11-21 执行 下一次 Linux CI 暴露随记用例在异步新建完成前读取旧 URL，导致第二段文本写入原文档；用例改为等待 URL 切换到新文档后再输入。
-  - 2026-11-21 验证 随记创建、标签筛选、导出与删选用例连续运行 3 次全部通过。
-  - 2026-11-21 验证 最终 `main` CI run `44851674234` 成功；外部镜像发布 run `44852278527` 成功，生产部署 run `44853337717` 成功，release SHA 为 `2e1e3173374d6e0b0c78ccc8282b8e8822e45dff`。
-  - 2026-11-21 执行 按用户授权不迁移旧数据，删除并重建专用 `inkloom-data` 卷；Caddy 证书卷、旧 release 镜像和回滚材料未删除。
-  - 2026-11-21 验证 生产 API 冒烟注册返回 201、会话返回 200、默认工作区创建成功、文档创建返回 201；随后再次重建数据卷并重启同一 release，最终用户、工作区、文档、知识库和资产计数均为 0，5 个 schema migration 已应用。
-  - 2026-11-21 验证 生产真实浏览器完成注册、随记新建与保存、知识库创建与归档、知识库只读预览；随后最后一次重建数据卷，业务表计数仍全部为 0。
-  - 2026-11-21 验证 公网验收 `web=200`、`api=200`、`cors=204`、安全头通过；三个容器 healthy，API/Web/Edge 单次内存约 `13.07/11.05/15.48 MiB`，无重启或 OOM，宿主机可用内存约 1.09 GiB。
-  - 2026-11-21 交付 M1.1 已完成生产发布与空数据初始化；剩余差距：无。
-
-### T45: 移除仓库内 UI Review 截图归档（P0）
-
-- 目标：删除无长期价值的版本化 UI 截图和报告，同时保留六档视口的自动化溢出与业务流检查。
-- 验收标准：
-  - `artifacts/ui-review/` 中全部已跟踪截图和报告从仓库删除。
-  - `tests/e2e/ui-review.spec.ts` 继续执行，截图改写为 `test-results/ui-review/`。
-  - `test-results/` 保持被 `.gitignore` 忽略，测试不会重新污染工作树。
-  - 当前计划和后续验收不再要求提交整套截图。
-- 边界：不删除跨视口测试，不改变产品代码、生产数据或部署。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-19 计划 用户确认仓库内 UI Review 截图没有长期价值，建立测试产物清理任务。
-  - 2026-11-19 执行 删除 `artifacts/ui-review/` 下 27 个已跟踪截图和报告；跨视口 Playwright 测试保留，截图目录改为 `test-results/ui-review/`，该路径已被 `.gitignore` 覆盖。
-  - 2026-11-19 验证 `pnpm typecheck` 通过；Playwright 六档视口共 6 项通过（25.5s），确认测试产物不会污染工作树。
-  - 2026-11-19 交付 仓库不再跟踪整套 UI Review 截图；剩余差距：无。
-
-### T46: 编辑器全宽、信息栏动效与块级图表插入（P0）
-
-- 目标：让文档内容区铺满可用宽度，右侧信息栏平滑展开/收起，并允许从任意块操作菜单插入 Mermaid 图表与 Excalidraw 画布后保留预览块。
-- 验收标准：
-  - 文档正文不再受固定 `58rem` 最大宽度约束，内容区覆盖侧栏与信息栏之间的全部可用空间。
-  - 信息栏按钮可平滑展开和收起；关闭后不进入键盘 Tab 顺序或无障碍树，移动端遮罩正确。
-  - 每个块操作菜单包含“插入 Mermaid 图表”和“插入 Excalidraw 画布”，插入位置跟随当前块。
-  - Mermaid 插入后立即作为内容块预览；画布保存后作为内容块保留预览，取消时不产生占位块。
-  - 新建或切换文档时正文滚动位置回到顶部，初始内容不被粘性操作栏遮挡。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 与相关 Playwright 回归通过。
-- 边界：不改变 Markdown 资产协议、图表编辑器能力、右侧信息栏内容或既有工具栏插入入口。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-21 计划 用户要求移除内容区两侧空白、增加信息栏弹性动效、把图表和画布新增入口放到每行块操作菜单，并修复新建文档初始滚动遮挡；建立任务卡。
-  - 2026-11-21 执行 文档主区移除固定 `58rem` 宽度和居中侧框，改为铺满侧栏与信息栏之间的可用空间；信息栏改为常驻可过渡容器，关闭态宽度归零并设置 `inert`，移动端通过位移和透明度收起。
-  - 2026-11-21 执行 块操作菜单新增 Mermaid 与 Excalidraw 插入；编辑器句柄支持按当前块边界插入 Mermaid 节点或画布节点，画布保存后更新同一内容块预览，取消时不创建占位。
-  - 2026-11-21 执行 文档切换和新建时同步重置滚动容器，并在编辑器渲染完成后再次校正到顶部，避免继承旧文档滚动位置或首个内容被粘性工具栏遮挡。
-  - 2026-11-21 验证 `pnpm typecheck` 通过；`pnpm test` 72 项通过；`pnpm --filter @inkloom/web build` 通过；Playwright 38 项全部通过，覆盖全宽布局、信息栏动效与关闭态、新建滚动复位、块菜单双图表插入、刷新持久化和既有六档视口。
-  - 2026-11-21 交付 产出内容区全宽布局、信息栏过渡与无障碍关闭态、块级 Mermaid/Excalidraw 插入、文档顶部定位和对应端到端回归；剩余差距：无。
-  - 2026-11-21 执行 用户复核发现短内容仍因正文最小高度重复计算应用头、文档头和工具栏而产生额外滚动；将最小高度改为只占剩余视口，并移除会在预览滚动后延迟重置的重复 ready 回调和无效 scroll-padding。
-  - 2026-11-21 执行 知识库预览切换改为页面在进入/退出编辑前记录真实滚动位置，并在工具栏布局完成后恢复；避免编辑按钮聚焦引发 48px 跳动。
-  - 2026-11-21 验证 回归覆盖短内容 `scrollHeight <= clientHeight`、标题始终位于工具栏下方、预览切换滚动保持；最终 Playwright 38 项全部通过。
-
-### T47: 文档列表行操作与重命名（P0）
-
-- 目标：为随记与知识库文档行增加显式操作菜单，并支持在不破坏自动保存 revision 语义的前提下重命名文档。
-- 验收标准：
-  - 随记行提供重命名、归档和删除；知识库文档行提供重命名和删除。
-  - 操作按钮在桌面 hover/focus 时出现，触控设备保持可见。
-  - 文档标题由自动保存状态机管理，重命名与正文、标签共用串行 revision 写入、草稿和冲突处理。
-  - 从列表行触发操作时先打开目标文档，再由文档界面完成确认，避免对未加载正文的后台写入。
-  - 重命名成功后在列表、文档头与刷新后的数据中保持一致；既有归档、删除和 revision 冲突流程不回归。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 与 Playwright 回归通过。
-- 边界：不增加文件夹、批量操作或拖拽排序；不改变文档路径与资产协议。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-21 计划 用户指出文档列表行缺少重命名等操作入口；建立行级操作菜单与安全重命名任务卡。
-  - 2026-11-21 执行 随记行新增重命名、归档、删除菜单，知识库文档行新增重命名和删除；桌面 hover/focus 显示，触控设备常显。
-  - 2026-11-21 执行 自动保存状态机新增标题草稿、持久化标题和串行 revision 写入；标题与正文、标签共享冲突副本、离线草稿和保存状态。
-  - 2026-11-21 执行 列表操作通过文档 command 驱动对应确认弹窗；当前文档不再重复导航，跨文档操作先进入目标文档。
-  - 2026-11-21 验证 行菜单重命名完成后列表和文档头立即更新，刷新后仍保持；知识库文档行操作入口存在，既有归档和删除流程保持。
-  - 2026-11-21 验证 `pnpm typecheck` 通过、`pnpm test` 72 项通过、`pnpm build` 通过；Playwright 39 项全部通过，覆盖行菜单、标题 revision 保存、刷新恢复、归档与删除。
-
-### T48: 块操作菜单层级整理（P0）
-
-- 目标：把块类型转换操作收入“转化为”二级菜单，并把图表插入收入下方独立的“图表类型”二级菜单。
-- 验收标准：
-  - 一级块菜单只保留“转化为”“图表类型”、当前块专属操作、复制和删除。
-  - “转化为”包含正文、H1–H6 与提示块类型。
-  - “图表类型”包含 Mermaid 图表和 Excalidraw 画布，并在“转化为”下方新增。
-  - 二级菜单支持鼠标、键盘和触控操作，不改变各转换和插入动作的既有行为与 revision 保存。
-  - 相关 Playwright 回归、`pnpm typecheck`、`pnpm test` 与 `pnpm build` 通过。
-- 边界：不新增未实现的图表引擎或块类型；不改变工具栏和斜杠菜单入口。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-21 计划 用户要求将现有转换项收口，并在下方新增“图表类型”二级菜单；建立任务卡。
-  - 2026-11-21 执行 一级块菜单收口为“转化为”“图表类型”、块专属操作、复制和删除；“转化为”包含正文、H1–H6 和提示块类型。
-  - 2026-11-21 执行 “图表类型”作为下方独立二级菜单，包含 Mermaid 图表和 Excalidraw 画布，并保持当前块边界插入和预览行为。
-  - 2026-11-21 验证 行操作重命名与图表二级菜单端到端用例通过；完整回归继续作为发布门禁。
-  - 2026-11-21 验证 “转化为”二级菜单包含正文、H1–H6 与提示块类型；完整 Playwright 39 项通过。
-  - 2026-11-21 验证 最终 CI run `44862786619`、镜像发布 run `44863073924` 与生产部署 run `44863591548` 成功；生产 release 更新为 `27a4a4115717ae9eacf242ceede0b221c661701a`，现有数据保留，Web/API 与三个容器健康。
-
-### T49: 工作区设置、空白画布保存与初始文档布局（P0）
-
-- 目标：让左下角“工作区设置”打开真实设置，修复空白 Excalidraw 画布保存失败，并清理空白初始文档的手柄遮挡与不对称留白。
-- 验收标准：
-  - “工作区设置”不再创建知识库，支持重命名当前工作区、调整文档搜索快捷键、设置新文档是否默认打开信息栏，以及选择正文阅读字号；本地偏好刷新后仍保留。
-  - 新快捷键与默认信息栏设置实际生效，阅读字号只影响编辑器正文，不改变文档数据。
-  - 不绘制任何图元直接保存 Excalidraw 画布时仍能生成 scene/SVG 资产并插入可预览画布块。
-  - 空白初始文档不显示块级操作手柄；占位正文与左右内容边距对称，并始终位于工具栏下方。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 与相关 Playwright 回归通过。
-- 边界：不新增服务端偏好表，不改变画布便携协议、知识库行为或文档 revision 语义；本地显示偏好保存在当前浏览器。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-21 计划 用户指出左下角设置错误触发新建知识库、空白画布保存提示不可用，以及空白文档手柄和间距异常；建立修复任务卡。
-  - 2026-11-21 执行 “工作区设置”改为独立弹窗，接入工作区重命名、文档搜索快捷键、新文档信息栏默认状态和正文阅读字号；本地显示偏好按工作区写入 `localStorage` 并刷新恢复。
-  - 2026-11-21 执行 生产 SQLite 只读核对显示用户最近一次画布保存后没有资产记录，确认失败发生在资源上传前；画布导出增加便携 scene JSON 与 SVG 预览降级，Excalidraw 浏览器导出异常不再中断保存。
-  - 2026-11-21 执行 空白首段不显示块操作手柄；输入文字后由 ProseMirror DOM 同步立即恢复手柄，正文左右 padding 改为对称并保持工具栏下方起始。
-  - 2026-11-21 验证 `pnpm typecheck` 通过；`pnpm test` 73 项通过；`pnpm build` 通过；完整 Playwright 42 项通过，覆盖设置持久化与实际生效、空白画布保存预览、空白文档布局、输入后块手柄恢复、拖拽排序、画布资产、六档视口和无障碍/200% 缩放。
-  - 2026-11-21 验证 补充工作区服务端重命名断言后，设置专项 Playwright 再次通过；编辑后的设置、空文档截图经人工检查无手柄遮挡且左右留白对称。
-  - 2026-11-21 交付 产出工作区设置、空白画布保存降级、空白文档布局和对应自动化回归；生产 release 尚未更新，本卡只完成源码与本地/CI 前置验证，剩余差距：发布部署。
-  - 2026-11-21 验证 `main` CI run `44881162188`、镜像发布 run `44881411102` 与生产部署 run `44881871177` 全部成功；生产 release 更新为 `cc67f89aa7c751d044944595f257d5e36b6dad9f`，现有数据卷保留，Web/API 与共享 Caddy 健康。
-  - 2026-11-21 验证 生产独立核验 API `/api/health` 返回 `ok:true`，资产上传 CORS 预检为 204 且允许 `https://inkloom.imhgl.com`，Web 返回 200 并带 CSP、HSTS、DENY frame 与 Referrer-Policy；`/srv/apps/inkloom/DEPLOYED_RELEASE` 与两个应用镜像标签均为 `cc67f89aa7c751d044944595f257d5e36b6dad9f`。剩余差距：无。
-
-### T50: Markdown 源片段运行时接线（P0）
-
-- 目标：让真实 Milkdown 保存链路只重建实际编辑的块，保留 frontmatter、链接定义、HTML 和未知语法等未编辑源片段。
-- 验收标准：
-  - `@inkloom/editor` 提供可测试的 canonical 三方合并函数，以初始 canonical 和当前 canonical 计算用户修改，并回放到底稿源片段。
-  - Web 编辑器初始化和每次更新都使用该合并结果，不再直接保存 `getMarkdown()` 全量规范化文本。
-  - 导入含 frontmatter、链接定义、HTML、未知代码围栏的文档后，只编辑正文段落，未编辑保护片段字节不变。
-  - 外部恢复、草稿恢复和编辑器重置会同步刷新 canonical 基线，后续编辑不覆盖恢复内容。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 和相关 Playwright 回归通过。
-- 边界：不新增 Markdown 语法类型，不改变 Cloud API 合同和资产协议。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 用户要求修复本轮审查发现；先处理最高风险的真实编辑器源语法破坏，并建立定向 E2E 回归。
-  - 2026-11-23 执行 `@inkloom/editor` 新增 canonical 三方合并；Web 编辑器初始化、更新、外部恢复和卸载统一通过 `reconcileMarkdownSource` 保存。
-  - 2026-11-23 验证 编辑器包 23 项测试通过；新增真实 Chromium 回归确认编辑正文后 frontmatter、链接定义和未知代码围栏保持不变。
-  - 2026-11-23 交付 产出源片段合并实现、单元测试和 Playwright 回归；剩余差距：纳入最终全量门禁。
-
-### T51: API 写入原子性与异常输入隔离（P0）
-
-- 目标：避免正文已提交但搜索、反链或输入解析失败导致客户端收到 500，并防止无效锚点阻断文档写入。
-- 验收标准：
-  - 文档写入、修订、资产引用、搜索和反链更新处于一致的成功/失败边界。
-  - 无效百分号锚点不会抛出未捕获异常，也不能让已提交写入返回失败。
-  - 失败重试不会因服务端已提交内容而产生伪 revision 冲突。
-  - API 集成测试覆盖无效锚点和派生索引失败路径。
-- 边界：不改变公开 API 路径、错误码和 revision 语义。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 依赖 T50；随后修复事务边界和链接解析鲁棒性。
-  - 2026-11-23 计划 T50 已完成，开始处理 API 写入原子性和异常锚点。
-  - 2026-11-23 执行 正文、revision、资产引用、搜索和反链更新统一进入事务；无效百分号锚点保留原始文本。
-  - 2026-11-23 验证 API 23 项测试通过，新增无效锚点、最近访问和原子排序覆盖。
-  - 2026-11-23 交付 产出数据库一致性修复、链接解析防护和集成测试；剩余差距：无。
-
-### T52: 认证可用性与登录限流（P1）
-
-- 目标：消除公开认证接口的同步 CPU 阻塞和无界密码尝试风险。
-- 验收标准：
-  - 密码哈希与校验使用异步实现，成功登录继续兼容既有哈希数据。
-  - 登录和注册具备按来源与账号的可配置限流，超限返回稳定 429 错误契约。
-  - 并发密码计算受到边界控制，测试不因异步化出现竞态。
-  - 认证与限流测试、typecheck、build 通过。
-- 边界：不引入第三方身份提供商、验证码或账号体系迁移。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 依赖 T51；完成认证异步化和服务端限流。
-  - 2026-11-23 执行 `scrypt` 改为异步、密码工作并发受控；注册/登录按 IP 与账号执行固定窗口限流，生产代理模式可读取转发地址。
-  - 2026-11-23 验证 认证限流专项测试返回 429 与 `Retry-After`；完整 Playwright 44 项通过。
-  - 2026-11-23 交付 产出认证异步化、限流配置与部署环境变量；剩余差距：无。
-
-### T53: 最近文档与知识库原子排序（P1）
-
-- 目标：让“最近”列表真实生效，并消除知识库上下移动两次请求造成的中途状态。
-- 验收标准：
-  - 打开文档会更新最近访问元数据，但不递增内容 revision。
-  - 最近列表展示实际打开过的文档，刷新后保持。
-  - 知识库上下移动通过单个原子接口完成；失败不改变任何排序。
-  - API、adapter 和 Playwright 回归覆盖两条流程。
-- 边界：不增加拖拽排序、多级知识库或跨工作区最近记录。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 依赖 T51；修复功能接线和非原子排序。
-  - 2026-11-23 执行 打开文档记录 `lastOpenedAt` 且不递增正文 revision；知识库重排改为带全量 revision 校验的单事务接口。
-  - 2026-11-23 验证 最近文档与 revision 不变、原子排序和 stale order 回归通过；完整 Playwright 44 项通过。
-  - 2026-11-23 交付 产出最近访问接线、原子排序 API/adapter/UI 和测试；剩余差距：无。
-
-### T54: 前端架构净化与加载性能（P1）
-
-- 目标：删除不可达旧实现，让共享 UI 包承担真实组件/token 职责，并降低文档列表与编辑器首开成本。
-- 验收标准：
-  - `@inkloom/ui` 提供真实按钮、输入、弹窗、骨架和语义 token；Web 全部复用，桌面端保持暂停并继续沿用品牌入口。
-  - 删除未被路由引用的旧 Workspace 页面及其独占控制器/组件。
-  - 文档摘要查询不再为所有记录加载完整 Markdown；最近查询在数据库层限制数量。
-  - 生产构建不再隐藏超大 chunk，图表依赖不再产生重复 KaTeX/Mermaid 主产物。
-  - `pnpm typecheck`、`pnpm test`、`pnpm build` 和完整 Playwright 回归通过。
-- 边界：不做视觉改版，不进入 Tauri、M1D 或移动端功能开发；保留现有 UI 外观与交互。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 依赖 T50-T53；完成死代码、共享 UI、列表查询和包体治理。
-  - 2026-11-23 执行 `@inkloom/ui` 接管按钮、输入、弹窗、骨架、公共 `cn` 和语义 token；删除旧 Workspace 页面及 2,454 行独占链路。
-  - 2026-11-23 执行 文档摘要查询只读取 4 KB 正文片段，最近查询在 SQL 层限制 12 条；KaTeX/Mermaid 覆盖去重，恢复真实 chunk 警告阈值。
-  - 2026-11-23 验证 构建模块数 4,730→4,608，编辑器 chunk 1,030→770 KB，KaTeX 从 2 份降为 1 份；`pnpm build` 与完整 Playwright 44 项通过。
-  - 2026-11-23 交付 产出真实共享 UI、死代码清理、摘要查询优化和依赖去重；剩余差距：大型图表引擎仍按需加载并有独立大 chunk 告警。
-
-### T55: 质量门禁、依赖与跨平台契约收口（P2）
-
-- 目标：让 CI 能自动发现代码规范、未使用代码、adapter 契约和依赖安全问题。
-- 验收标准：
-  - 增加兼容 TypeScript 7 的 Oxlint、格式检查、覆盖率报告和 Rust test/clippy 门禁。
-  - TypeScript 启用适合当前代码的额外严格检查。
-  - Cloud adapter 接入统一 WorkspaceAdapter contract suite，能力声明与真实实现一致。
-  - Rust `cargo clippy --all-targets -- -D warnings` 通过。
-  - KaTeX 升级到安全版本，`pnpm audit --prod` 无已知漏洞。
-  - 本地完整门禁和 CI 配置一致。
-- 边界：不清理与本次门禁无关的既有产品死代码；不改变部署拓扑。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 依赖 T54；最后收口自动化与依赖安全。
-  - 2026-11-23 执行 Oxlint 与 Prettier 门禁、TypeScript 索引/未使用检查、覆盖率阈值、Cloud adapter contract suite、Rust test/clippy 和 CI 配置完成。
-  - 2026-11-23 执行 KaTeX 固定到 0.19.1、Mermaid 固定到 12.3.0；生产依赖审计无已知漏洞。
-  - 2026-11-23 验证 Oxlint、Prettier、typecheck、84 项覆盖率测试（32.20% statements / 33.57% lines）、3 项 Rust 测试、clippy `-D warnings` 和 audit 全部通过。
-  - 2026-11-23 交付 产出完整本地/CI 质量门禁与依赖修复；剩余差距：无。
-
-### T56: 块操作手柄独立左侧操作槽（P0）
-
-- 目标：修复块操作按钮与正文内容重叠，为每行保留固定、稳定且不侵占正文的左侧操作区域。
-- 验收标准：
-  - 桌面端和移动端的手柄完整位于正文内容左边界之外，且与正文保持可见间隔。
-  - 编辑、预览切换、拖拽排序、块菜单和触控目标尺寸保持可用。
-  - 正文左右布局不产生页面级横向溢出，多档视口回归通过。
-  - `pnpm lint`、`pnpm typecheck`、`pnpm build` 与相关 Playwright 回归通过。
-- 边界：不改变手柄图标、菜单内容、拖拽算法或文档 Markdown 语义。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 用户在本地预览中指出块操作按钮右边框覆盖正文；建立独立操作槽修复任务。
-  - 2026-11-23 执行 为正文预留固定左侧操作槽，手柄按块首行定位；监听滚动和尺寸变化，滚入粘性工具栏下方的手柄同步隐藏。
-  - 2026-11-23 验证 `pnpm typecheck`、`pnpm lint`、`pnpm format:check`、`pnpm build` 与完整 Playwright 47/47 通过；详情断言覆盖手柄不覆盖正文、粘性工具栏遮挡和 320–2560px 无页面级横向溢出。
-
-### T57: 文档列表与编辑器块视觉层级修复（P1）
-
-- 目标：降低侧栏信息噪声，修复画布工具条重叠，并统一 Mermaid、画布、代码、公式、提示块、折叠块和分割线的对比度与视觉层级。
-- 验收标准：
-  - 最近和全部随记列表只显示文档名称；超长名称使用省略号，不展示正文摘要或原始块标记。
-  - 画布工具条编辑入口不重叠、不被裁切；图表与画布标题区域无装饰性图标底色。
-  - CodeMirror 行号与公式区域采用清晰但克制的浅色层级，不出现突兀黑块。
-  - 提示块高度紧凑、标签与正文关系明确；折叠块图标无底色；分割线在白色内容区清晰可辨。
-  - Mermaid、画布、代码、公式、表格、提示块和折叠块使用一致的边框、表面、文字和强调色层级。
-  - 320-2560px、键盘、触控、reduced-motion 及编辑器核心 Playwright 回归通过。
-- 边界：保留现有信息架构、图标库、白绿品牌色和编辑器命令；不重做编辑器内核或文档数据模型。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 用户通过内置浏览器批注提出列表摘要、画布重叠、图标底色、代码行号、提示块、折叠块、分割线和整体对比度问题；建立统一视觉修复任务。
-  - 2026-11-23 计划 追加修复滚动后被粘性工具栏遮挡块仍显示操作手柄，以及表格卡片内边距造成表头背景无法铺满的问题。
-  - 2026-11-23 计划 追加修复提示块标记段占用额外高度的问题，并将 Mermaid 与画布编辑操作收敛为悬停或键盘聚焦时显示，同时保留明确的操作入口。
-  - 2026-11-23 执行 侧栏改为标题单行省略；画布工具条改为约束网格；Mermaid/画布图标去底色，操作区悬停或键盘聚焦时显示；代码行号、公式、提示块、折叠块、表格和分割线统一为低噪声语义色。
-  - 2026-11-23 执行 提示块隐藏仅含标记的首段，改为紧凑标签与正文网格；Mermaid 增加明确的“编辑”文字，画布保留“编辑”入口。
-  - 2026-11-23 验证 详情 E2E 覆盖标题省略、画布工具条边界、图标透明、悬停操作区、浅色行号、提示块高度与标记隐藏、表头满框和分割线；完整 Playwright 47/47 通过。
-  - 2026-11-23 验证 内置浏览器强制加载最新构建后人工核对侧栏、Mermaid、画布、提示块、折叠块和表格；验收截图见 `test-results/inkloom-final-editor.png`、`test-results/inkloom-callout-fixed.png` 与 `test-results/inkloom-embed-hover-fixed.png`。
-
-### T58: 编辑器块节距与图表边缘插入（P0）
-
-- 目标：统一正文顶层块的垂直节距，并让 Mermaid、自由画布等不可直接编辑的图表块能从左右边缘快速在块前或块后插入文本行。
-- 验收标准：
-  - 正文任一相邻顶层块，无论文本、标题、列表、表格、代码、提示、折叠、图表或分割线，垂直节距一致且不低于语义 token。
-  - 点击 Mermaid 或画布左侧边缘非交互区域，在块前创建并聚焦空段落；点击右侧边缘非交互区域，在块后创建并聚焦空段落。
-  - 已存在相邻空段落时复用，不重复堆叠；手柄、编辑按钮、模板选择、预览和拖拽交互不受影响。
-  - 触控、键盘焦点、320–2560px、reduced-motion、相关 Playwright 和全量质量门禁通过。
-- 边界：不改变 Markdown 数据结构、图表 NodeView 内容、导航信息架构或已有块菜单语义。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 用户指出不同内容块之间缺少稳定行间距，且图表块左右缘无法落到文本光标；建立统一节距和边缘插入任务。
-  - 2026-11-23 执行 新增 `--spacing-editor-block: 1rem`，统一正文全部顶层块垂直节距；Mermaid/画布左右 20px 非交互区域分别创建并聚焦块前/块后空段落，已有相邻空段落时直接复用。
-  - 2026-11-23 验证 新增 Playwright 回归确认相邻块间距均为 `16px`、左右缘插入文本顺序正确、同侧重复点击不堆叠空段落；完整 Playwright 47/47、`pnpm test` 84/84、`pnpm lint`、`pnpm format:check` 与 `pnpm build` 通过。
-  - 2026-11-23 验证 内置浏览器最终 DOM 实测 9 组相邻顶层块间距全部为 `16.00px`，最新预览保持打开。
-
-### T59: 删除文档后的列表缓存一致性（P1）
-
-- 目标：文档删除成功后立即从相关列表缓存移除对应行，避免后端已删除但侧栏仍显示旧行。
-- 验收标准：
-  - 删除成功后 `notes`、`recent` 与当前知识库文档缓存同步剔除目标文档。
-  - 后续服务端刷新仍以真实列表为准，不吞掉删除失败或 revision 冲突错误。
-  - 随记筛选删除回归与全量质量门禁通过。
-- 边界：不改变删除 API、revision 校验、路由或文档恢复能力。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 全量 E2E 暴露出删除后列表缓存刷新竞态；建立缓存一致性修复卡。
-  - 2026-11-23 执行 删除 API 成功后先同步剔除 `notes`、`recent` 和当前知识库文档缓存，再执行服务端失效刷新；错误路径保持原有 revision 与失败提示语义。
-  - 2026-11-23 验证 随记筛选删除专项回归通过；最终完整 Playwright 47/47 通过，无侧栏残留行。
-  - 2026-11-24 执行 发布回归进一步发现列表切换与删除存在跨文档竞态；自动保存回调改为可等待，文档查询必须与路由文档 ID 一致后才渲染 `DocumentSurface`，并以文档 ID 作为 React key 强制重建编辑器状态。
-  - 2026-11-24 验证 删除专项在高复现模式下连续 10/10 通过；最终完整 Playwright 47/47、Vitest 85/85、lint、format 与全仓构建通过。
-
-### T60: 提示块标签独立行布局（P1）
-
-- 目标：让提示类型标签独占顶部一行，与正文保持明确间距且互不重叠；标签底色完整覆盖双字文本。
-- 验收标准：
-  - 提示标签位于正文上方独立行，正文不侵入标签区域。
-  - 标签底色完整包住“提示”等短标签文本，不出现裁边或过窄。
-  - 紧凑高度、颜色层级、键盘/触控及现有结构化块回归不退化。
-- 边界：不改变提示块 Markdown 语法、类型切换、复制或持久化行为。
-- 状态：done
-- 进度（只追加新行，不修改旧行）：
-  - 2026-11-23 计划 用户指出提示标签与正文同排且底色不足；建立独立标签行修复卡。
-  - 2026-11-23 执行 覆盖 Milkdown 对普通引用块 `::before` 的绝对定位，将提示标签恢复为普通流中的独立块级首行；标签固定覆盖 2.9rem 双字区，并以 0.45rem 间隔连接正文。
-  - 2026-11-23 验证 结构化块专项 Playwright 通过，断言正文起点位于标签下方、标签底色非透明且最小宽度不少于 46px；最终完整 Playwright 47/47、`pnpm test` 84/84、`pnpm lint`、`pnpm format:check` 与 `pnpm build` 通过。
-  - 2026-11-23 验证 内置浏览器强制加载最终构建后人工确认“提示”标签独占首行、底色完整包住双字、正文无重叠；证据见 `test-results/inkloom-callout-fixed.png`。
+  - 2026-11-24 计划 用户确认按 `init-project-docs` 审核结论建卡并修正。
+  - 2026-11-24 执行 建立 `docs/agents/` 与 `docs/archive/`，迁移专题文档、ADR、历史验收和 52 张已完成任务卡；删除重复入口 `START_HERE.md`，同步入口、安全、变更、子项目与品牌文档链接。
+  - 2026-11-24 执行 将 T4、T9 校正为 blocked，把 T5/T6/T7/T8/T10/T11 放入待执行区，补齐生命周期分区、归档索引和当前任务状态。
+  - 2026-11-24 验证 32 个 Markdown 文件无失效文件链接或标题锚点；T1–T62 均只出现一张任务卡且无重复/缺失；核心文档通过 Prettier。
+  - 2026-11-24 交付 README 147 行、AGENTS 112 行、DEVELOP_PLAN 268 行、done 卡 2 张；剩余差距：无。
 
 ### T61: Frontmatter 源片段保真回归（P0）
 
@@ -1100,6 +202,63 @@
   - 2026-11-24 验证 新增 frontmatter 重叠回归先红后绿；未知字段只保留一次；原始 E2E 源片段保真用例、删除专项连续 10/10、完整 Playwright 47/47、Vitest 85/85、lint、format 与全仓构建通过。
   - 2026-11-24 验证 `main` CI run `45303582813` 与镜像发布 run `45303610509` 成功；运维配置提交 `cbcd74b` 补齐代理信任和认证限流，生产部署 run `45305087168` 成功，release 更新为 `5824e4691a3498fb2c1967a190f5a602ec968116`。
   - 2026-11-24 验证 生产 Web/API/Caddy 健康，镜像与 `DEPLOYED_RELEASE` 均为 `5824e46`；API health 为 `ok:true`，CORS 预检 204，Web 200 且安全头完整，`inkloom-data` 数据卷保留。剩余差距：无。
+
+## 归档索引
+
+历史任务卡已整卡迁移至 [M1.1 历史任务归档](./docs/archive/plan-2026-11-m1.md)，以下索引按原任务编号排列。
+
+- T1: 开源仓库与品牌整理（done 2026-11-13）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T2: Web 交互原型基线（done 2026-11-13）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T3: 抽取 core、editor、diagrams、storage 包（done 2026-11-18）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T12: 初始化 GitHub 仓库并推送首个版本（done 2026-11-13）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T13: 复核项目三文档结构（done 2026-11-16）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T14: 同步 init-project-docs 注释规范（done 2026-11-16）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T15: Web 云工作区可上线 MVP（done 2026-11-18）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T16: Web 端到端测试与生产部署（done 2026-11-18）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T17: 集中生产部署凭据到私有控制面（done 2026-11-18）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T18: Web 工作区交互闭环与保存可靠性（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T19: Web 连续分辨率自适应（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T20: Web 多视口截图与真实流程验收（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T21: Web 清新视觉与品牌 Logo 重设计（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T22: Web 正式前端技术栈重构（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T23: 共享边缘拆分与最新版生产发布（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T24: 产品规范与 Web-first M1.1 计划重排（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T25: 随记、扁平知识库与资产数据结构迁移（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T26: 随记与知识库工作区 API（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T27: Markdown 源码保真与未知语法保护（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T28: 白色应用壳、路由与认证页（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T29: 产品级 Milkdown Editor Shell（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T30: 正文块与表格完整能力（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T31: 草稿、自动保存、检查点与冲突（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T32: Content-addressed 资产服务（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T33: 图片与附件块（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T34: Mermaid 独立图表块（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T35: Excalidraw 画布资产块（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T36: 随记工作流（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T37: 扁平知识库工作流（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T38: 知识库预览优先与编辑切换（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T39: SQLite FTS5 文档搜索（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T40: 大纲、真实反向链接与文档信息栏（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T41: 版本历史预览、差异与恢复（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T42: 全局视觉、字体、动效与响应式收口（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T43: M1.1 全链路测试与视觉验收（done 2026-11-20）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T44: M1.1 生产发布与全新数据初始化（done 2026-11-21）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T45: 移除仓库内 UI Review 截图归档（done 2026-11-19）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T46: 编辑器全宽、信息栏动效与块级图表插入（done 2026-11-21）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T47: 文档列表行操作与重命名（done 2026-11-21）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T48: 块操作菜单层级整理（done 2026-11-21）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T49: 工作区设置、空白画布保存与初始文档布局（done 2026-11-21）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T50: Markdown 源片段运行时接线（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T51: API 写入原子性与异常输入隔离（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T52: 认证可用性与登录限流（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T53: 最近文档与知识库原子排序（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T54: 前端架构净化与加载性能（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T55: 质量门禁、依赖与跨平台契约收口（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T56: 块操作手柄独立左侧操作槽（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T57: 文档列表与编辑器块视觉层级修复（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T58: 编辑器块节距与图表边缘插入（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T59: 删除文档后的列表缓存一致性（done 2026-11-24）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
+- T60: 提示块标签独立行布局（done 2026-11-23）→ [历史归档](./docs/archive/plan-2026-11-m1.md)
 
 ## 状态枚举
 
@@ -1129,4 +288,6 @@
 | M3     | 实时协作                                    | planned |
 | M4     | 移动端与 HarmonyOS                          | planned |
 
-技术背景见 [README.md](./README.md) 与 [产品与技术方案](./docs/PRODUCT_AND_ARCHITECTURE.md)，改码规则见 [AGENTS.md](./AGENTS.md)。
+技术背景见 [README.md](./README.md) 与
+[产品与技术方案](./docs/agents/product-and-architecture.md)，改码规则见
+[AGENTS.md](./AGENTS.md)。

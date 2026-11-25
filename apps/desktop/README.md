@@ -24,5 +24,5 @@ A desktop host will reuse the same:
 Platform-specific disk access belongs in `@inkloom/storage` adapters and Rust
 commands; React pages must not import native filesystem APIs directly.
 
-See [PRODUCT_AND_ARCHITECTURE.md](../../docs/PRODUCT_AND_ARCHITECTURE.md) and
+See [产品与技术方案](../../docs/agents/product-and-architecture.md) and
 [DEVELOP_PLAN.md](../../DEVELOP_PLAN.md).

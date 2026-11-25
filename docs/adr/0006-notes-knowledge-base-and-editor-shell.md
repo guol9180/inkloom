@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted — 2026-11-19.
 
 ## Context
 
@@ -18,9 +18,9 @@ architecture mismatches:
    but replacing Milkdown would weaken the Markdown-first guarantee.
 
 Detailed behavior is specified in
-[UX_AND_EDITOR_SPEC.md](../UX_AND_EDITOR_SPEC.md). Product and data architecture
+[UX_AND_EDITOR_SPEC.md](../agents/ux-and-editor-spec.md). Product and data architecture
 is specified in
-[PRODUCT_AND_ARCHITECTURE.md](../PRODUCT_AND_ARCHITECTURE.md).
+[PRODUCT_AND_ARCHITECTURE.md](../agents/product-and-architecture.md).
 
 ## Decision
 

@@ -226,8 +226,11 @@ clean commit -> CI tests/E2E -> immutable images -> deploy exact SHA
 - `.env` files are excluded from Docker build contexts; only `.env.example` may be committed.
 - Docker group access is treated as root-equivalent. Deployment credentials must not be reused for personal or unrelated administration.
 - Review package visibility before publishing proprietary artifacts. Public image packages must not contain secrets or non-public data.
-- Run `pnpm audit --prod` before every release and record unresolved transitive issues.
-- Current audit residual is one high `picomatch` ReDoS in Excalidraw's Sass build-only dependency chain and one low nested KaTeX advisory. Verify the vulnerable watcher chain is absent from `apps/web/dist`; the API runtime has no such dependency.
+- Run `pnpm audit --prod` before every release and record unresolved transitive
+  issues in the active release task.
+- The last M1.1 quality gate recorded no known production dependency
+  vulnerabilities. Re-run the audit for every new lockfile or image release;
+  do not carry this result forward as a standing guarantee.
 
 ## Local Development
 

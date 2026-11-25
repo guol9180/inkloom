@@ -1,95 +1,37 @@
 # InkLoom Session Handoff
 
-## Reading Order
+## Start
 
-1. [README.md](./README.md): product snapshot, structure and commands.
-2. [AGENTS.md](./AGENTS.md): engineering rules and package boundaries.
-3. [DEVELOP_PLAN.md](./DEVELOP_PLAN.md): current task, scope and acceptance.
-4. [PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md): product,
-   data, API and host architecture.
-5. [UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md): canonical editor and
-   interaction design.
-6. [DEPLOYMENT.md](./docs/DEPLOYMENT.md): production release, backup and rollback.
+按 [README.md](./README.md) 了解产品与启动方式，按
+[AGENTS.md](./AGENTS.md) 获取开发约束，并从
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md) 选择已确认任务。详细产品、编辑器和部署
+规则只在专题文档维护，本文件不复制。
 
 ## Current State
 
-- Product: InkLoom, English-only visible brand text.
-- Web: `https://inkloom.imhgl.com`.
-- API: `https://api.inkloom.imhgl.com`.
-- Repository: `https://github.com/guol9180/inkloom`, branch `main`.
-- Production application release:
-  `5824e4691a3498fb2c1967a190f5a602ec968116`.
-- Current production is the completed M1.1 product-grade editor and knowledge
-  workflow.
-- The current release update preserved the existing production data and did not
-  perform a migration or reset.
-- The source tree also contains a WIP Tauri desktop scaffold. Desktop is parked
-  and must not enter the Web release image.
-
-M1.1 and the post-release editor refinements are complete. T25–T61 are closed;
-the milestone state and verification evidence are recorded in
-[DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
-
-T49 adds real workspace settings, resilient blank-canvas saving, and the clean
-empty-document layout. It is deployed in the production release above.
-
-T50–T55 add the source-preserving Markdown merge, API/authentication hardening,
-recent-document and atomic knowledge-base ordering fixes, shared UI cleanup,
-strict quality gates, and dependency security updates. T56–T61 add the final
-editor layout, visual hierarchy, deletion consistency and frontmatter fidelity
-fixes. These changes are deployed in the production release above.
-
-## Locked Product Decisions
-
-- M1.1 implements Web only.
-- Future desktop, mobile, HarmonyOS and sync hosts retain adapter and command
-  entry points, but no future host implementation starts in M1.1.
-- Workspace navigation has two modes: Scratch and Knowledge.
-- Scratch notes are flat and directly editable.
-- The new button is integrated into the `+` menu to the right of search; there
-  is no separate scratch-note creation button.
-- Knowledge bases are directly created top-level containers.
-- Knowledge-base documents are flat Markdown files with no groups or nesting.
-- Knowledge-base documents open in preview by default and require explicit
-  editing.
-- Milkdown / ProseMirror remains the editor kernel; the product-level editor
-  shell and custom NodeViews are rebuilt around it.
-- The visual theme is white/near-white.
-- UI typography follows a Codex-like precise and restrained hierarchy using
-  Geist Sans, system Chinese fonts and Geist Mono.
-- All content loading uses layout-stable skeleton screens.
-- Content editing is autosave-only with IndexedDB drafts, serialized writes,
-  idle/max-interval checkpoints, conflict copies and one editor owner per tab.
-- Markdown source is canonical; unknown syntax and untouched source slices must
-  be preserved.
+- Production Web: `https://inkloom.imhgl.com`.
+- Production API: `https://api.inkloom.imhgl.com`.
+- Active release: `5824e4691a3498fb2c1967a190f5a602ec968116`.
+- M1.1 Web product-grade editor and knowledge workflow are deployed.
+- T62–T63 documentation governance and ADR alignment are complete; no product
+  implementation milestone is active.
+- Desktop, mobile, HarmonyOS, M2 synchronization and real-time collaboration
+  remain paused.
 
 ## Next Work
 
-There is no active development task after the T50–T61 quality remediation. The
-next milestone must be explicitly selected in
-[DEVELOP_PLAN.md](./DEVELOP_PLAN.md).
+Wait for the user to explicitly approve a new milestone. Do not resume desktop,
+M2, collaboration or mobile work based on the existence of scaffolds or
+placeholder contracts.
 
-Do not resume desktop, M2 synchronization, real-time collaboration or mobile
-work without explicit user confirmation.
+## Blocked Work
 
-## Verified Before Handoff
+- T4 desktop file workspace: WIP scaffold exists, but M1D is not approved.
+- T9 cross-platform adapter suite: shared contracts exist, but the OPFS, Tauri,
+  Harmony and Cloud host implementations belong to paused milestones.
 
-The last production check returned:
+## Verification
 
-```json
-{
-  "web": 200,
-  "api": 200,
-  "cors": 204,
-  "securityHeaders": true
-}
-```
-
-Final container and data checks:
-
-- `inkloom-api`, `inkloom-web` and `platform-edge` are healthy.
-- `inkloom-api` and `inkloom-web` are running the release SHA above.
-- The existing SQLite data volume was retained during this release.
-- API health, asset-upload CORS preflight, CSP, HSTS and frame-denial headers
-  passed independent production checks after release.
-- No OOM was observed after release.
+The deployed release, container/data retention and production checks are
+recorded in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md). Historical M1.1 evidence is in
+the [acceptance archive](./docs/archive/m1-1-acceptance-2026-11-21.md).

@@ -2,81 +2,54 @@
 
 ## 通用规范（必建五条）
 
-1. **复用优先，不过度设计**：同一逻辑或结构出现第二份副本时，立即抽取为公共函数 / 公共样式 / 公共组件；前端页面表现优先组件化；保证代码质量，不为假想的未来需求预先抽象。
-2. **文档同步**：DEVELOP_PLAN.md 随任务同步（进度只追加、状态如实流转）；AGENTS.md 仅在开发规范变化时更新；README.md 仅在项目定位、结构、用法或环境变化时更新——新增功能默认只记录在 DEVELOP_PLAN.md，不逐条追加进 README，README 不是变更日志。文档与代码不同步视为任务未完成。
-3. **计划执行分离**：动手前先在 DEVELOP_PLAN.md 建任务卡（目标、验收标准、边界）并确认；执行中不得顺手扩范围，需求或范围变化先回任务卡更新，再改代码。
+1. **复用优先，不过度设计**：同一逻辑或结构出现第二份副本时，立即抽取为公共函数 / 公共样式 / 公共组件；前端表现层优先组件化；不牺牲可读性、可测性与可维护性，不为假想的未来需求预先抽象。
+2. **文档同步**：DEVELOP_PLAN.md 逐任务更新（进度只追加、状态如实流转）；AGENTS.md 仅当开发规范变化时更新；README.md 仅当项目定位、结构、用法或环境变化时更新——新增功能默认只记录在 DEVELOP_PLAN.md，不逐条追加进 README，README 不是变更日志。文档与代码不同步视为任务未完成。
+3. **计划执行分离**：动手前先在 DEVELOP_PLAN.md 建任务卡（目标、验收标准、边界）并经确认；执行中不得自行扩大任务范围，需求或范围变化先更新任务卡，再改代码。
 4. **诚实终态**：声明完成必须附实际产出文件与验证证据（执行了什么、结果如何）；未运行的测试或验证不得声称通过；受阻时如实标注 blocked 并写明原因与可否绕行。
-5. **精准修改**：每一行改动都必须能追溯到当前任务；不顺手改进相邻代码、注释或格式，不重构没坏的东西，匹配现有风格；只清理因本次改动产生的孤儿代码（本次改动使其失效的导入 / 变量 / 函数）；发现既有死代码提及而不删，除非任务明确要求。注释只写代码装不下的信息（业务约束、非显然决策、坑位规避），不写修改叙事、阶段引用、代码复述。
+5. **精准修改**：每一行改动都必须能追溯到当前任务；不顺手改进相邻代码、注释或格式，不重构与当前任务无关的代码，也不动没坏的东西，匹配现有风格；只清理本次改动造成的孤儿代码（本次改动导致失效的导入 / 变量 / 函数）；发现既有死代码提及而不删，除非任务明确要求；注释只写代码装不下的信息（业务约束、非显然决策、坑位规避），不写改动叙事、阶段引用、代码复述。
 
 ## 单一事实源
 
 - 项目定位、功能快照、运行方式和环境要求：`README.md`
-- 产品原则、架构、数据模型和技术取舍：`docs/PRODUCT_AND_ARCHITECTURE.md`
-- Web 信息架构、编辑器、视觉、动效、响应式和交互验收：`docs/UX_AND_EDITOR_SPEC.md`
+- 产品原则、架构、数据模型和技术取舍：`docs/agents/product-and-architecture.md`
+- 数据模型、API 契约和搜索：`docs/agents/data-and-api.md`
+- 编辑器分层和 Markdown 能力边界：`docs/agents/editor-architecture.md`
+- Web 信息架构、编辑器、视觉、动效、响应式和交互验收：
+  `docs/agents/ux-and-editor-spec.md`
+- 安全基线和性能目标：`docs/agents/security-and-performance.md`
 - 任务范围、状态和验收：`DEVELOP_PLAN.md`
 - 下个会话的接手步骤：`HANDOFF.md`
-- 部署域名、子域和环境变量：`docs/DEPLOYMENT.md`
+- 部署域名、子域和环境变量：`docs/agents/deployment.md`
 
 不得在上述文件之间复制整段内容；需要时使用相对链接。
 
-## 目录与依赖方向
+## 仓库边界
 
-```text
-apps/web ─┐
-          ├─> packages/ui ─> packages/core
-apps/desktop ┤
-apps/mobile-tauri ┤
-apps/harmony ┘
+- `packages/core` 必须保持平台无关；packages 不得依赖 apps；跨包引用必须使用
+  `@inkloom/*` 包名，禁止相对路径穿透包边界。
+- 完整依赖方向见
+  [产品与技术方案 · Repository and Dependency Direction](./docs/agents/product-and-architecture.md#5-repository-and-dependency-direction)，
+  决策历史见 [ADR 0004](./docs/adr/0004-package-boundaries.md) 和
+  [ADR 0007](./docs/adr/0007-desktop-scaffold-ordering-exception.md)。
 
-apps/* ─> packages/editor
-apps/* ─> packages/diagrams
-apps/* ─> packages/storage
-apps/* ─> packages/sync
-services/api ─> packages/core
-```
+## 当前交付边界
 
-- `packages/core` 保持平台无关，不直接导入 React、Tauri、Node、DOM API。
-- `packages/storage` 只定义 adapter 与领域接口；Tauri、OPFS、File System Access 和 Cloud 实现分别注入。
-- `packages/editor` 不直接访问磁盘、数据库或网络。
-- `packages/diagrams` 按需加载 Mermaid 与 Excalidraw，禁止进入 Web 首屏主 chunk。
-- `services/api` 不导入浏览器包。
-- 跨包引用使用 `@inkloom/*` 包名，禁止相对路径穿透包边界。
-- ArkUI 原生页面不得直接操作 Markdown 文档；通过 ArkWeb 编辑器和版本化 Bridge 访问。
-- Tauri Android/iOS 与桌面端必须复用 storage/sync adapter，不复制业务逻辑。
-
-## 当前交付与扩展边界
-
-- M1.1 只实现 Web 端；桌面、移动、HarmonyOS 和实时协作保持暂停。
-- 当前只保留未来 host 的领域、adapter、revision、asset 和命令接入口，不为尚未出现的第二实现预先拆包。
-- 随记、知识库、文档生命周期、逻辑路径和 revision 语义属于平台无关领域，不得写死在前端页面。
-- Web 页面通过 Cloud adapter 访问数据；未来 Tauri、移动和 Harmony 通过相同契约注入各自 adapter。
-- 编辑器命令注册表必须与工具栏、斜杠菜单和快捷键共用同一套命令定义。
-- 主文档编辑器使用 Milkdown / ProseMirror；CodeMirror 只允许进入代码块和图表源码节点。
-- 图片、附件、Excalidraw 场景和 SVG 预览必须采用 content-addressed asset 契约，不把二进制或大 JSON 放入 Markdown 正文。
-- API 错误码、revision 冲突和 write contract 必须可被未来非 Web host 直接复用。
+- 当前只交付 Web；桌面、移动、HarmonyOS 和实时协作必须先在
+  [DEVELOP_PLAN.md](./DEVELOP_PLAN.md) 获准新任务卡后才能开始。
+- 新增 host 必须复用既有领域契约、adapter、revision、asset 与命令接入口，不得分叉 Markdown 或业务语义。
+- 产品边界和架构理由见
+  [产品与技术方案](./docs/agents/product-and-architecture.md)；编辑器实现约束见
+  [UX 与编辑器规范](./docs/agents/ux-and-editor-spec.md)。
 
 ## 移动平台约束
 
-- `WorkspacePath` 是逻辑路径；Android URI、iOS security-scoped URL 和 Harmony sandbox 绝对路径不得进入共享状态。
-- `PlatformCapabilities` 是能力判断的唯一来源，禁止通过 user-agent 猜测平台能力。
-- Bridge 请求必须带 `PLATFORM_BRIDGE_VERSION`、request id、method 白名单和 JSON-safe payload。
-- 原生句柄、文件描述符、数据库对象不得跨 Bridge 传给 JavaScript。
-- 所有写入都携带 `baseRevision`；冲突必须返回 `RevisionConflictError` 等价错误。
-- Harmony ArkWeb 特权调用必须校验来源 URL；耗时操作使用异步代理。
-- 移动端进入网络同步前先完成本地持久化，必须能恢复被系统终止的编辑。
-- 新增 adapter 必须通过统一的 adapter contract tests 后才能声明平台支持。
+未来 host 工作开始前必须遵守
+[移动平台约束](./docs/agents/mobile-platform.md)。
 
 ## 代码风格
 
-- TypeScript 默认 `strict: true`，不使用无说明的 `any`。
-- React 组件使用 PascalCase；hooks 使用 `useXxx`；领域文件使用 kebab-case。
-- Markdown AST、文档 ID、路径和 revision 类型集中在 `packages/core`。
-- 所有文件路径先在领域层标准化；UI 不拼接磁盘绝对路径。
-- 样式 token 统一放在 `packages/ui`，页面不得重复定义品牌色和字体。
-- 白色主题、Geist 字体、圆角、阴影和动效参数必须来自语义 token，页面不得写任意品牌色。
-- 按钮、菜单、弹窗和骨架屏必须实现 hover、focus-visible、pressed、disabled、loading 等适用状态。
-- 动画优先使用 `transform` 与 `opacity`，并支持 `prefers-reduced-motion`。
-- 新增第三方依赖前先说明体积、许可证和安全影响。
+TypeScript `strict`、命名、领域类型归属、设计 token、交互状态、动效和依赖审查细则见
+[代码风格](./docs/agents/code-style.md)。
 
 ## 流程要求
 
@@ -105,4 +78,19 @@ services/api ─> packages/core
 - 禁止绕过 Bridge 白名单直接暴露 native 方法给网页。
 - 禁止提交 `node_modules/`、构建缓存、密钥或真实用户文档。
 
-项目背景见 [README.md](./README.md)，当前任务见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)。
+## 专题文档
+
+- [产品与技术方案](./docs/agents/product-and-architecture.md)
+- [数据与 API](./docs/agents/data-and-api.md)
+- [编辑器架构](./docs/agents/editor-architecture.md)
+- [UX 与编辑器规范](./docs/agents/ux-and-editor-spec.md)
+- [安全与性能](./docs/agents/security-and-performance.md)
+- [代码风格](./docs/agents/code-style.md)
+- [移动平台约束](./docs/agents/mobile-platform.md)
+- [部署手册](./docs/agents/deployment.md)
+- [架构决策记录](./docs/adr/)
+- [M1.1 历史任务归档](./docs/archive/plan-2026-11-m1.md)
+- [M1.1 历史验收报告](./docs/archive/m1-1-acceptance-2026-11-21.md)
+
+项目背景见 [README.md](./README.md)，当前任务见
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md)。

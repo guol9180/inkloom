@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted.
+Superseded by [ADR 0007](./0007-desktop-scaffold-ordering-exception.md).
+
+- Accepted: 2026-11-13
+- Superseded: 2026-11-24
 
 ## Decision
 

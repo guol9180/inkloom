@@ -83,9 +83,9 @@ semantics.
 - Node.js 22, SQLite WAL, SQLite FTS5 and content-addressed assets.
 
 The product and architecture rationale is in
-[PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md). Detailed
-editor, UI, motion, typography, save and responsive behavior is in
-[UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md).
+[product-and-architecture.md](./docs/agents/product-and-architecture.md).
+Detailed editor, UI, motion, typography, save and responsive behavior is in
+[ux-and-editor-spec.md](./docs/agents/ux-and-editor-spec.md).
 
 ## Quick Start
 
@@ -126,19 +126,30 @@ pnpm test:e2e
 ```
 
 Additional environment details are in [.env.example](./.env.example) and
-[DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+[deployment.md](./docs/agents/deployment.md).
 
 ## Documentation
 
-- [START_HERE.md](./START_HERE.md): reading order and next task.
 - [AGENTS.md](./AGENTS.md): engineering rules and package boundaries.
 - [DEVELOP_PLAN.md](./DEVELOP_PLAN.md): tasks, progress and acceptance.
 - [HANDOFF.md](./HANDOFF.md): current state and handoff instructions.
-- [PRODUCT_AND_ARCHITECTURE.md](./docs/PRODUCT_AND_ARCHITECTURE.md): product,
-  data, API and host architecture.
-- [UX_AND_EDITOR_SPEC.md](./docs/UX_AND_EDITOR_SPEC.md): detailed Web and editor
+- [product-and-architecture.md](./docs/agents/product-and-architecture.md):
+  product scope, technical stack, repository and host boundaries.
+- [data-and-api.md](./docs/agents/data-and-api.md): data model, API contracts
+  and search.
+- [editor-architecture.md](./docs/agents/editor-architecture.md): editor
+  layering and Markdown boundaries.
+- [ux-and-editor-spec.md](./docs/agents/ux-and-editor-spec.md): detailed Web and editor
   experience specification.
-- [DEPLOYMENT.md](./docs/DEPLOYMENT.md): production domains, release and rollback.
+- [security-and-performance.md](./docs/agents/security-and-performance.md):
+  security baseline and performance targets.
+- [code-style.md](./docs/agents/code-style.md): coding conventions and
+  dependency constraints.
+- [deployment.md](./docs/agents/deployment.md): production domains, release and
+  rollback.
+- [docs/adr](./docs/adr/): accepted and superseded architecture decisions.
+- [CONTRIBUTING.md](./CONTRIBUTING.md): contribution entry point.
+- [SECURITY.md](./SECURITY.md): vulnerability reporting and supported scope.
 
 ## License
 

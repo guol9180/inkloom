@@ -17,7 +17,7 @@ M1.1 is now being planned and implemented from
 - White/near-white responsive UI from 320px to 2560px.
 
 The detailed behavior is in
-[UX_AND_EDITOR_SPEC.md](../../docs/UX_AND_EDITOR_SPEC.md).
+[UX 与编辑器规范](../../docs/agents/ux-and-editor-spec.md).
 
 ## Run
 

@@ -74,4 +74,4 @@ component. Do not generate raster logo alternatives.
 - `apps/web/src/components/brand-mark.tsx`
 
 Detailed visual and interaction requirements are in
-[docs/UX_AND_EDITOR_SPEC.md](../docs/UX_AND_EDITOR_SPEC.md).
+[UX 与编辑器规范](../docs/agents/ux-and-editor-spec.md).

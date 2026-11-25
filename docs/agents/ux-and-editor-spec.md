@@ -1,12 +1,15 @@
 # InkLoom UX and Editor Specification
 
-版本：1.0  
-日期：2026-11-19  
-状态：M1.1 implementation baseline
+版本：1.0
+
+日期：2026-11-24
+
+状态：M1.1 production baseline
 
 本文是 Web 端产品交互、编辑器行为、视觉系统和响应式体验的单一事实源。高层产品模型、数据架构和平台边界见
-[PRODUCT_AND_ARCHITECTURE.md](./PRODUCT_AND_ARCHITECTURE.md)，任务状态与验收见
-[DEVELOP_PLAN.md](../DEVELOP_PLAN.md)，工程约束见 [AGENTS.md](../AGENTS.md)。
+[product-and-architecture.md](./product-and-architecture.md)，任务状态与验收见
+[DEVELOP_PLAN.md](../../DEVELOP_PLAN.md)，工程约束见
+[AGENTS.md](../../AGENTS.md)。
 
 ## 1. Scope
 

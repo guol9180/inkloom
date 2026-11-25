@@ -27,4 +27,4 @@ pnpm --filter @inkloom/api start
 | `INKLOOM_WEB_ORIGINS`       | 逗号分隔的允许 Web Origin                            |
 | `INKLOOM_SECURE_COOKIES`    | 非生产环境显式启用 Secure Cookie                     |
 
-生产环境设置 `NODE_ENV=production`，Cookie 名会自动使用 `__Host-` 前缀。API 域名和反向代理配置见 [部署文档](../../docs/DEPLOYMENT.md)。
+生产环境设置 `NODE_ENV=production`，Cookie 名会自动使用 `__Host-` 前缀。API 域名和反向代理配置见 [部署文档](../../docs/agents/deployment.md)。
