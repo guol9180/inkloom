@@ -13,7 +13,7 @@
 - Production API: `https://api.inkloom.imhgl.com`.
 - Active release: `5824e4691a3498fb2c1967a190f5a602ec968116`.
 - M1.1 Web product-grade editor and knowledge workflow are deployed.
-- T62–T63 documentation governance and ADR alignment are complete; no product
+- T62–T64 documentation governance, ADR alignment and push are complete; no product
   implementation milestone is active.
 - Desktop, mobile, HarmonyOS, M2 synchronization and real-time collaboration
   remain paused.
