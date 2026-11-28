@@ -39,3 +39,10 @@ Engineering requirements:
 - Use cursor pagination for document and search lists.
 - Use skeleton screens with stable dimensions.
 - Avoid layout thrash during editor and drawer transitions.
+- Prefetch the lazy editor only after the workspace shell is idle or a document
+  row is hovered or focused.
+- Render Mermaid diagrams only after their node approaches the viewport.
+- Enforce gzip bundle budgets during `pnpm build`: entry 100 KB, workspace
+  140 KB, editor shell 90 KB, rich editor 280 KB and auth 60 KB.
+- Run Playwright axe checks for login, empty workspace and editor screens with
+  zero serious or critical WCAG A/AA violations.

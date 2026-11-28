@@ -15,7 +15,7 @@ import { extractHeadings, type MarkdownHeading } from "@inkloom/editor";
 import type { DocumentSnapshot, WorkspaceId } from "@inkloom/core";
 import type { CloudDocumentContext, CloudDocumentLink } from "@inkloom/storage";
 import { cloudClient } from "../../cloud-workspace";
-import { Skeleton } from "@inkloom/ui";
+import { AppSheet, IconButton, Skeleton, useMediaQuery } from "@inkloom/ui";
 
 export function DocumentContextPanel({
   open,
@@ -34,6 +34,7 @@ export function DocumentContextPanel({
   onNavigate: (link: CloudDocumentLink) => void;
   onOpenHistory: () => void;
 }) {
+  const mobile = useMediaQuery("(max-width: 1023px)");
   const context = useQuery({
     queryKey: [
       "document-context",
@@ -51,6 +52,69 @@ export function DocumentContextPanel({
   });
   const outline = useMemo(() => extractHeadings(markdown), [markdown]);
 
+  const header = (
+    <div className="flex min-h-14 items-center justify-between border-b border-line-soft px-4">
+      <div>
+        <span className="block text-[0.75rem] font-semibold tracking-[0.08em] text-ink-500">
+          文档
+        </span>
+        <strong className="mt-0.5 block text-sm font-semibold text-ink-900">
+          文档信息
+        </strong>
+      </div>
+      <IconButton aria-label="关闭信息栏" onClick={onClose}>
+        <X size={16} />
+      </IconButton>
+    </div>
+  );
+
+  const body = (
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      <ContextSection icon={<BookOpen size={14} />} title="大纲">
+        <Outline
+          headings={outline}
+          onSelect={(index) => scrollToHeading(index)}
+        />
+      </ContextSection>
+
+      {context.isPending ? (
+        <div className="grid gap-2 py-3">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className="h-10 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : context.isError ? (
+        <div className="m-2 rounded-xl bg-danger-50 px-3 py-3 text-xs leading-5 text-danger-700">
+          文档上下文暂时无法加载，正文仍可正常阅读和编辑。
+        </div>
+      ) : (
+        <ContextContent
+          context={context.data}
+          onNavigate={onNavigate}
+          onOpenHistory={onOpenHistory}
+        />
+      )}
+    </div>
+  );
+
+  if (mobile) {
+    return (
+      <AppSheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        title="文档信息"
+        side="right"
+        showHeader={false}
+        bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        {header}
+        {body}
+      </AppSheet>
+    );
+  }
+
   return (
     <div
       role="complementary"
@@ -58,57 +122,14 @@ export function DocumentContextPanel({
       aria-hidden={!open}
       data-state={open ? "open" : "closed"}
       inert={!open}
-      className={`absolute inset-y-0 right-0 z-40 flex w-[min(90vw,20rem)] shrink-0 flex-col overflow-hidden border-l bg-white/97 backdrop-blur-xl transition-[width,transform,opacity,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform,opacity] lg:relative lg:z-10 lg:shadow-none ${
+      className={`relative z-10 flex shrink-0 flex-col overflow-hidden bg-white/97 backdrop-blur-xl transition-[width,opacity,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,opacity] ${
         open
-          ? "translate-x-0 border-line-soft opacity-100 shadow-[-18px_0_50px_rgb(28_45_36_/_0.1)] lg:w-[19rem] xl:w-[20rem]"
-          : "pointer-events-none translate-x-full border-transparent opacity-0 lg:w-0 lg:translate-x-0 lg:border-l-0"
+          ? "w-[19rem] border-l border-line-soft opacity-100 xl:w-[20rem]"
+          : "pointer-events-none w-0 border-transparent opacity-0"
       }`}
     >
-      <div className="flex min-h-14 items-center justify-between border-b border-line-soft px-4">
-        <div>
-          <span className="block text-[0.64rem] font-bold tracking-[0.12em] text-ink-300 uppercase">
-            Document
-          </span>
-          <strong className="mt-0.5 block text-sm font-semibold text-ink-900">
-            文档信息
-          </strong>
-        </div>
-        <button
-          type="button"
-          className="grid size-9 place-items-center rounded-xl text-ink-400 transition hover:bg-canvas hover:text-ink-800 focus-visible:ring-4 focus-visible:ring-brand-100"
-          aria-label="关闭信息栏"
-          onClick={onClose}
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        <ContextSection icon={<BookOpen size={14} />} title="大纲">
-          <Outline
-            headings={outline}
-            onSelect={(index) => scrollToHeading(index)}
-          />
-        </ContextSection>
-
-        {context.isPending ? (
-          <div className="grid gap-2 py-3">
-            {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-10 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : context.isError ? (
-          <div className="m-2 rounded-xl bg-danger-50 px-3 py-3 text-xs leading-5 text-danger-700">
-            文档上下文暂时无法加载，正文仍可正常阅读和编辑。
-          </div>
-        ) : (
-          <ContextContent
-            context={context.data}
-            onNavigate={onNavigate}
-            onOpenHistory={onOpenHistory}
-          />
-        )}
-      </div>
+      {header}
+      {body}
     </div>
   );
 }
@@ -167,14 +188,14 @@ function ContextContent({
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <strong className="block truncate text-[0.68rem] font-semibold text-ink-700">
+                <strong className="block truncate text-[0.75rem] font-semibold text-ink-700">
                   {asset.kind === "excalidraw"
                     ? "Excalidraw 场景"
                     : asset.kind === "svg"
                       ? "SVG 预览"
                       : asset.mime}
                 </strong>
-                <small className="text-[0.6rem] text-ink-400">
+                <small className="text-[0.68rem] text-ink-500">
                   {formatBytes(asset.size)}
                 </small>
               </span>
@@ -199,7 +220,7 @@ function ContextContent({
             >
               <span className="size-1.5 rounded-full bg-brand-500" />
               <span className="flex-1">revision {revision.meta.revision}</span>
-              <time className="text-[0.6rem] text-ink-400">
+              <time className="text-[0.68rem] text-ink-500">
                 {formatDateTime(revision.recordedAt)}
               </time>
             </button>
@@ -211,7 +232,7 @@ function ContextContent({
       </ContextSection>
 
       <ContextSection icon={<Info size={14} />} title="属性">
-        <dl className="grid gap-2 px-2 text-[0.66rem]">
+        <dl className="grid gap-2 px-2 text-[0.75rem]">
           <Property label="路径" value={context.document.path} />
           <Property
             label="revision"
@@ -252,8 +273,8 @@ function Outline({
               : heading.depth === 2
                 ? "pl-5"
                 : heading.depth === 3
-                  ? "pl-8 text-[0.69rem]"
-                  : "pl-10 text-[0.66rem]"
+                  ? "pl-8 text-[0.75rem]"
+                  : "pl-10 text-[0.75rem]"
           }`}
           onClick={() => onSelect(index)}
         >
@@ -290,14 +311,16 @@ function LinkList({
         >
           <span className="flex items-center gap-2">
             <FileText size={13} className="shrink-0" />
-            <strong className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold">
+            <strong className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold">
               {link.title}
             </strong>
             {link.broken && (
-              <span className="text-[0.62rem] font-bold uppercase">断链</span>
+              <span className="text-[0.75rem] font-semibold text-danger-700">
+                断链
+              </span>
             )}
           </span>
-          <small className="mt-0.5 line-clamp-2 block text-[0.6rem] leading-4 opacity-70">
+          <small className="mt-0.5 line-clamp-2 block text-[0.68rem] leading-4 text-ink-500">
             {link.snippet}
           </small>
         </button>
@@ -319,11 +342,11 @@ function ContextSection({
 }) {
   return (
     <section className="border-b border-line-soft py-3 last:border-0">
-      <h3 className="mb-2 flex items-center gap-2 px-2 text-[0.65rem] font-bold tracking-[0.06em] text-ink-500 uppercase">
+      <h3 className="mb-2 flex items-center gap-2 px-2 text-[0.75rem] font-semibold text-ink-500">
         {icon}
         {title}
         {count !== undefined && (
-          <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand-100 px-1.5 py-0.5 text-[0.62rem] text-brand-700">
+          <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand-100 px-1.5 py-0.5 text-[0.75rem] text-brand-700">
             {count}
           </span>
         )}

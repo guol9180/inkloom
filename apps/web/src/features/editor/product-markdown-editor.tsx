@@ -8,11 +8,42 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type ComponentProps,
   type FormEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
+  type DragStartEvent
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from "@dnd-kit/sortable";
+import {
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useFloating,
+  type VirtualElement
+} from "@floating-ui/react";
+import { Command } from "cmdk";
+import { useDropzone } from "react-dropzone";
 import {
   Bold,
   Code2,
@@ -33,6 +64,7 @@ import {
   ListOrdered,
   MessageSquareText,
   Minus,
+  MoreHorizontal,
   Network,
   Paperclip,
   Pilcrow,
@@ -53,10 +85,16 @@ import {
 } from "lucide-react";
 import {
   AppDialog,
+  AppProgress,
+  AppTooltip,
   Button,
   FieldLabel,
+  FullscreenDialog,
   IconButton,
-  TextInput
+  TextInput,
+  ToolbarButton,
+  ToolbarRoot,
+  ToolbarSeparator
 } from "@inkloom/ui";
 import type {
   RichMarkdownEditorHandle,
@@ -100,8 +138,36 @@ const RichMarkdownEditor = lazy(() =>
     default: module.RichMarkdownEditor
   }))
 );
+const ImageLightbox = lazy(() =>
+  import("./image-lightbox").then((module) => ({
+    default: module.ImageLightbox
+  }))
+);
 
 const DIAGRAM_EDGE_HIT_PX = 20;
+const PRIMARY_TOOLBAR_IDS = new Set([
+  "undo",
+  "redo",
+  "paragraph",
+  "heading-1",
+  "heading-2",
+  "bold",
+  "italic",
+  "strike",
+  "bullet-list",
+  "ordered-list",
+  "task-list",
+  "link",
+  "image",
+  "quote",
+  "table"
+]);
+const PRIMARY_TOOLBAR_COMMANDS = TOOLBAR_COMMANDS.filter((command) =>
+  PRIMARY_TOOLBAR_IDS.has(command.id)
+);
+const MORE_TOOLBAR_COMMANDS = TOOLBAR_COMMANDS.filter(
+  (command) => !PRIMARY_TOOLBAR_IDS.has(command.id)
+);
 
 type BlockHandle = {
   index: number;
@@ -115,10 +181,7 @@ type BlockHandle = {
   toggleOpen?: boolean;
 };
 
-type FloatingPosition = {
-  top: number;
-  left: number;
-};
+type FloatingSelection = { range: Range };
 
 type ProductUploadTask = AssetUploadTask & {
   replaceBlockIndex?: number;
@@ -170,23 +233,14 @@ export const ProductMarkdownEditor = forwardRef<
   const [blockType, setBlockType] = useState<MarkdownBlockType>("paragraph");
   const [tableHeader, setTableHeader] = useState(false);
   const [handles, setHandles] = useState<BlockHandle[]>([]);
-  const [draggingIndex, setDraggingIndex] = useState<number>();
   const [dropIndex, setDropIndex] = useState<number>();
+  const dropIndexRef = useRef<number | undefined>(undefined);
+  const [keyboardDragging, setKeyboardDragging] = useState(false);
   const [openMenuIndex, setOpenMenuIndex] = useState<number>();
-  const pointerDragRef = useRef<
-    | {
-        from: number;
-        pointerId: number;
-        startY: number;
-        moved: boolean;
-      }
-    | undefined
-  >(undefined);
-  const [selection, setSelection] = useState<FloatingPosition>();
+  const [selection, setSelection] = useState<FloatingSelection>();
   const [slash, setSlash] = useState<{
-    position: FloatingPosition;
+    range: Range;
     query: string;
-    activeIndex: number;
   }>();
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
@@ -198,14 +252,111 @@ export const ProductMarkdownEditor = forwardRef<
   const [toggleSummaryError, setToggleSummaryError] = useState("");
   const [uploads, setUploads] = useState<ProductUploadTask[]>([]);
   const [imagePreview, setImagePreview] = useState<string>();
-  const [replaceImageIndex, setReplaceImageIndex] = useState<number>();
   const [canvasEditor, setCanvasEditor] = useState<CanvasEditorState>();
   const [legacyCanvasError, setLegacyCanvasError] = useState("");
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const replaceImageIndexRef = useRef<number | undefined>(undefined);
   const uploadControllersRef = useRef(new Map<string, AbortController>());
   const legacyCanvasMigrationRef = useRef("");
   const hasDocumentContent = handles.some((handle) => !handle.empty);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  );
+  const selectionFloating = useFloating({
+    placement: "top",
+    strategy: "fixed",
+    middleware: [offset(8), flip(), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate
+  });
+  const slashFloating = useFloating({
+    placement: "bottom-start",
+    strategy: "fixed",
+    middleware: [offset(8), flip(), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate
+  });
+  const selectionReference = useMemo<VirtualElement | undefined>(
+    () =>
+      selection
+        ? {
+            getBoundingClientRect: () =>
+              selection.range.getBoundingClientRect(),
+            contextElement: rootRef.current ?? undefined
+          }
+        : undefined,
+    [selection]
+  );
+  const slashReference = useMemo<VirtualElement | undefined>(
+    () =>
+      slash
+        ? {
+            getBoundingClientRect: () => slash.range.getBoundingClientRect(),
+            contextElement: rootRef.current ?? undefined
+          }
+        : undefined,
+    [slash]
+  );
+  const editorDropzone = useDropzone({
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+    noDragEventsBubbling: true,
+    onDrop: (files) => enqueueFiles(files)
+  });
+  const imageDropzone = useDropzone({
+    accept: {
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/gif": [".gif"],
+      "image/webp": [".webp"],
+      "image/avif": [".avif"],
+      "image/svg+xml": [".svg"]
+    },
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+    onDrop: (files) => {
+      enqueueFiles(files, "image", replaceImageIndexRef.current);
+      replaceImageIndexRef.current = undefined;
+    }
+  });
+  const attachmentDropzone = useDropzone({
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+    onDrop: (files) => enqueueFiles(files, "attachment")
+  });
+
+  useEffect(() => {
+    selectionFloating.refs.setPositionReference(selectionReference ?? null);
+  }, [selectionFloating.refs, selectionReference]);
+
+  useEffect(() => {
+    slashFloating.refs.setPositionReference(slashReference ?? null);
+  }, [slashFloating.refs, slashReference]);
+
+  useEffect(() => {
+    if (!keyboardDragging) return;
+    const moveTarget = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const visible = handles.filter((handle) => handle.visible);
+      const current = dropIndexRef.current;
+      const currentPosition = visible.findIndex(
+        (handle) => handle.index === current
+      );
+      if (currentPosition < 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const next = visible[currentPosition + direction];
+      if (!next) return;
+      setDropIndex(next.index);
+      dropIndexRef.current = next.index;
+    };
+    window.addEventListener("keydown", moveTarget, true);
+    return () => window.removeEventListener("keydown", moveTarget, true);
+  }, [handles, keyboardDragging]);
 
   useImperativeHandle(
     ref,
@@ -376,10 +527,7 @@ export const ProductMarkdownEditor = forwardRef<
         setSelection(undefined);
         return;
       }
-      setSelection({
-        top: Math.max(8, rect.top - 48),
-        left: Math.max(8, rect.left + rect.width / 2)
-      });
+      setSelection({ range: activeSelection.getRangeAt(0).cloneRange() });
     }
     document.addEventListener("selectionchange", syncSelection);
     return () => document.removeEventListener("selectionchange", syncSelection);
@@ -400,24 +548,6 @@ export const ProductMarkdownEditor = forwardRef<
     () => filterSlashCommands(slash?.query ?? ""),
     [slash?.query]
   );
-
-  function targetBlockAt(clientY: number): number | undefined {
-    const handleLayer = handleLayerRef.current;
-    const visibleHandles = handles.filter((handle) => handle.visible);
-    if (!handleLayer || visibleHandles.length === 0) return undefined;
-    const layerTop = handleLayer.getBoundingClientRect().top;
-    let nearest = visibleHandles[0]!;
-    let distance = Number.POSITIVE_INFINITY;
-    for (const handle of visibleHandles) {
-      const center = layerTop + handle.top + handle.lineHeight / 2;
-      const nextDistance = Math.abs(clientY - center);
-      if (nextDistance < distance) {
-        nearest = handle;
-        distance = nextDistance;
-      }
-    }
-    return nearest.index;
-  }
 
   function focusDiagramBoundary(event: ReactPointerEvent<HTMLDivElement>) {
     if (readOnly || event.button !== 0) return;
@@ -555,12 +685,12 @@ export const ProductMarkdownEditor = forwardRef<
 
   function executeCommand(command: EditorCommandId) {
     if (command === "image") {
-      setReplaceImageIndex(undefined);
-      imageInputRef.current?.click();
+      replaceImageIndexRef.current = undefined;
+      imageDropzone.open();
       return;
     }
     if (command === "attachment") {
-      attachmentInputRef.current?.click();
+      attachmentDropzone.open();
       return;
     }
     if (command === "mermaid") {
@@ -602,74 +732,29 @@ export const ProductMarkdownEditor = forwardRef<
     window.requestAnimationFrame(syncHandles);
   }
 
+  function selectSlashCommand(command: EditorCommandId) {
+    executeCommand(command);
+    setSlash(undefined);
+    window.requestAnimationFrame(() => editorRef.current?.focus());
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (
-      (event.target as Element | null)?.closest(
-        ".inkloom-mermaid-view, .inkloom-canvas-view"
-      )
-    ) {
+    const target = event.target as Element | null;
+    if (target?.closest(".inkloom-mermaid-view, .inkloom-canvas-view")) {
+      return;
+    }
+    if (target?.closest("[data-slash-menu]")) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlash(undefined);
+        editorRef.current?.focus();
+      }
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "j") {
       event.preventDefault();
       onFocusSearch();
       return;
-    }
-    if (slash) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setSlash(undefined);
-        return;
-      }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const direction = event.key === "ArrowDown" ? 1 : -1;
-        setSlash((current) =>
-          current
-            ? {
-                ...current,
-                activeIndex:
-                  (current.activeIndex + direction + slashCommands.length) %
-                  Math.max(1, slashCommands.length)
-              }
-            : current
-        );
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const command = slashCommands[slash.activeIndex];
-        if (command) executeCommand(command.id);
-        setSlash(undefined);
-        return;
-      }
-      if (event.key === "Backspace" && slash.query.length > 0) {
-        event.preventDefault();
-        setSlash((current) =>
-          current
-            ? { ...current, query: current.query.slice(0, -1), activeIndex: 0 }
-            : current
-        );
-        return;
-      }
-      if (
-        event.key.length === 1 &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey
-      ) {
-        event.preventDefault();
-        setSlash((current) =>
-          current
-            ? {
-                ...current,
-                query: `${current.query}${event.key}`,
-                activeIndex: 0
-              }
-            : current
-        );
-        return;
-      }
     }
     for (const command of EDITOR_COMMANDS) {
       if (!commandShortcutMatches(command.id, event.nativeEvent)) continue;
@@ -679,12 +764,8 @@ export const ProductMarkdownEditor = forwardRef<
     }
     if (event.key === "/" && editorRef.current?.isCurrentBlockEmpty()) {
       event.preventDefault();
-      const position = currentCaretPosition();
-      setSlash({
-        position,
-        query: "",
-        activeIndex: 0
-      });
+      const range = currentCaretRange();
+      if (range) setSlash({ range, query: "" });
     }
   }
 
@@ -836,40 +917,91 @@ export const ProductMarkdownEditor = forwardRef<
     setUploads((current) => current.filter((task) => task.id !== taskId));
   }
 
+  function handleBlockDragStart(event: DragStartEvent) {
+    const index = Number(event.active.id);
+    if (!Number.isInteger(index)) return;
+    setKeyboardDragging(event.activatorEvent instanceof KeyboardEvent);
+    setOpenMenuIndex(undefined);
+    setDropIndex(index);
+    dropIndexRef.current = index;
+  }
+
+  function handleBlockDragOver(event: DragOverEvent) {
+    if (event.over) {
+      const index = Number(event.over.id);
+      setDropIndex(index);
+      dropIndexRef.current = index;
+    }
+  }
+
+  function handleBlockDragMove(event: DragMoveEvent) {
+    const from = Number(event.active.id);
+    const origin = handles.find((handle) => handle.index === from);
+    const layerTop = handleLayerRef.current?.getBoundingClientRect().top;
+    if (!origin || layerTop === undefined) return;
+    const centerY =
+      layerTop + origin.top + origin.lineHeight / 2 + event.delta.y;
+    let target = from;
+    let distance = Number.POSITIVE_INFINITY;
+    for (const handle of handles) {
+      if (!handle.visible) continue;
+      const nextDistance = Math.abs(
+        layerTop + handle.top + handle.lineHeight / 2 - centerY
+      );
+      if (nextDistance < distance) {
+        target = handle.index;
+        distance = nextDistance;
+      }
+    }
+    setDropIndex(target);
+    dropIndexRef.current = target;
+  }
+
+  function handleBlockDragEnd(event: DragEndEvent) {
+    const from = Number(event.active.id);
+    const to = event.over ? Number(event.over.id) : dropIndexRef.current;
+    setDropIndex(undefined);
+    dropIndexRef.current = undefined;
+    setKeyboardDragging(false);
+    if (
+      Number.isInteger(from) &&
+      to !== undefined &&
+      Number.isInteger(to) &&
+      to !== from
+    ) {
+      editorRef.current?.moveTopLevelBlock(from, to);
+    }
+    window.requestAnimationFrame(syncHandles);
+  }
+
   return (
     <div
-      ref={rootRef}
-      className="product-markdown-editor relative min-h-0"
-      data-reading-scale={readingScale}
-      data-empty-document={!hasDocumentContent}
-      onKeyDownCapture={readOnly ? undefined : handleKeyDown}
-      onPaste={(event) => {
-        if (readOnly) return;
-        const files = [...event.clipboardData.files];
-        if (files.length === 0) return;
-        event.preventDefault();
-        enqueueFiles(files);
-      }}
-      onDragOver={(event) => {
-        if (readOnly) return;
-        if ([...event.dataTransfer.types].includes("Files")) {
+      {...editorDropzone.getRootProps({
+        ref: rootRef,
+        className: "product-markdown-editor relative min-h-0",
+        "data-reading-scale": readingScale,
+        "data-empty-document": !hasDocumentContent,
+        onKeyDownCapture: readOnly ? undefined : handleKeyDown,
+        onPaste: (event: ReactClipboardEvent<HTMLDivElement>) => {
+          if (readOnly) return;
+          const files = [...event.clipboardData.files];
+          if (files.length === 0) return;
           event.preventDefault();
+          enqueueFiles(files);
+        },
+        onDoubleClick: (event: ReactMouseEvent<HTMLDivElement>) => {
+          const image = (event.target as Element | null)?.closest("img");
+          if (image instanceof HTMLImageElement && image.src) {
+            setImagePreview(image.src);
+          }
         }
-      }}
-      onDrop={(event) => {
-        if (readOnly) return;
-        const files = [...event.dataTransfer.files];
-        if (files.length === 0) return;
-        event.preventDefault();
-        enqueueFiles(files);
-      }}
-      onDoubleClick={(event) => {
-        const image = (event.target as Element | null)?.closest("img");
-        if (image instanceof HTMLImageElement && image.src) {
-          setImagePreview(image.src);
-        }
-      }}
+      })}
     >
+      {editorDropzone.isDragActive && !readOnly && (
+        <div className="pointer-events-none absolute inset-3 z-[110] grid place-items-center rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50/90 text-sm font-semibold text-brand-800 backdrop-blur-sm">
+          松开以插入文件
+        </div>
+      )}
       {legacyCanvasError && (
         <div
           className="mx-[clamp(1.25rem,5vw,4.5rem)] mt-4 rounded-xl border border-sun-200 bg-sun-50 px-3 py-2 text-xs text-sun-700"
@@ -879,14 +1011,13 @@ export const ProductMarkdownEditor = forwardRef<
         </div>
       )}
       {!readOnly && (
-        <div
-          className="sticky top-14 z-30 flex min-h-12 items-center gap-1 overflow-x-auto border-b border-line-soft bg-white/96 px-3 py-1.5 backdrop-blur-md"
-          role="toolbar"
+        <ToolbarRoot
+          className="sticky top-12 z-30 flex min-h-11 items-center gap-1 overflow-x-auto border-b border-line-soft bg-paper/96 px-2.5 py-1.5 backdrop-blur-md"
           aria-label="文档格式"
         >
           {blockType === "table" ? (
             <>
-              <span className="mx-1 shrink-0 text-[0.62rem] font-bold tracking-[0.08em] text-ink-400 uppercase">
+              <span className="mx-1 shrink-0 text-[0.75rem] font-semibold text-ink-500">
                 表格
               </span>
               <TableToolbarButton
@@ -902,7 +1033,7 @@ export const ProductMarkdownEditor = forwardRef<
                 action="delete-row"
                 disabled={tableHeader}
               />
-              <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
               <TableToolbarButton
                 label="增加列"
                 icon={<Columns3 size={15} />}
@@ -916,7 +1047,7 @@ export const ProductMarkdownEditor = forwardRef<
                 action="delete-column"
                 disabled={tableHeader}
               />
-              <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
               <TableToolbarButton
                 label="左对齐"
                 icon={<TextAlignStart size={15} />}
@@ -937,334 +1068,351 @@ export const ProductMarkdownEditor = forwardRef<
               />
             </>
           ) : (
-            TOOLBAR_COMMANDS.map((command, index) => {
-              const previous = TOOLBAR_COMMANDS[index - 1];
+            PRIMARY_TOOLBAR_COMMANDS.map((command, index) => {
+              const previous = PRIMARY_TOOLBAR_COMMANDS[index - 1];
               const separator = previous && previous.group !== command.group;
               return (
                 <span className="contents" key={command.id}>
                   {separator && (
-                    <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+                    <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
                   )}
-                  <button
-                    type="button"
-                    className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.68rem] font-semibold transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
-                      commandIdMatchesBlockType(command.id, blockType)
-                        ? "bg-surface-selected text-brand-800"
-                        : "text-ink-500"
-                    }`}
-                    title={
-                      command.hint
-                        ? `${command.label} · ${command.hint}`
-                        : command.label
-                    }
-                    aria-label={command.label}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => executeCommand(command.id)}
-                  >
-                    <CommandIcon command={command} />
-                  </button>
+                  <AppTooltip label={command.label} shortcut={command.hint}>
+                    <ToolbarButton
+                      className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-[0.75rem] font-semibold transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 ${
+                        commandIdMatchesBlockType(command.id, blockType)
+                          ? "bg-surface-selected text-brand-800"
+                          : "text-ink-500"
+                      }`}
+                      aria-label={command.label}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => executeCommand(command.id)}
+                    >
+                      <CommandIcon command={command} />
+                    </ToolbarButton>
+                  </AppTooltip>
                 </span>
               );
             })
           )}
-        </div>
+          <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <ToolbarButton
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[0.75rem] font-semibold text-ink-600 transition hover:bg-surface-hover hover:text-ink-950 focus-visible:ring-4 focus-visible:ring-brand-100"
+                aria-label="更多格式"
+              >
+                <MoreHorizontal size={15} />
+                <span className="hidden sm:inline">更多</span>
+              </ToolbarButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                className="z-[70] w-52 rounded-xl border border-line bg-paper p-1.5 shadow-popover"
+              >
+                {MORE_TOOLBAR_COMMANDS.map((command) => (
+                  <DropdownMenu.Item
+                    key={command.id}
+                    className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                    onSelect={() => executeCommand(command.id)}
+                  >
+                    <span className="grid size-5 place-items-center text-ink-500">
+                      <CommandIcon command={command} />
+                    </span>
+                    <span className="min-w-0 flex-1">{command.label}</span>
+                    {command.hint && (
+                      <span className="text-[0.68rem] text-ink-400">
+                        {command.hint}
+                      </span>
+                    )}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </ToolbarRoot>
       )}
 
       <div
         ref={handleLayerRef}
-        className="relative min-h-[calc(100dvh-10.5rem)]"
+        className="relative mx-auto min-h-[calc(100dvh-10.5rem)] w-full max-w-[76ch]"
         onPointerDownCapture={focusDiagramBoundary}
       >
         {!readOnly && hasDocumentContent && (
           <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12">
-            {handles.map((handle) =>
-              !handle.visible ? null : (
-                <DropdownMenu.Root
-                  key={handle.index}
-                  open={openMenuIndex === handle.index}
-                  onOpenChange={(open) =>
-                    setOpenMenuIndex(open ? handle.index : undefined)
-                  }
-                >
-                  <DropdownMenu.Trigger asChild>
-                    <button
-                      type="button"
-                      className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-surface-hover hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
-                        dropIndex === handle.index
-                          ? "bg-brand-100 text-brand-800"
-                          : ""
-                      }`}
-                      style={{
-                        top:
-                          handle.top + Math.max(0, (handle.lineHeight - 28) / 2)
-                      }}
-                      aria-label={`块 ${handle.index + 1} 操作`}
-                      data-dragging={draggingIndex === handle.index}
-                      data-drop={dropIndex === handle.index}
-                      onPointerDown={(event) => {
-                        if (event.button !== 0) return;
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                        pointerDragRef.current = {
-                          from: handle.index,
-                          pointerId: event.pointerId,
-                          startY: event.clientY,
-                          moved: false
-                        };
-                      }}
-                      onPointerMove={(event) => {
-                        const drag = pointerDragRef.current;
-                        if (!drag || drag.pointerId !== event.pointerId) return;
-                        if (
-                          !drag.moved &&
-                          Math.abs(event.clientY - drag.startY) < 6
-                        ) {
-                          return;
-                        }
-                        drag.moved = true;
-                        setOpenMenuIndex(undefined);
-                        setDraggingIndex(drag.from);
-                        setDropIndex(targetBlockAt(event.clientY));
-                      }}
-                      onPointerUp={(event) => {
-                        const drag = pointerDragRef.current;
-                        pointerDragRef.current = undefined;
-                        if (!drag || drag.pointerId !== event.pointerId) return;
-                        if (
-                          event.currentTarget.hasPointerCapture(event.pointerId)
-                        ) {
-                          event.currentTarget.releasePointerCapture(
-                            event.pointerId
-                          );
-                        }
-                        if (drag.moved) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          const target = targetBlockAt(event.clientY);
-                          if (target !== undefined && target !== drag.from) {
-                            editorRef.current?.moveTopLevelBlock(
-                              drag.from,
-                              target
-                            );
-                          }
-                        }
-                        setDraggingIndex(undefined);
-                        setDropIndex(undefined);
-                        window.requestAnimationFrame(syncHandles);
-                      }}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={pointerWithin}
+              onDragStart={handleBlockDragStart}
+              onDragOver={handleBlockDragOver}
+              onDragMove={handleBlockDragMove}
+              onDragEnd={handleBlockDragEnd}
+              onDragCancel={() => {
+                setDropIndex(undefined);
+                dropIndexRef.current = undefined;
+                setKeyboardDragging(false);
+              }}
+            >
+              <SortableContext
+                items={handles
+                  .filter((handle) => handle.visible)
+                  .map((handle) => String(handle.index))}
+                strategy={verticalListSortingStrategy}
+              >
+                {handles.map((handle) =>
+                  !handle.visible ? null : (
+                    <DropdownMenu.Root
+                      key={handle.index}
+                      open={openMenuIndex === handle.index}
+                      onOpenChange={(open) =>
+                        setOpenMenuIndex(open ? handle.index : undefined)
+                      }
                     >
-                      ⠿
-                    </button>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Portal>
-                    <DropdownMenu.Content
-                      side="right"
-                      align="start"
-                      sideOffset={4}
-                      className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                    >
-                      <DropdownMenu.Sub>
-                        <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                          <Pilcrow size={14} />
-                          <span className="flex-1">转化为</span>
-                          <span className="text-ink-300">›</span>
-                        </DropdownMenu.SubTrigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.SubContent
-                            sideOffset={6}
-                            className="z-[80] w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                          >
-                            <BlockMenuItem
-                              icon={<Pilcrow size={14} />}
-                              label="正文"
-                              onSelect={() =>
-                                editorRef.current?.setHeading(null)
-                              }
-                            />
-                            {[1, 2, 3, 4, 5, 6].map((level) => (
+                      <DropdownMenu.Trigger asChild>
+                        <SortableBlockHandleButton
+                          index={handle.index}
+                          className={`pm-block-handle pointer-events-auto absolute grid h-7 w-7 place-items-center rounded-lg text-[1rem] leading-none text-ink-300 outline-none transition hover:bg-surface-hover hover:text-ink-700 data-[dragging=true]:bg-brand-50 data-[drop=true]:bg-brand-100 ${
+                            dropIndex === handle.index
+                              ? "bg-brand-100 text-brand-800"
+                              : ""
+                          }`}
+                          style={{
+                            top:
+                              handle.top +
+                              Math.max(0, (handle.lineHeight - 28) / 2)
+                          }}
+                          aria-label={`块 ${handle.index + 1} 操作`}
+                          aria-haspopup="menu"
+                          aria-expanded={openMenuIndex === handle.index}
+                          data-drop={dropIndex === handle.index}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setOpenMenuIndex(handle.index);
+                          }}
+                        >
+                          ⠿
+                        </SortableBlockHandleButton>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          side="right"
+                          align="start"
+                          sideOffset={4}
+                          className="z-[70] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                        >
+                          <DropdownMenu.Sub>
+                            <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                              <Pilcrow size={14} />
+                              <span className="flex-1">转化为</span>
+                              <span className="text-ink-300">›</span>
+                            </DropdownMenu.SubTrigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.SubContent
+                                sideOffset={6}
+                                className="z-[80] w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                              >
+                                <BlockMenuItem
+                                  icon={<Pilcrow size={14} />}
+                                  label="正文"
+                                  onSelect={() =>
+                                    editorRef.current?.setHeading(null)
+                                  }
+                                />
+                                {[1, 2, 3, 4, 5, 6].map((level) => (
+                                  <BlockMenuItem
+                                    key={level}
+                                    icon={headingIcon(level)}
+                                    label={`${level} 级标题`}
+                                    onSelect={() =>
+                                      editorRef.current?.setHeading(
+                                        level as 1 | 2 | 3 | 4 | 5 | 6
+                                      )
+                                    }
+                                  />
+                                ))}
+                                <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                                <DropdownMenu.Sub>
+                                  <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                                    <MessageSquareText size={14} />
+                                    <span className="flex-1">提示块</span>
+                                    <span className="text-ink-300">›</span>
+                                  </DropdownMenu.SubTrigger>
+                                  <DropdownMenu.Portal>
+                                    <DropdownMenu.SubContent
+                                      sideOffset={6}
+                                      className="z-[90] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                                    >
+                                      {CALLOUT_KINDS.map((kind) => (
+                                        <BlockMenuItem
+                                          key={kind}
+                                          icon={
+                                            <span
+                                              className={`size-1.5 rounded-full callout-dot-${kind}`}
+                                            />
+                                          }
+                                          label={CALLOUT_LABELS[kind]}
+                                          onSelect={() =>
+                                            editorRef.current?.setCalloutKind(
+                                              handle.index,
+                                              kind
+                                            )
+                                          }
+                                        />
+                                      ))}
+                                    </DropdownMenu.SubContent>
+                                  </DropdownMenu.Portal>
+                                </DropdownMenu.Sub>
+                              </DropdownMenu.SubContent>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Sub>
+                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                          <DropdownMenu.Sub>
+                            <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
+                              <Network size={14} />
+                              <span className="flex-1">图表类型</span>
+                              <span className="text-ink-300">›</span>
+                            </DropdownMenu.SubTrigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.SubContent
+                                sideOffset={6}
+                                className="z-[80] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                              >
+                                <BlockMenuItem
+                                  icon={<Network size={14} />}
+                                  label="Mermaid 图表"
+                                  onSelect={() =>
+                                    editorRef.current?.insertBlockAt(
+                                      handle.index,
+                                      "mermaid"
+                                    )
+                                  }
+                                />
+                                <BlockMenuItem
+                                  icon={<Shapes size={14} />}
+                                  label="Excalidraw 画布"
+                                  onSelect={() =>
+                                    void openCanvasEditor(
+                                      {
+                                        id: newCanvasId(),
+                                        title: "自由画布",
+                                        sceneHash: "",
+                                        previewHash: ""
+                                      },
+                                      handle.index
+                                    )
+                                  }
+                                />
+                              </DropdownMenu.SubContent>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Sub>
+                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                          {handle.kind === "image" && (
+                            <>
                               <BlockMenuItem
-                                key={level}
-                                icon={headingIcon(level)}
-                                label={`${level} 级标题`}
+                                icon={<Image size={14} />}
+                                label="替换图片"
+                                onSelect={() => {
+                                  replaceImageIndexRef.current = handle.index;
+                                  imageDropzone.open();
+                                }}
+                              />
+                              <BlockMenuItem
+                                icon={<Image size={14} />}
+                                label="图片左对齐"
                                 onSelect={() =>
-                                  editorRef.current?.setHeading(
-                                    level as 1 | 2 | 3 | 4 | 5 | 6
+                                  editorRef.current?.setImageAlignment(
+                                    handle.index,
+                                    "left"
                                   )
                                 }
                               />
-                            ))}
-                            <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                            <DropdownMenu.Sub>
-                              <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                                <MessageSquareText size={14} />
-                                <span className="flex-1">提示块</span>
-                                <span className="text-ink-300">›</span>
-                              </DropdownMenu.SubTrigger>
-                              <DropdownMenu.Portal>
-                                <DropdownMenu.SubContent
-                                  sideOffset={6}
-                                  className="z-[90] w-36 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                                >
-                                  {CALLOUT_KINDS.map((kind) => (
-                                    <BlockMenuItem
-                                      key={kind}
-                                      icon={
-                                        <span
-                                          className={`size-1.5 rounded-full callout-dot-${kind}`}
-                                        />
-                                      }
-                                      label={CALLOUT_LABELS[kind]}
-                                      onSelect={() =>
-                                        editorRef.current?.setCalloutKind(
-                                          handle.index,
-                                          kind
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </DropdownMenu.SubContent>
-                              </DropdownMenu.Portal>
-                            </DropdownMenu.Sub>
-                          </DropdownMenu.SubContent>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Sub>
-                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                      <DropdownMenu.Sub>
-                        <DropdownMenu.SubTrigger className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle">
-                          <Network size={14} />
-                          <span className="flex-1">图表类型</span>
-                          <span className="text-ink-300">›</span>
-                        </DropdownMenu.SubTrigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.SubContent
-                            sideOffset={6}
-                            className="z-[80] w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                          >
-                            <BlockMenuItem
-                              icon={<Network size={14} />}
-                              label="Mermaid 图表"
-                              onSelect={() =>
-                                editorRef.current?.insertBlockAt(
-                                  handle.index,
-                                  "mermaid"
-                                )
-                              }
-                            />
-                            <BlockMenuItem
-                              icon={<Shapes size={14} />}
-                              label="Excalidraw 画布"
-                              onSelect={() =>
-                                void openCanvasEditor(
-                                  {
-                                    id: newCanvasId(),
-                                    title: "自由画布",
-                                    sceneHash: "",
-                                    previewHash: ""
-                                  },
-                                  handle.index
-                                )
-                              }
-                            />
-                          </DropdownMenu.SubContent>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Sub>
-                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                      {handle.kind === "image" && (
-                        <>
+                              <BlockMenuItem
+                                icon={<Image size={14} />}
+                                label="图片居中"
+                                onSelect={() =>
+                                  editorRef.current?.setImageAlignment(
+                                    handle.index,
+                                    "center"
+                                  )
+                                }
+                              />
+                              <BlockMenuItem
+                                icon={<Image size={14} />}
+                                label="图片右对齐"
+                                onSelect={() =>
+                                  editorRef.current?.setImageAlignment(
+                                    handle.index,
+                                    "right"
+                                  )
+                                }
+                              />
+                              <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                            </>
+                          )}
+                          {handle.kind === "toggle" && (
+                            <>
+                              <BlockMenuItem
+                                icon={<ChevronsDownUp size={14} />}
+                                label="重命名折叠标题"
+                                onSelect={() => {
+                                  const details = rootRef.current
+                                    ?.querySelectorAll<HTMLDetailsElement>(
+                                      "details[data-inkloom-toggle]"
+                                    )
+                                    .item(handle.index);
+                                  setToggleSummaryError("");
+                                  setToggleEdit({
+                                    index: handle.index,
+                                    summary:
+                                      details?.querySelector("summary")
+                                        ?.textContent ?? "折叠内容"
+                                  });
+                                }}
+                              />
+                              <BlockMenuItem
+                                icon={<ChevronsDownUp size={14} />}
+                                label={
+                                  handle.toggleOpen
+                                    ? "收起折叠块"
+                                    : "展开折叠块"
+                                }
+                                onSelect={() =>
+                                  editorRef.current?.toggleToggleOpen(
+                                    handle.index
+                                  )
+                                }
+                              />
+                              <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                            </>
+                          )}
                           <BlockMenuItem
-                            icon={<Image size={14} />}
-                            label="替换图片"
-                            onSelect={() => {
-                              setReplaceImageIndex(handle.index);
-                              imageInputRef.current?.click();
-                            }}
-                          />
-                          <BlockMenuItem
-                            icon={<Image size={14} />}
-                            label="图片左对齐"
+                            icon={<Copy size={14} />}
+                            label="复制此块"
                             onSelect={() =>
-                              editorRef.current?.setImageAlignment(
-                                handle.index,
-                                "left"
+                              editorRef.current?.duplicateTopLevelBlock(
+                                handle.index
                               )
                             }
                           />
                           <BlockMenuItem
-                            icon={<Image size={14} />}
-                            label="图片居中"
+                            danger
+                            icon={<Trash2 size={14} />}
+                            label="删除此块"
                             onSelect={() =>
-                              editorRef.current?.setImageAlignment(
-                                handle.index,
-                                "center"
+                              editorRef.current?.deleteTopLevelBlock(
+                                handle.index
                               )
                             }
                           />
-                          <BlockMenuItem
-                            icon={<Image size={14} />}
-                            label="图片右对齐"
-                            onSelect={() =>
-                              editorRef.current?.setImageAlignment(
-                                handle.index,
-                                "right"
-                              )
-                            }
-                          />
-                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                        </>
-                      )}
-                      {handle.kind === "toggle" && (
-                        <>
-                          <BlockMenuItem
-                            icon={<ChevronsDownUp size={14} />}
-                            label="重命名折叠标题"
-                            onSelect={() => {
-                              const details = rootRef.current
-                                ?.querySelectorAll<HTMLDetailsElement>(
-                                  "details[data-inkloom-toggle]"
-                                )
-                                .item(handle.index);
-                              setToggleSummaryError("");
-                              setToggleEdit({
-                                index: handle.index,
-                                summary:
-                                  details?.querySelector("summary")
-                                    ?.textContent ?? "折叠内容"
-                              });
-                            }}
-                          />
-                          <BlockMenuItem
-                            icon={<ChevronsDownUp size={14} />}
-                            label={
-                              handle.toggleOpen ? "收起折叠块" : "展开折叠块"
-                            }
-                            onSelect={() =>
-                              editorRef.current?.toggleToggleOpen(handle.index)
-                            }
-                          />
-                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                        </>
-                      )}
-                      <BlockMenuItem
-                        icon={<Copy size={14} />}
-                        label="复制此块"
-                        onSelect={() =>
-                          editorRef.current?.duplicateTopLevelBlock(
-                            handle.index
-                          )
-                        }
-                      />
-                      <BlockMenuItem
-                        danger
-                        icon={<Trash2 size={14} />}
-                        label="删除此块"
-                        onSelect={() =>
-                          editorRef.current?.deleteTopLevelBlock(handle.index)
-                        }
-                      />
-                    </DropdownMenu.Content>
-                  </DropdownMenu.Portal>
-                </DropdownMenu.Root>
-              )
-            )}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                  )
+                )}
+              </SortableContext>
+            </DndContext>
           </div>
         )}
 
@@ -1294,24 +1442,36 @@ export const ProductMarkdownEditor = forwardRef<
       </div>
 
       {canvasEditor && !canvasEditor.loading && (
-        <CanvasEditor
-          key={canvasEditor.canvas.id}
-          scene={canvasEditor.scene}
-          title={canvasEditor.canvas.title}
-          notice={canvasEditor.notice}
-          onCancel={() => setCanvasEditor(undefined)}
-          onSave={(result) => saveCanvasAssets(canvasEditor.canvas, result)}
-          onSnapshot={(sceneJson) => {
-            try {
-              localStorage.setItem(
-                canvasDraftKey(workspaceId, documentId, canvasEditor.canvas.id),
-                sceneJson
-              );
-            } catch {
-              // The explicit save path remains available when storage is full.
-            }
-          }}
-        />
+        <FullscreenDialog
+          open
+          title="Excalidraw 画布"
+          description="在独立画布中编辑并保存 Excalidraw 场景。"
+          showClose={false}
+          onClose={() => setCanvasEditor(undefined)}
+        >
+          <CanvasEditor
+            key={canvasEditor.canvas.id}
+            scene={canvasEditor.scene}
+            title={canvasEditor.canvas.title}
+            notice={canvasEditor.notice}
+            onCancel={() => setCanvasEditor(undefined)}
+            onSave={(result) => saveCanvasAssets(canvasEditor.canvas, result)}
+            onSnapshot={(sceneJson) => {
+              try {
+                localStorage.setItem(
+                  canvasDraftKey(
+                    workspaceId,
+                    documentId,
+                    canvasEditor.canvas.id
+                  ),
+                  sceneJson
+                );
+              } catch {
+                // The explicit save path remains available when storage is full.
+              }
+            }}
+          />
+        </FullscreenDialog>
       )}
       {canvasEditor?.loading && (
         <div
@@ -1322,30 +1482,8 @@ export const ProductMarkdownEditor = forwardRef<
         </div>
       )}
 
-      <input
-        ref={imageInputRef}
-        className="hidden"
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml"
-        onChange={(event) => {
-          const files = [...(event.target.files ?? [])];
-          event.target.value = "";
-          if (files.length > 0) {
-            enqueueFiles(files, "image", replaceImageIndex);
-          }
-          setReplaceImageIndex(undefined);
-        }}
-      />
-      <input
-        ref={attachmentInputRef}
-        className="hidden"
-        type="file"
-        onChange={(event) => {
-          const files = [...(event.target.files ?? [])];
-          event.target.value = "";
-          if (files.length > 0) enqueueFiles(files, "attachment");
-        }}
-      />
+      <input {...imageDropzone.getInputProps({ className: "hidden" })} />
+      <input {...attachmentDropzone.getInputProps({ className: "hidden" })} />
 
       {uploads.length > 0 && (
         <div className="fixed right-4 bottom-4 z-[85] grid w-[min(calc(100vw-2rem),21rem)] gap-2">
@@ -1366,7 +1504,7 @@ export const ProductMarkdownEditor = forwardRef<
                   <strong className="block truncate text-xs font-semibold text-ink-800">
                     {task.file.name}
                   </strong>
-                  <span className="mt-0.5 block text-[0.64rem] text-ink-400">
+                  <span className="mt-0.5 block text-[0.75rem] text-ink-400">
                     {task.state === "uploading"
                       ? `正在上传 · ${task.progress}%`
                       : task.state === "complete"
@@ -1403,12 +1541,11 @@ export const ProductMarkdownEditor = forwardRef<
                 )}
               </div>
               {task.state === "uploading" && (
-                <span className="mt-2 block h-1 overflow-hidden rounded-full bg-line-soft">
-                  <span
-                    className="block h-full rounded-full bg-brand-500 transition-[width] duration-200"
-                    style={{ width: `${task.progress}%` }}
-                  />
-                </span>
+                <AppProgress
+                  className="mt-2"
+                  value={task.progress}
+                  label={`${task.file.name} 上传进度`}
+                />
               )}
             </div>
           ))}
@@ -1416,62 +1553,63 @@ export const ProductMarkdownEditor = forwardRef<
       )}
 
       {selection && (
-        <div
-          className="fixed z-[80] -translate-x-1/2 rounded-xl border border-line-soft bg-white p-1 shadow-popover"
-          style={{ top: selection.top, left: selection.left }}
-          role="toolbar"
+        <ToolbarRoot
+          ref={selectionFloating.refs.setFloating}
+          className="z-[80] rounded-xl border border-line-soft bg-white p-1 shadow-popover"
+          style={selectionFloating.floatingStyles}
           aria-label="选区格式"
           onMouseDown={(event) => event.preventDefault()}
         >
           {(["bold", "italic", "strike", "inline-code", "link"] as const).map(
             (command) => (
-              <button
-                type="button"
-                className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
-                key={command}
-                aria-label={editorCommandLabel(command)}
-                onClick={() => executeCommand(command)}
-              >
-                <SelectionCommandIcon command={command} />
-              </button>
+              <AppTooltip label={editorCommandLabel(command)} key={command}>
+                <ToolbarButton
+                  className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
+                  aria-label={editorCommandLabel(command)}
+                  onClick={() => executeCommand(command)}
+                >
+                  <SelectionCommandIcon command={command} />
+                </ToolbarButton>
+              </AppTooltip>
             )
           )}
-        </div>
+        </ToolbarRoot>
       )}
 
       {slash && (
-        <div
+        <Command
+          ref={slashFloating.refs.setFloating}
+          style={slashFloating.floatingStyles}
           data-slash-menu
           className="fixed z-[90] w-[min(88vw,19rem)] rounded-2xl border border-line-soft bg-white p-2 shadow-popover"
-          style={{
-            top: Math.max(
-              8,
-              Math.min(window.innerHeight - 420, slash.position.top + 28)
-            ),
-            left: Math.max(
-              8,
-              Math.min(window.innerWidth - 320, slash.position.left)
-            )
-          }}
+          shouldFilter={false}
+          loop
+          label="插入内容"
         >
-          <div className="px-2 py-1.5 text-[0.62rem] font-bold tracking-[0.1em] text-ink-300 uppercase">
-            {slash.query ? `/${slash.query}` : "插入内容"}
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <span className="shrink-0 text-xs font-semibold text-ink-500">
+              插入
+            </span>
+            <Command.Input
+              autoFocus
+              value={slash.query}
+              onValueChange={(query) =>
+                setSlash((current) =>
+                  current ? { ...current, query } : current
+                )
+              }
+              placeholder="筛选命令"
+              className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
+            />
           </div>
-          <div className="max-h-80 overflow-y-auto">
-            {slashCommands.map((command, index) => (
-              <button
-                type="button"
+          <Command.List className="max-h-80 overflow-y-auto">
+            {slashCommands.map((command) => (
+              <Command.Item
                 key={command.id}
-                className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs ${
-                  index === slash.activeIndex
-                    ? "bg-surface-selected text-ink-950"
-                    : "text-ink-600 hover:bg-canvas"
-                }`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  executeCommand(command.id);
-                  setSlash(undefined);
-                }}
+                value={command.id}
+                keywords={[...command.keywords]}
+                className="flex min-h-10 w-full cursor-default items-center gap-2 rounded-xl px-2.5 text-left text-xs text-ink-600 outline-none data-[selected=true]:bg-surface-selected data-[selected=true]:text-ink-950"
+                onSelect={() => selectSlashCommand(command.id)}
               >
                 <span className="grid size-7 place-items-center rounded-lg bg-brand-50 text-brand-700">
                   <CommandIcon command={command} />
@@ -1479,18 +1617,13 @@ export const ProductMarkdownEditor = forwardRef<
                 <span className="min-w-0 flex-1 truncate font-semibold">
                   {command.label}
                 </span>
-                {index === slash.activeIndex && (
-                  <span className="text-[0.6rem] text-ink-300">Enter</span>
-                )}
-              </button>
+              </Command.Item>
             ))}
-            {slashCommands.length === 0 && (
-              <p className="px-3 py-8 text-center text-xs text-ink-400">
-                没有匹配的命令
-              </p>
-            )}
-          </div>
-        </div>
+            <Command.Empty className="px-3 py-8 text-center text-xs text-ink-400">
+              没有匹配的命令
+            </Command.Empty>
+          </Command.List>
+        </Command>
       )}
 
       <AppDialog
@@ -1594,28 +1727,14 @@ export const ProductMarkdownEditor = forwardRef<
         </form>
       </AppDialog>
 
-      <AppDialog
-        open={imagePreview !== undefined}
-        title="图片预览"
-        description="双击图片可再次打开大图。"
-        onClose={() => setImagePreview(undefined)}
-        footer={
-          <Button
-            variant="secondary"
-            onClick={() => setImagePreview(undefined)}
-          >
-            关闭
-          </Button>
-        }
-      >
-        {imagePreview && (
-          <img
-            className="max-h-[68dvh] w-full rounded-xl bg-paper-warm object-contain"
+      {imagePreview && (
+        <Suspense fallback={null}>
+          <ImageLightbox
             src={imagePreview}
-            alt="图片预览"
+            onClose={() => setImagePreview(undefined)}
           />
-        )}
-      </AppDialog>
+        </Suspense>
+      )}
     </div>
   );
 });
@@ -1727,6 +1846,38 @@ function BlockMenuItem({
   );
 }
 
+function SortableBlockHandleButton({
+  index,
+  children,
+  ...props
+}: ComponentProps<"button"> & { index: number }) {
+  const { attributes, isDragging, listeners, setNodeRef } = useSortable({
+    id: String(index)
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      data-dragging={isDragging}
+      {...props}
+      {...attributes}
+      onKeyDownCapture={(event) => {
+        if (event.key !== " " && event.key !== "Spacebar") return;
+        listeners?.onKeyDown?.(event as never);
+        if (event.defaultPrevented) event.stopPropagation();
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 z-10"
+        onPointerDown={(event) => listeners?.onPointerDown?.(event as never)}
+      />
+      <span className="pointer-events-none relative z-0">{children}</span>
+    </button>
+  );
+}
+
 function TableToolbarButton({
   action,
   disabled = false,
@@ -1741,17 +1892,17 @@ function TableToolbarButton({
   onAction: (action: TableAction) => void;
 }) {
   return (
-    <button
-      type="button"
-      className="grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-ink-500 transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-35"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => onAction(action)}
-    >
-      {icon}
-    </button>
+    <AppTooltip label={label}>
+      <ToolbarButton
+        className="grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-ink-500 transition hover:bg-surface-hover hover:text-brand-800 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-35"
+        aria-label={label}
+        disabled={disabled}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => onAction(action)}
+      >
+        {icon}
+      </ToolbarButton>
+    </AppTooltip>
   );
 }
 
@@ -1772,16 +1923,12 @@ function EditorSkeleton() {
   );
 }
 
-function currentCaretPosition(): FloatingPosition {
+function currentCaretRange(): Range | undefined {
   const selection = window.getSelection();
   if (selection?.rangeCount) {
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    return {
-      top: rect.bottom,
-      left: Math.max(8, rect.left)
-    };
+    return selection.getRangeAt(0).cloneRange();
   }
-  return { top: 96, left: 32 };
+  return undefined;
 }
 
 function commandIdMatchesBlockType(

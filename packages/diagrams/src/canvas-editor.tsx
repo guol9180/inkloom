@@ -86,12 +86,7 @@ export function CanvasEditor({
   }
 
   return (
-    <div
-      className="canvas-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Excalidraw 画布"
-    >
+    <div className="canvas-modal">
       <div className="canvas-modal-head">
         <div>
           <span className="section-label">EXCALIDRAW 场景</span>

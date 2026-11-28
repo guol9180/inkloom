@@ -76,13 +76,13 @@ test("creates a scratch note, saves it, refreshes and protects routes", async ({
   const protectedPath = new URL(page.url()).pathname;
   await page.getByRole("button", { name: "账号设置" }).click();
   await page.getByRole("menuitem", { name: "退出登录" }).click();
-  await expect(page.getByRole("tab", { name: "登录" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "登录" })).toBeVisible();
 
   await page.goto(protectedPath);
-  await expect(page.getByRole("tab", { name: "登录" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "登录" })).toBeVisible();
   await expect(page).toHaveURL(/\/login\?next=/);
   await page.getByLabel("邮箱").fill(await testEmail(page));
-  await page.getByLabel("密码").fill("review-password");
+  await page.getByLabel("密码", { exact: true }).fill("review-password");
   await page.getByRole("button", { name: "进入工作区" }).click();
   await expect(page.getByLabel("Markdown 正文")).toContainText(
     "刷新后仍然存在。"
@@ -404,7 +404,7 @@ test("keeps edits made while a successful autosave is in flight", async ({
 
 test("creates and refreshes a flat knowledge base route", async ({ page }) => {
   await registerUser(page);
-  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("radio", { name: "知识库", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "选择或创建一个知识库" })
   ).toBeVisible();
@@ -421,18 +421,43 @@ test("creates and refreshes a flat knowledge base route", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("heading", { name: "产品资料" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "知识库", exact: true })
-  ).toHaveAttribute("class", /bg-ink-950/);
+    page.getByRole("radio", { name: "知识库", exact: true })
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+test("creates and opens an isolated workspace from the workspace menu", async ({
+  page
+}) => {
+  await registerUser(page);
+  const previousWorkspaceId = workspaceIdFromUrl(page);
+  await page.getByRole("button", { name: "切换工作区" }).click();
+  await page.getByRole("menuitem", { name: "新建工作区" }).click();
+  const dialog = page.getByRole("dialog", { name: "新建工作区" });
+  await dialog.getByLabel("工作区名称").fill("第二写作空间");
+  await dialog.getByRole("button", { name: "创建工作区" }).click();
+
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/notes$/);
+  await expect
+    .poll(() => workspaceIdFromUrl(page))
+    .not.toBe(previousWorkspaceId);
+  await expect(
+    page.getByRole("heading", { name: "从一个清晰的想法开始" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "切换工作区" }).click();
+  await expect(
+    page.getByRole("menuitem", { name: /第二写作空间/ })
+  ).toBeVisible();
 });
 
 test("keeps the near-white shell within the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/login");
-  await expect(page.getByRole("tab", { name: "登录" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "登录" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await registerUser(page);
   await expectNoHorizontalOverflow(page);
   await page.getByRole("button", { name: "打开导航" }).click();
+  await expect(page.getByRole("dialog", { name: "工作区导航" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -443,7 +468,7 @@ async function registerUser(page: Page) {
   await page.goto("/register");
   await page.getByLabel("称呼").fill("工作区验收");
   await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill("review-password");
+  await page.getByLabel("密码", { exact: true }).fill("review-password");
   await page.getByRole("button", { name: "创建并进入" }).click();
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/notes$/);
   await page.evaluate((value) => {

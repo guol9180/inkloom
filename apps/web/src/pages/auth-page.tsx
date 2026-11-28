@@ -1,11 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { BrandLockup } from "../components/brand-mark";
-import { Button, FieldLabel, TextInput } from "@inkloom/ui";
+import {
+  Button,
+  FieldLabel,
+  IconButton,
+  SegmentedControl,
+  TextInput
+} from "@inkloom/ui";
 import { cloudClient } from "../cloud-workspace";
 import { sessionQuery } from "../queries";
 
@@ -21,6 +28,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const queryClient = useQueryClient();
   const session = queryClient.getQueryData(sessionQuery.queryKey);
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
   const [searchParams] = useSearchParams();
   const next = safeNextPath(searchParams.get("next"));
   const form = useForm<AuthValues>({
@@ -47,39 +55,27 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   return (
     <main className="app-auth-shell relative grid min-h-dvh place-items-center overflow-hidden bg-canvas px-4 py-8 sm:px-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgb(255_255_255/.95),transparent_34rem)]" />
       <section className="relative w-full max-w-[27rem]">
         <div className="mb-7 flex justify-center">
           <BrandLockup />
         </div>
-        <div className="rounded-dialog border border-line-soft bg-white/92 p-5 shadow-panel backdrop-blur-xl sm:p-7">
-          <div
-            className="grid grid-cols-2 rounded-xl bg-surface-subtle p-1"
-            role="tablist"
-            aria-label="账号入口"
-          >
-            {(["login", "register"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={mode === item}
-                className={`min-h-10 rounded-[0.65rem] text-sm font-semibold transition ${
-                  mode === item
-                    ? "bg-white text-ink-950 shadow-sm"
-                    : "text-ink-400 hover:text-ink-700"
-                }`}
-                onClick={() =>
-                  navigate(item === "login" ? "/login" : "/register")
-                }
-              >
-                {item === "login" ? "登录" : "创建账号"}
-              </button>
-            ))}
-          </div>
+        <div className="rounded-panel border border-line bg-paper p-5 shadow-xs sm:p-7">
+          <SegmentedControl
+            value={mode}
+            ariaLabel="账号入口"
+            className="bg-[#efefed]"
+            itemClassName="min-h-10 rounded-md text-sm data-[state=on]:shadow-none"
+            onValueChange={(nextMode) =>
+              navigate(nextMode === "login" ? "/login" : "/register")
+            }
+            options={[
+              { value: "login", label: "登录" },
+              { value: "register", label: "创建账号" }
+            ]}
+          />
 
           <div className="mt-7 text-center">
-            <h1 className="text-balance font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-ink-950">
+            <h1 className="text-balance font-display text-[1.8rem] font-semibold tracking-[-0.025em] text-ink-950">
               {mode === "login" ? "继续写下去" : "建立你的空间"}
             </h1>
             <p className="mt-2 text-sm leading-6 text-ink-500">
@@ -114,18 +110,37 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               />
               <FieldError message={form.formState.errors.email?.message} />
             </FieldLabel>
-            <FieldLabel>
-              密码
-              <TextInput
-                type="password"
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                placeholder="至少 8 个字符"
-                {...form.register("password")}
-              />
+            <div className="grid gap-2 text-sm font-semibold text-ink-700">
+              <label htmlFor="auth-password">密码</label>
+              <span className="grid grid-cols-[minmax(0,1fr)_2.75rem] gap-2">
+                <TextInput
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  className="min-w-0"
+                  placeholder="至少 8 个字符"
+                  {...form.register("password")}
+                />
+                <IconButton
+                  type="button"
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  aria-pressed={showPassword}
+                  variant="secondary"
+                  className="size-11 min-h-11 rounded-xl text-ink-500"
+                  onClick={() => setShowPassword((current) => !current)}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </IconButton>
+              </span>
+              {mode === "register" && (
+                <span className="text-xs font-normal leading-5 text-ink-500">
+                  至少 8 个字符，建议混合使用字母、数字和符号。
+                </span>
+              )}
               <FieldError message={form.formState.errors.password?.message} />
-            </FieldLabel>
+            </div>
             {mutation.error && (
               <p
                 className="rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 text-sm leading-5 text-danger-700"
@@ -152,7 +167,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             </Button>
           </form>
 
-          <div className="mt-5 flex items-center justify-center gap-4 text-[0.68rem] font-medium text-ink-400">
+          <div className="mt-5 flex items-center justify-center gap-4 text-[0.75rem] font-medium text-ink-500">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck size={13} /> 安全会话
             </span>

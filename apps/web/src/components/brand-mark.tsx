@@ -5,7 +5,7 @@ export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-grid size-9 shrink-0 place-items-center rounded-[0.9rem] border border-brand-200 bg-brand-50 text-brand-700 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.9)]",
+        "inline-grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-white text-brand-700 shadow-xs",
         className
       )}
       aria-hidden="true"
@@ -29,7 +29,7 @@ export function BrandLockup({
         <span className="min-w-0 leading-none">
           <strong
             className={cn(
-              "block truncate font-display text-[1.0625rem] font-semibold tracking-[-0.025em]",
+              "block truncate font-display text-[1.0625rem] font-semibold tracking-[-0.02em]",
               inverse ? "text-white" : "text-ink-950"
             )}
           >
@@ -37,11 +37,11 @@ export function BrandLockup({
           </strong>
           <span
             className={cn(
-              "mt-1 block truncate text-[0.64rem] font-semibold tracking-[0.16em] uppercase",
-              inverse ? "text-brand-100/65" : "text-ink-400"
+              "mt-0.5 block truncate text-[0.68rem] font-medium tracking-[0.08em]",
+              inverse ? "text-brand-100/65" : "text-ink-500"
             )}
           >
-            writing studio
+            Writing studio
           </span>
         </span>
       )}

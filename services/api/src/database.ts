@@ -1183,6 +1183,90 @@ export class DocumentDatabase {
     });
   }
 
+  listDeletedDocuments(
+    userId: string,
+    workspaceId: string
+  ): ApiDocumentSummary[] {
+    this.requireWorkspace(userId, workspaceId);
+    return this.listDocumentSummaries(
+      `workspace_id = ? AND deleted_at IS NOT NULL`,
+      [workspaceId],
+      "updated"
+    );
+  }
+
+  restoreDeletedDocument(
+    userId: string,
+    workspaceId: string,
+    documentId: string,
+    baseRevision: number
+  ): DocumentSnapshot {
+    this.requireWorkspace(userId, workspaceId);
+    const currentRow = this.requireDeletedDocument(workspaceId, documentId);
+    assertRevision(documentId, baseRevision, currentRow.revision);
+    if (currentRow.lifecycle === "knowledge" && !currentRow.knowledge_base_id) {
+      throw new ApiDatabaseError(
+        409,
+        "KNOWLEDGE_BASE_NOT_FOUND",
+        "原知识库已不存在，无法恢复此文档。"
+      );
+    }
+    const timestamp = this.now();
+    const current = documentFromRow(currentRow);
+    const nextPath =
+      currentRow.lifecycle === "knowledge"
+        ? this.uniquePathForKnowledgeBase(
+            workspaceId,
+            currentRow.knowledge_base_id!,
+            currentRow.path
+          )
+        : allocatePath(currentRow.path, this.activeScratchPaths(workspaceId));
+    this.transaction(() => {
+      this.insertRevision(current, timestamp);
+      this.db
+        .prepare(
+          `UPDATE documents
+           SET deleted_at = NULL, path = ?, revision = revision + 1,
+               updated_at = ?
+           WHERE id = ? AND workspace_id = ?`
+        )
+        .run(nextPath, timestamp, documentId, workspaceId);
+      this.syncDocumentSearch(workspaceId, documentId);
+      this.syncDocumentLinks(workspaceId, documentId);
+      this.refreshIncomingLinksForPath(
+        workspaceId,
+        currentRow.path,
+        documentId,
+        nextPath
+      );
+      this.touchWorkspace(workspaceId, timestamp);
+    });
+    return this.readDocument(userId, workspaceId, documentId);
+  }
+
+  deleteDocumentPermanently(
+    userId: string,
+    workspaceId: string,
+    documentId: string,
+    baseRevision: number
+  ): void {
+    this.requireWorkspace(userId, workspaceId);
+    const currentRow = this.requireDeletedDocument(workspaceId, documentId);
+    assertRevision(documentId, baseRevision, currentRow.revision);
+    const timestamp = this.now();
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "DELETE FROM document_search WHERE document_id = ? AND workspace_id = ?"
+        )
+        .run(documentId, workspaceId);
+      this.db
+        .prepare("DELETE FROM documents WHERE id = ? AND workspace_id = ?")
+        .run(documentId, workspaceId);
+      this.touchWorkspace(workspaceId, timestamp);
+    });
+  }
+
   listRevisions(
     userId: string,
     workspaceId: string,
@@ -1386,6 +1470,26 @@ export class DocumentDatabase {
       .get(documentId, workspaceId) as DocumentRow | undefined;
     if (!row) {
       throw new ApiDatabaseError(404, "DOCUMENT_NOT_FOUND", "找不到文档。");
+    }
+    return row;
+  }
+
+  private requireDeletedDocument(
+    workspaceId: string,
+    documentId: string
+  ): DocumentRow {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM documents
+         WHERE id = ? AND workspace_id = ? AND deleted_at IS NOT NULL`
+      )
+      .get(documentId, workspaceId) as DocumentRow | undefined;
+    if (!row) {
+      throw new ApiDatabaseError(
+        404,
+        "DELETED_DOCUMENT_NOT_FOUND",
+        "回收站中没有这篇文档。"
+      );
     }
     return row;
   }

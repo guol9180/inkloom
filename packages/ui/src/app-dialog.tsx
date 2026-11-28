@@ -3,6 +3,8 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "./lib/cn";
 import { IconButton } from "./button";
+import { AppSheet } from "./sheet";
+import { useMediaQuery } from "./use-media-query";
 
 export function AppDialog({
   open,
@@ -21,6 +23,25 @@ export function AppDialog({
   onClose: () => void;
   size?: "regular" | "wide";
 }) {
+  const mobile = useMediaQuery("(max-width: 639px)");
+
+  if (mobile) {
+    return (
+      <AppSheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        title={title}
+        description={description}
+        side="bottom"
+        footer={footer}
+      >
+        <div className="px-5 py-5">{children}</div>
+      </AppSheet>
+    );
+  }
+
   return (
     <DialogPrimitive.Root
       open={open}
@@ -29,10 +50,10 @@ export function AppDialog({
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="app-dialog-overlay fixed inset-0 z-50 bg-ink-950/28 backdrop-blur-[3px]" />
+        <DialogPrimitive.Overlay className="app-dialog-overlay fixed inset-0 z-[140] bg-ink-950/28 backdrop-blur-[3px]" />
         <DialogPrimitive.Content
           className={cn(
-            "app-dialog fixed top-1/2 left-1/2 z-50 max-h-[min(88dvh,860px)] w-[min(calc(100vw-1.25rem),36rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-dialog border border-white/80 bg-paper text-ink-950 shadow-dialog outline-none",
+            "app-dialog fixed top-1/2 left-1/2 z-[140] max-h-[min(88dvh,860px)] w-[min(calc(100vw-1.25rem),36rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-dialog border border-white/80 bg-paper text-ink-950 shadow-dialog outline-none",
             size === "wide" && "w-[min(calc(100vw-1.25rem),52rem)]"
           )}
         >

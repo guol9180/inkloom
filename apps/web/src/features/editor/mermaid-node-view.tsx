@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type KeyboardEvent as ReactKeyboardEvent
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { basicSetup } from "codemirror";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
@@ -32,6 +25,7 @@ import {
   TriangleAlert,
   X
 } from "lucide-react";
+import { FullscreenDialog } from "@inkloom/ui";
 
 const MERMAID_RENDER_DELAY_MS = 300;
 
@@ -140,13 +134,34 @@ function MermaidBlock({
   const [rendering, setRendering] = useState(true);
   const [error, setError] = useState<MermaidRenderError>();
   const [fullscreen, setFullscreen] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const selectedTemplate = matchingMermaidTemplate(source);
 
   useEffect(() => {
-    if (!source.trim()) {
+    const section = sectionRef.current;
+    if (!section || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" }
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if ((!visible && !fullscreen) || !source.trim()) {
       setRendering(false);
       setError(undefined);
-      setSvg("");
+      if (!source.trim()) setSvg("");
       return;
     }
     let cancelled = false;
@@ -169,23 +184,7 @@ function MermaidBlock({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [source]);
-
-  useEffect(() => {
-    if (!fullscreen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const close = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setFullscreen(false);
-    };
-    window.addEventListener("keydown", close, true);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", close, true);
-    };
-  }, [fullscreen]);
+  }, [fullscreen, source, visible]);
 
   function handleTemplate(event: ChangeEvent<HTMLSelectElement>) {
     const template = MERMAID_TEMPLATES.find(
@@ -194,19 +193,12 @@ function MermaidBlock({
     if (template) onSourceChange(template.source);
   }
 
-  function handleKeyDown(event: ReactKeyboardEvent) {
-    if (event.key === "Escape" && fullscreen) {
-      event.stopPropagation();
-      setFullscreen(false);
-    }
-  }
-
   const content = (
     <section
+      ref={sectionRef}
       className={`inkloom-mermaid-panel ${
         fullscreen ? "is-fullscreen" : ""
       } ${readOnly ? "is-readonly" : ""}`}
-      onKeyDown={handleKeyDown}
       aria-label="Mermaid 图表"
     >
       <header className="inkloom-mermaid-toolbar">
@@ -290,7 +282,19 @@ function MermaidBlock({
     </section>
   );
 
-  return fullscreen ? createPortal(content, document.body) : content;
+  return fullscreen ? (
+    <FullscreenDialog
+      open
+      title="Mermaid 图表编辑"
+      description="编辑源码并预览 Mermaid 图表。"
+      onClose={() => setFullscreen(false)}
+      showClose={false}
+    >
+      {content}
+    </FullscreenDialog>
+  ) : (
+    content
+  );
 }
 
 function MermaidSourceEditor({

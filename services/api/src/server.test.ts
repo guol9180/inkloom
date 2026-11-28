@@ -938,6 +938,98 @@ describe("InkLoom API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  it("moves deleted documents to trash and supports restore or permanent deletion", async () => {
+    const fixture = await startServer();
+    const writer = await register(fixture, "trash@example.com", "secret-123");
+    const workspaces = await json<{ workspaces: Array<{ id: string }> }>(
+      fixture,
+      "/api/workspaces",
+      { cookie: writer.cookie }
+    );
+    const workspaceId = first(workspaces.workspaces).id;
+    const notes = await json<{
+      documents: Array<{ id: string; revision: number }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/notes`, {
+      cookie: writer.cookie
+    });
+    const document = first(notes.documents);
+
+    const firstDelete = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/nodes/${document.id}`,
+      {
+        method: "DELETE",
+        cookie: writer.cookie,
+        body: { baseRevision: document.revision }
+      }
+    );
+    expect(firstDelete.status).toBe(204);
+    const visibleNotes = await json<{ documents: Array<{ id: string }> }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/notes`,
+      { cookie: writer.cookie }
+    );
+    expect(visibleNotes.documents.map((item) => item.id)).not.toContain(
+      document.id
+    );
+
+    const trash = await json<{
+      documents: Array<{ id: string; revision: number }>;
+    }>(fixture, `/api/workspaces/${workspaceId}/trash`, {
+      cookie: writer.cookie
+    });
+    expect(trash.documents).toEqual([
+      expect.objectContaining({
+        id: document.id,
+        revision: document.revision + 1
+      })
+    ]);
+
+    const restored = await json<{
+      document: { meta: { id: string; revision: number } };
+    }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${document.id}/restore`,
+      {
+        method: "POST",
+        cookie: writer.cookie,
+        body: { baseRevision: document.revision + 1 }
+      }
+    );
+    expect(restored.document.meta).toMatchObject({
+      id: document.id,
+      revision: document.revision + 2
+    });
+
+    const secondDelete = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/nodes/${document.id}`,
+      {
+        method: "DELETE",
+        cookie: writer.cookie,
+        body: { baseRevision: restored.document.meta.revision }
+      }
+    );
+    expect(secondDelete.status).toBe(204);
+    const permanent = await raw(
+      fixture,
+      `/api/workspaces/${workspaceId}/documents/${document.id}/permanent`,
+      {
+        method: "DELETE",
+        cookie: writer.cookie,
+        body: { baseRevision: restored.document.meta.revision + 1 }
+      }
+    );
+    expect(permanent.status).toBe(204);
+
+    const emptyTrash = await json<{ documents: unknown[] }>(
+      fixture,
+      `/api/workspaces/${workspaceId}/trash`,
+      { cookie: writer.cookie }
+    );
+    expect(emptyTrash.documents).toEqual([]);
+  });
+
   it("reorders knowledge bases atomically and rejects stale order revisions", async () => {
     const fixture = await startServer();
     const session = await register(fixture, "order@example.com", "secret-123");

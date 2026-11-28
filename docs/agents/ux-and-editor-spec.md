@@ -36,13 +36,13 @@ M1.1 只实现 Web 端，但所有领域契约、存储接口和编辑器命令�
 
 视觉关键词：
 
-> 白色、轻盈、圆润、安静、精确、可触摸。
+> 暖白、轻盈、纸感、安静、精确、可触摸。
 
 体验原则：
 
 1. 随记用于快速写，知识库用于稳定读。
 2. 随记默认编辑，知识库文档默认预览。
-3. 界面层级依靠留白、边框、字重和轻背景，不依靠大面积彩色卡片。
+3. 界面层级依靠留白、细线、字重和轻背景，不依靠大面积彩色卡片。
 4. 所有交互反馈平滑、克制，不制造布局跳动。
 5. Markdown 是正文事实源，未知语法不能静默丢失。
 6. 图表、图片和附件是独立资产，不进入 Markdown 正文 JSON。
@@ -57,7 +57,7 @@ M1.1 只实现 Web 端，但所有领域契约、存储接口和编辑器命令�
 
 - 一个账号可有多个工作区。
 - 顶部栏不显示当前工作区名称，只显示 Logo 和独立的向下箭头按钮。
-- 点击箭头打开工作区选择菜单。
+- 点击箭头打开工作区选择菜单，可直接创建工作区并进入新空间。
 - 每个工作区记住上次使用的模式、展开状态和界面偏好。
 - 左下角“工作区设置”打开设置弹窗，不触发新建知识库；可重命名当前工作区，并调整文档搜索快捷键、新文档信息栏默认状态和正文阅读字号。
 - 搜索快捷键、信息栏默认状态和阅读字号保存在当前浏览器，按工作区隔离；刷新后仍保持。
@@ -74,6 +74,7 @@ M1.1 只实现 Web 端，但所有领域契约、存储接口和编辑器命令�
 - 随记打开后直接进入编辑状态。
 - 支持标签筛选、最近文档、导出、删除和归档。
 - 列表按最近更新时间或创建时间排序，可按今天、昨天和更早分组。
+- “最近打开”与“全部随记”同时显示时，后者不重复前者的条目。
 
 ### 3.3 Knowledge Bases
 
@@ -84,6 +85,7 @@ M1.1 只实现 Web 端，但所有领域契约、存储接口和编辑器命令�
 - 知识库内容来自随记归档或 Markdown 导入。
 - 不在知识库中直接新建文档。
 - 知识库可以重命名、排序、归档随记、导出和删除。
+- 文档列表可按最近更新、创建时间和标题顺序排序。
 - 删除知识库时，其中文档默认全部移回随记，不删除正文。
 
 ### 3.4 Document Lifecycle
@@ -100,6 +102,10 @@ Knowledge-base document (preview)
 Knowledge-base document
   -> return to scratch
 Scratch note (editing)
+
+Scratch or knowledge document
+  -> move to trash
+  -> restore or permanently delete
 ```
 
 归档与移回保留：
@@ -134,11 +140,11 @@ Scratch note (editing)
 ### 5.1 Layout
 
 - 登录和注册内容居中放在约 `400–440px` 宽的白色面板中。
-- 页面背景使用雾白 `#F7F9F8`。
+- 页面背景使用中性雾白 `#F7F7F5`。
 - 不使用铺满全屏的双栏营销页、大插画或大面积渐变。
 - 品牌只显示 Lucide 图标和英文 `InkLoom`。
 - 桌面居中，移动端保留约 `16px` 安全边距。
-- 面板使用 `18px` 圆角、细边框和非常轻的阴影。
+- 面板使用 `12px` 圆角、细边框和非常轻的阴影。
 
 ### 5.2 Login
 
@@ -162,8 +168,7 @@ Scratch note (editing)
 
 - 可选显示名称，最多 40 字符。
 - 邮箱。
-- 至少 8 字符的密码。
-- 确认密码，仅客户端校验。
+- 至少 8 字符的密码，并提供显示/隐藏控制与明确规则说明。
 
 成功后：
 
@@ -188,11 +193,11 @@ Scratch note (editing)
 Menu  InkLoom  chevron          Save status   Help   Account
 ```
 
-- 高度约 `52–58px`。
-- 白或近白背景，底部 `1px` 浅灰绿色边框。
+- 高度约 `56px`。
+- 白色背景，底部 `1px` 中性浅灰边框。
 - Logo 右侧只显示向下箭头，不显示工作区名称。
 - 保存状态靠右，保持安静。
-- 中等屏幕减少文字，手机端保存状态缩为状态点。
+- 中等屏幕减少文字，手机端保留“已保存”“保存中”或“失败”等短标签。
 - 不用顶部栏重复文档标题。
 
 ### 6.2 Responsive Structure
@@ -207,7 +212,7 @@ Menu  InkLoom  chevron          Save status   Help   Account
 - 根容器使用 `100dvh` 和安全区域。
 - 不同区域独立滚动。
 - 打开文件栏时关闭信息栏，反之亦然。
-- 文档内容区铺满侧栏与信息栏之间的全部可用宽度，不设置居中固定最大宽度。
+- 文档外壳铺满侧栏与信息栏之间；正文使用约 `76ch` 的居中阅读画布，宽表格和代码在自身容器内滚动。
 - 文档信息栏展开和收起使用宽度、位移与透明度组合过渡；桌面端不制造未解释的空白列。
 - 信息栏关闭后从布局和无障碍树中退出，内部元素不可聚焦。
 - 抽屉关闭后焦点回到触发按钮。
@@ -247,7 +252,7 @@ Search documents                    +
 ### 7.2 Scratch View
 
 - 文档平铺，按今天、昨天和更早分组。
-- 显示标题、两行摘要、最多三个标签和更新时间。
+- 显示标题、更新时间、最多两个标签和当前选中态；正文标题与摘要不进入侧栏。
 - 标签可筛选。
 - 每行提供独立操作按钮：桌面 hover/focus 显示，触控设备常显。
 - 随记行菜单包含重命名、归档到知识库和删除文档。
@@ -291,10 +296,10 @@ Search documents                    +
 
 ### 7.7 File Text and Keyboard
 
-- 文档标题一行省略，摘要两行。
+- 文档标题一行省略，元数据一行。
 - `F2` 行内重命名。
 - 方向键在条目间导航，Enter 打开。
-- Delete 打开确认，不直接删除。
+- Delete 打开确认并将文档移入回收站，不直接永久删除。
 - 触控目标至少 `36px`，手机至少 `44px`。
 
 ## 8. Editor Architecture
@@ -322,15 +327,14 @@ Asset Layer
 
 工具栏固定在编辑区顶部，不随正文滚动。
 
-默认分组：
+默认只常驻高频命令：
 
 - 撤销、重做、清除格式。
-- 正文、H1–H6、字号。
+- 正文、H1–H2。
 - 加粗、斜体、下划线、删除线、行内代码。
-- 文字颜色、背景高亮。
-- 对齐、无序列表、有序列表、任务列表、缩进、行高。
-- 插入菜单、链接、引用、分割线。
-- 查找和更多。
+- 无序列表、有序列表、任务列表。
+- 链接、图片、引用、表格。
+- “更多格式”菜单承载 H3–H6、附件、图表、公式、提示块、折叠块和代码块。
 
 - 工具栏始终保持单行。
 - 空间不足时横向滚动，不折成多排。
@@ -676,6 +680,16 @@ On `REVISION_CONFLICT`:
 
 Multi-tab editing uses `BroadcastChannel`; only one tab owns editing at a time.
 
+### 12.6 Trash
+
+- Deleting a document is a revision-checked soft delete.
+- The sidebar exposes a shared trash entry for the current workspace.
+- Trash lists title, deleted/updated time and original path.
+- Restore recreates the document in its original scratch note or knowledge base;
+  a conflicting path receives a numbered suffix.
+- Permanent deletion requires a second confirmation and removes body, tags,
+  revisions and asset references.
+
 ## 13. Knowledge-Base Reading Mode
 
 Knowledge-base documents open in read-only preview by default.
@@ -740,25 +754,26 @@ Sections:
 ### 16.1 Color Tokens
 
 ```css
---color-canvas: #f7f9f8;
+--color-canvas: #f7f7f5;
 --color-surface: #ffffff;
---color-surface-subtle: #fcfdfc;
---color-surface-muted: #f1f5f3;
---color-border: #e4ebe6;
---color-border-strong: #d2ded7;
---color-text: #17231d;
---color-text-secondary: #5f6d65;
---color-text-muted: #8b9891;
---color-brand: #2f7d5d;
---color-brand-hover: #286d51;
---color-brand-soft: #eaf6ef;
---color-brand-selected: #dff2e7;
---color-danger: #c65353;
+--color-surface-subtle: #f1f1ef;
+--color-surface-muted: #ececea;
+--color-border: #e7e7e4;
+--color-border-strong: #d8d8d4;
+--color-text: #37352f;
+--color-text-secondary: #5f5e5b;
+--color-text-muted: #73726f;
+--color-brand: #2b6249;
+--color-brand-hover: #244f3c;
+--color-brand-soft: #f0f7f3;
+--color-brand-selected: #ececea;
+--color-danger: #a84f43;
 --color-warning: #b7791f;
 --color-info: #5a7fa6;
 ```
 
-Pine green is an accent only. No large green background panels.
+Graphite neutrals establish the Notion-like paper workspace. Pine green is a
+single accent only. No large green background panels or multicolor gradients.
 
 ### 16.2 Typography
 
@@ -778,17 +793,19 @@ Pine green is an accent only. No large green background panels.
 - H1 `28–30px`, H2 `22–24px`, H3 `18–20px`.
 - UI `13–14px`, buttons `13px / 500`.
 - Inputs remain at least `16px` on mobile.
+- UI and reading text use the same sans-serif family; heading hierarchy comes
+  from weight and size, not a decorative display face.
 - Use tabular numbers for time, counts and revisions.
 - Do not animate font weight.
 - Avoid negative tracking on Chinese text.
 
 ### 16.3 Radius and Elevation
 
-- Control radius `10px`.
+- Control radius `8px`.
 - Menu/popover radius `12px`.
-- Panel radius `14px`.
-- Login/modal radius `18px`.
-- Cards and media `12–16px`.
+- Panel radius `12px`.
+- Login/modal radius `16px`.
+- Cards and media `8–16px`.
 - Use `xs`, `sm`, `popover` and `modal` shadows only.
 - The white theme establishes hierarchy with borders and whitespace, not saturated surfaces.
 
@@ -823,9 +840,11 @@ Pine green is an accent only. No large green background panels.
 - Task dialogs are `380–440px`; medium dialogs `480–560px`; large dialogs up to `960px`.
 - Mobile dialogs become bottom sheets.
 - Primary action is on the right; cancel on the left.
-- Use specific button labels such as “Create knowledge base” and “Delete document”.
+- Use specific button labels such as “创建知识库”和“移入回收站”。
 - Destructive actions require action-time confirmation.
 - Archiving uses the knowledge-base picker as its only confirmation.
+- Archive success exposes a 6-second “撤销” action.
+- Document deletion moves the document to trash and exposes a 6-second “撤销” action.
 - Typing the workspace name is required for workspace deletion.
 - Menus support keyboard navigation, flip positioning and internal scrolling.
 - Toasts are used for archive, move, export, restore and upload results.
@@ -843,6 +862,8 @@ Pine green is an accent only. No large green background panels.
 - Tables and trees have semantic roles and keyboard navigation.
 - Reduced motion is fully supported.
 - Color is never the only signal for state or error.
+- Core login, empty workspace and editor screens pass automated serious/critical
+  axe checks.
 
 ## 20. Responsive Acceptance
 

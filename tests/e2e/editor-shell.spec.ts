@@ -25,7 +25,8 @@ test("uses one command registry for toolbar, slash menu and shortcuts", async ({
   await page.keyboard.press("/");
   await expect(page.getByText("插入内容")).toBeVisible();
   await expect(page.getByRole("button", { name: "表格" }).last()).toBeVisible();
-  await page.getByRole("button", { name: "引用" }).last().click();
+  await page.keyboard.type("引用");
+  await page.keyboard.press("Enter");
   await expect(page.locator(".ProseMirror blockquote")).toBeVisible();
 
   await page.keyboard.press("Control+j");
@@ -113,7 +114,7 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
     page.locator(`aside [data-document-id="${secondNoteId}"]`).first()
   ).toBeVisible();
 
-  await page.locator("aside").getByRole("button", { name: "#产品" }).click();
+  await page.locator("aside").getByRole("radio", { name: "#产品" }).click();
   const taggedNote = page
     .locator(`aside [data-document-id="${noteId}"]`)
     .first()
@@ -133,8 +134,8 @@ test("creates flat scratch notes with tags, filtering, export and delete", async
   await page.getByRole("button", { name: "文档操作" }).click();
   await page.getByRole("menuitem", { name: "删除文档" }).click();
   await page
-    .getByRole("dialog", { name: "删除文档" })
-    .getByRole("button", { name: "确认删除" })
+    .getByRole("dialog", { name: "移入回收站" })
+    .getByRole("button", { name: "移入回收站" })
     .click();
   await expect(page).toHaveURL(/\/notes$/);
   await expect(
@@ -196,6 +197,17 @@ test("renames a scratch note from its row action menu", async ({ page }) => {
   await expect
     .poll(() => page.locator("aside").innerText())
     .toContain("重命名后的随记");
+
+  const renamedRowButton = page
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
+    .getByRole("button")
+    .first();
+  await renamedRowButton.focus();
+  await page.keyboard.press("F2");
+  const keyboardRename = page.getByRole("dialog", { name: "重命名文档" });
+  await expect(keyboardRename).toBeVisible();
+  await keyboardRename.getByRole("button", { name: "取消" }).click();
 });
 
 test("shows title-only document rows with ellipsis for long names", async ({
@@ -252,7 +264,7 @@ test("archives a saved scratch note into a flat knowledge base", async ({
   await knowledgeDialog.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/knowledge\/[^/]+$/);
 
-  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
   const noteRow = page
     .locator(`aside [data-document-id="${noteId}"]`)
     .first()
@@ -269,7 +281,7 @@ test("archives a saved scratch note into a flat knowledge base", async ({
   await archiveDialog.getByRole("button", { name: "确认归档" }).click();
   await expect(page).toHaveURL(/\/notes$/);
 
-  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("radio", { name: "知识库", exact: true }).click();
   await page
     .getByRole("button", { name: /产品知识/ })
     .first()
@@ -283,6 +295,65 @@ test("archives a saved scratch note into a flat knowledge base", async ({
   await archivedRow.getByRole("button", { name: /操作$/ }).click();
   await expect(page.getByRole("menuitem", { name: "重命名" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "删除文档" })).toBeVisible();
+});
+
+test("undoes an archive from the success toast", async ({ page }) => {
+  await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
+  await page.getByLabel("Markdown 正文").click();
+  await page.keyboard.type("可撤销归档");
+  await createKnowledgeBaseFromMenu(page, "可撤销知识库");
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
+  await page
+    .locator(`aside [data-document-id="${noteId}"]`)
+    .first()
+    .getByRole("button")
+    .first()
+    .click();
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "归档到知识库" }).click();
+  await page
+    .getByRole("dialog", { name: "归档到知识库" })
+    .getByRole("button", { name: "确认归档" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  const restoreRequest = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/documents\/[^/]+\/restore-to-notes$/.test(
+        new URL(response.url()).pathname
+      )
+  );
+  await page.getByRole("button", { name: "撤销" }).click();
+  await restoreRequest;
+  await expect(page).toHaveURL(new RegExp(`/notes/${noteId}$`));
+  await expect(page.getByLabel("Markdown 正文")).toContainText("可撤销归档");
+});
+
+test("restores a deleted document from the trash", async ({ page }) => {
+  await openScratchNote(page);
+  const noteId = documentIdFromUrl(page);
+  await page.getByRole("button", { name: "文档操作" }).click();
+  await page.getByRole("menuitem", { name: "删除文档" }).click();
+  await page
+    .getByRole("dialog", { name: "移入回收站" })
+    .getByRole("button", { name: "移入回收站" })
+    .click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  await page.getByRole("button", { name: "回收站" }).click();
+  const dialog = page.getByRole("dialog", { name: "回收站" });
+  await expect(dialog).toBeVisible();
+  const restoreRequest = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/documents\/[^/]+\/restore$/.test(new URL(response.url()).pathname)
+  );
+  await dialog.getByRole("button", { name: "恢复" }).first().click();
+  await restoreRequest;
+  await expect(page).toHaveURL(new RegExp(`/notes/${noteId}$`));
+  await expect(page.getByLabel("Markdown 正文")).toBeVisible();
 });
 
 test("renames and revision-safely reorders flat knowledge bases", async ({
@@ -311,6 +382,25 @@ test("renames and revision-safely reorders flat knowledge bases", async ({
   ).toBeVisible();
 });
 
+test("sorts knowledge documents from the sidebar menu", async ({ page }) => {
+  await openScratchNote(page);
+  await createKnowledgeBaseFromMenu(page, "排序知识库");
+  const sortedRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "GET" &&
+      url.pathname.endsWith("/documents") &&
+      url.searchParams.get("sort") === "title"
+    );
+  });
+  await page.getByRole("button", { name: "知识库文档排序" }).click();
+  await page.getByRole("menuitem", { name: "标题顺序" }).click();
+  await sortedRequest;
+  await expect(
+    page.getByRole("button", { name: "知识库文档排序" })
+  ).toContainText("标题顺序");
+});
+
 test("moves a knowledge document back and preserves it when deleting the base", async ({
   page
 }) => {
@@ -319,7 +409,7 @@ test("moves a knowledge document back and preserves it when deleting the base", 
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("知识库往返文档");
   await createKnowledgeBaseFromMenu(page, "往返知识库");
-  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
   const noteRow = page
     .locator(`aside [data-document-id="${noteId}"]`)
     .first()
@@ -335,7 +425,7 @@ test("moves a knowledge document back and preserves it when deleting the base", 
     .click();
   await expect(page).toHaveURL(/\/notes$/);
 
-  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("radio", { name: "知识库", exact: true }).click();
   await page.getByRole("button", { name: "往返知识库", exact: true }).click();
   const knowledgeDoc = page
     .locator("aside")
@@ -348,7 +438,7 @@ test("moves a knowledge document back and preserves it when deleting the base", 
   await page.getByRole("menuitem", { name: "移回随记" }).click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
 
-  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("radio", { name: "知识库", exact: true }).click();
   await page.getByRole("button", { name: "往返知识库", exact: true }).click();
   await page.getByRole("button", { name: "往返知识库 操作" }).click();
   await page.getByRole("menuitem", { name: "删除知识库" }).click();
@@ -358,7 +448,7 @@ test("moves a knowledge document back and preserves it when deleting the base", 
     .click();
   await expect(page.getByRole("button", { name: /往返知识库/ })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
   await expect(
     page.locator(`aside [data-document-id="${noteId}"]`).first()
   ).toBeVisible();
@@ -378,7 +468,7 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
     if (index < 17) await page.keyboard.press("Enter");
   }
   await createKnowledgeBaseFromMenu(page, "预览知识库");
-  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
   const noteRow = page
     .locator(`aside [data-document-id="${noteId}"]`)
     .first()
@@ -394,7 +484,7 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
     .click();
   await expect(page).toHaveURL(/\/notes$/);
 
-  await page.getByRole("button", { name: "知识库", exact: true }).click();
+  await page.getByRole("radio", { name: "知识库", exact: true }).click();
   await page.getByRole("button", { name: "预览知识库", exact: true }).click();
   await page
     .locator("aside")
@@ -450,6 +540,12 @@ test("keeps knowledge documents preview-first with lossless edit switching", asy
   await expect(
     page.getByRole("button", { name: "编辑", exact: true })
   ).toBeVisible();
+  await page.keyboard.press("Control+Shift+E");
+  await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
+    "aria-readonly",
+    "false"
+  );
+  await expect(page.getByRole("toolbar", { name: "文档格式" })).toBeVisible();
 });
 
 test("searches scratch and knowledge documents through the server index", async ({
@@ -460,7 +556,7 @@ test("searches scratch and knowledge documents through the server index", async 
   await page.getByLabel("Markdown 正文").click();
   await page.keyboard.type("跨库全文搜索关键词");
   await createKnowledgeBaseFromMenu(page, "搜索知识库");
-  await page.getByRole("button", { name: "随记", exact: true }).click();
+  await page.getByRole("radio", { name: "随记", exact: true }).click();
   const archivedCandidate = page
     .locator(`aside [data-document-id="${noteId}"]`)
     .first()
@@ -524,12 +620,11 @@ test("searches scratch and knowledge documents through the server index", async 
   await expect(page.locator("mark").first()).toBeVisible();
   await captureUiReview(page, "t39-search-1440x960.png");
 
-  await page
-    .locator("aside")
-    .getByRole("button")
-    .filter({ hasText: "跨库全文搜索关键词" })
-    .first()
-    .click();
+  await page.getByPlaceholder("搜索").press("ArrowDown");
+  await expect(
+    page.getByRole("option", { name: /跨库全文搜索关键词/ })
+  ).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/knowledge\/[^/]+\/[^/]+$/);
   await expect(page.getByLabel("Markdown 正文")).toHaveAttribute(
     "aria-readonly",
@@ -653,7 +748,7 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
       String(body.markdown ?? "").includes("```mermaid")
     );
   });
-  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+  await clickEditorCommand(page, "Mermaid 图表");
   await expect(page.locator(".inkloom-mermaid-svg svg").last()).toBeVisible({
     timeout: 15_000
   });
@@ -686,7 +781,7 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
 
   await page.getByRole("button", { name: "文档操作" }).click();
   await page.getByRole("menuitem", { name: "版本历史" }).click();
-  const drawer = page.getByRole("complementary", { name: "版本历史" });
+  const drawer = page.getByRole("dialog", { name: "版本历史" });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText(/revision/).first()).toBeVisible();
   await drawer
@@ -709,10 +804,10 @@ test("previews revision NodeViews, diffs blocks and restores safely", async ({
   });
   await captureUiReview(page, "t41-history-1440x960.png");
 
-  await drawer.getByRole("button", { name: "块差异" }).click();
+  await drawer.getByRole("radio", { name: "块差异" }).click();
   await expect(drawer.getByText("新增").first()).toBeVisible();
   await expect(drawer.getByText("版本二内容")).toBeVisible();
-  await drawer.getByRole("button", { name: "内容预览" }).click();
+  await drawer.getByRole("radio", { name: "内容预览" }).click();
 
   await drawer.getByRole("button", { name: "恢复此版本" }).click();
   const restoreDialog = page.getByRole("dialog", { name: "恢复历史版本" });
@@ -753,9 +848,10 @@ test("opens real workspace settings and applies persisted editor preferences", a
   await settings.getByLabel("工作区名称").fill(renamedWorkspace);
   await settings.getByLabel("文档搜索快捷键").selectOption("ctrl-shift-f");
   await settings.getByLabel("新文档默认打开信息栏").check();
-  await settings.getByRole("button", { name: "大号正文" }).click();
+  await settings.getByRole("radio", { name: "大号正文" }).click();
   await settings.getByRole("button", { name: "保存设置" }).click();
   await expect(settings).toBeHidden();
+  await expect(page.getByText("工作区设置已保存")).toBeVisible();
 
   await page.keyboard.press("Control+Shift+F");
   await expect(page.getByPlaceholder("搜索")).toBeFocused();
@@ -780,8 +876,8 @@ test("opens real workspace settings and applies persisted editor preferences", a
   await expect(page.getByLabel("工作区名称")).toHaveValue(renamedWorkspace);
   await expect(page.getByLabel("文档搜索快捷键")).toHaveValue("ctrl-shift-f");
   await expect(page.getByLabel("新文档默认打开信息栏")).toBeChecked();
-  await expect(page.getByRole("button", { name: "大号正文" })).toHaveAttribute(
-    "aria-pressed",
+  await expect(page.getByRole("radio", { name: "大号正文" })).toHaveAttribute(
+    "aria-checked",
     "true"
   );
 });
@@ -817,6 +913,8 @@ test("reorders blocks from the single-character gutter handle", async ({
     secondHandle!.y + secondHandle!.height / 2,
     { steps: 8 }
   );
+  await expect(handles.first()).toHaveAttribute("data-dragging", "true");
+  await expect(handles.nth(1)).toHaveAttribute("data-drop", "true");
   await page.mouse.up();
   await expect
     .poll(() => page.locator(".ProseMirror").innerText())
@@ -880,6 +978,30 @@ test("reserves a separate gutter for block actions", async ({ page }) => {
   expect(overlap).toBe(false);
 });
 
+test("reorders blocks with the keyboard drag handle", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await page.keyboard.type("键盘第一块");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("键盘第二块");
+
+  const firstHandle = page.locator('[aria-label^="块 "]').first();
+  await firstHandle.focus();
+  await page.keyboard.press("Space");
+  await expect(firstHandle).toHaveAttribute("data-dragging", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator('[aria-label^="块 "]').nth(1)).toHaveAttribute(
+    "data-drop",
+    "true"
+  );
+  await page.keyboard.press("Space");
+
+  await expect
+    .poll(() => page.locator(".ProseMirror").innerText())
+    .toMatch(/^键盘第二块\s+键盘第一块/);
+});
+
 test("fills the editor width, animates document info and resets new-note scroll", async ({
   page
 }) => {
@@ -897,7 +1019,7 @@ test("fills the editor width, animates document info and resets new-note scroll"
   const panel = page.locator('[aria-label="文档信息栏"]');
   await expect(panel).toHaveAttribute("data-state", "closed");
   await expect(panel).toHaveAttribute("aria-hidden", "true");
-  await expect(panel).toHaveCSS("transition-property", /transform/);
+  await expect(panel).toHaveCSS("transition-property", /width.*opacity/);
   await page.getByRole("button", { name: "打开文档信息" }).click();
   await expect(panel).toHaveAttribute("data-state", "open");
   await expect
@@ -1099,7 +1221,7 @@ test("keeps a consistent block rhythm and inserts lines from diagram edges", asy
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   await page.keyboard.type("图表前一行");
-  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+  await clickEditorCommand(page, "Mermaid 图表");
 
   const mermaid = page.locator(".inkloom-mermaid-view").last();
   await expect(mermaid.locator(".inkloom-mermaid-svg svg")).toBeVisible({
@@ -1155,7 +1277,7 @@ test("saves a blank Excalidraw canvas and keeps its preview", async ({
   page
 }) => {
   await openScratchNote(page);
-  await page.getByRole("button", { name: "Excalidraw 画布" }).click();
+  await clickEditorCommand(page, "Excalidraw 画布");
 
   const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
   await expect(dialog.locator(".excalidraw")).toBeVisible({ timeout: 20_000 });
@@ -1188,7 +1310,7 @@ test("edits structured blocks and restores them after saving", async ({
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   await page.keyboard.type("发布说明");
-  await page.getByRole("button", { name: "四级标题", exact: true }).click();
+  await clickEditorCommand(page, "四级标题");
   await expect(
     page.locator(".ProseMirror h4").filter({ hasText: "发布说明" })
   ).toBeVisible();
@@ -1248,7 +1370,7 @@ test("edits structured blocks and restores them after saving", async ({
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "公式", exact: true }).click();
+  await clickEditorCommand(page, "公式");
   await expect(page.locator(".milkdown-code-block").last()).toBeVisible();
   const codeGutter = page.locator(".milkdown-code-block .cm-gutters").last();
   await expect(codeGutter).toBeVisible();
@@ -1260,7 +1382,7 @@ test("edits structured blocks and restores them after saving", async ({
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "提示块", exact: true }).click();
+  await clickEditorCommand(page, "提示块");
   const callout = page.locator('blockquote[data-callout="note"]').last();
   await expect(callout).toBeVisible();
   await page.keyboard.type("发布前请先完成备份。");
@@ -1291,7 +1413,7 @@ test("edits structured blocks and restores them after saving", async ({
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "折叠块", exact: true }).click();
+  await clickEditorCommand(page, "折叠块");
   const toggle = page.locator("details[data-inkloom-toggle]").last();
   await expect(toggle).toBeVisible();
   await expect(toggle.locator("summary")).toHaveText("折叠内容");
@@ -1316,7 +1438,7 @@ test("edits structured blocks and restores them after saving", async ({
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "分隔线", exact: true }).click();
+  await clickEditorCommand(page, "分隔线");
   const divider = page.locator(".ProseMirror hr").last();
   await expect(divider).toBeVisible();
   const dividerMetrics = await divider.evaluate((element) => ({
@@ -1350,7 +1472,7 @@ test("edits structured blocks and restores them after saving", async ({
   expect(markdown).toMatch(/\|\s+能力\s+\|\s+状态\s+\|/);
   expect(markdown).toContain("$$");
   expect(markdown).toContain("> [!NOTE]");
-  expect(markdown).toContain("<details>");
+  expect(markdown).toMatch(/<details(?:\s+open)?>/);
   expect(markdown).toContain("<summary>部署说明</summary>");
   expect(markdown).toContain("</details>");
 
@@ -1377,7 +1499,6 @@ test("edits structured blocks and restores them after saving", async ({
   });
   await page.setViewportSize({ width: 320, height: 720 });
   await page.waitForTimeout(250);
-  await page.getByRole("button", { name: "关闭导航" }).dispatchEvent("click");
   const overflow = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth
@@ -1440,7 +1561,7 @@ test("edits Mermaid source beside a live preview and restores it", async ({
   await openScratchNote(page);
   await page.getByLabel("Markdown 正文").click();
 
-  await page.getByRole("button", { name: "Mermaid 图表" }).click();
+  await clickEditorCommand(page, "Mermaid 图表");
   const diagram = page.locator(".inkloom-mermaid-view").last();
   await expect(diagram).toBeVisible();
   await expect(diagram.locator(".inkloom-mermaid-svg svg").first()).toBeVisible(
@@ -1537,7 +1658,7 @@ test("draws an Excalidraw scene, saves assets and recovers a snapshot", async ({
 }) => {
   await openScratchNote(page);
   await page.getByLabel("Markdown 正文").click();
-  await page.getByRole("button", { name: "Excalidraw 画布" }).click();
+  await clickEditorCommand(page, "Excalidraw 画布");
 
   const dialog = page.getByRole("dialog", { name: "Excalidraw 画布" });
   await expect(dialog).toBeVisible();
@@ -1905,7 +2026,7 @@ test("round-trips quote, task and code blocks", async ({ page }) => {
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   await page.keyboard.type("引用第一行");
-  await page.getByRole("button", { name: "引用", exact: true }).click();
+  await clickEditorCommand(page, "引用");
   await expect(
     page.locator(".ProseMirror blockquote").filter({ hasText: "引用第一行" })
   ).toBeVisible();
@@ -1921,7 +2042,7 @@ test("round-trips quote, task and code blocks", async ({ page }) => {
 
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "代码块", exact: true }).click();
+  await clickEditorCommand(page, "代码块");
   const code = page.locator(".milkdown-code-block .cm-content").last();
   await expect(code).toBeVisible();
   const saveRequest = page.waitForRequest((request) => {
@@ -1971,7 +2092,7 @@ async function openScratchNote(page: Page): Promise<string> {
   await page.goto("/register");
   await page.getByLabel("称呼").fill("编辑器验收");
   await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill("review-password");
+  await page.getByLabel("密码", { exact: true }).fill("review-password");
   await page.getByRole("button", { name: "创建并进入" }).click();
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/notes$/);
   await page
@@ -1980,6 +2101,18 @@ async function openScratchNote(page: Page): Promise<string> {
     .click();
   await expect(page).toHaveURL(/\/notes\/[^/]+$/);
   return page.url();
+}
+
+async function clickEditorCommand(page: Page, label: string) {
+  const toolbar = page.getByRole("toolbar", { name: "文档格式" });
+  const direct = toolbar.getByRole("button", { name: label, exact: true });
+  if ((await direct.count()) > 0) {
+    await direct.click();
+    return;
+  }
+  await toolbar.getByRole("button", { name: "更多格式" }).click();
+  await page.getByRole("menuitem", { name: label }).click();
+  await page.getByLabel("Markdown 正文").focus();
 }
 
 function documentIdFromUrl(page: Page): string {

@@ -13,16 +13,19 @@
 - Production API: `https://api.inkloom.imhgl.com`.
 - Active release: `5824e4691a3498fb2c1967a190f5a602ec968116`.
 - M1.1 Web product-grade editor and knowledge workflow are deployed.
-- T62–T64 documentation governance, ADR alignment and push are complete; no product
-  implementation milestone is active.
+- T65–T71 specialized interaction, accessibility, workflow, Notion-like visual
+  refresh and performance-gate work is complete locally.
+- The production release still points to the previous M1.1 build until a
+  deployment is explicitly requested.
+- T62–T64 documentation governance, ADR alignment and push are complete.
 - Desktop, mobile, HarmonyOS, M2 synchronization and real-time collaboration
   remain paused.
 
 ## Next Work
 
-Wait for the user to explicitly approve a new milestone. Do not resume desktop,
-M2, collaboration or mobile work based on the existence of scaffolds or
-placeholder contracts.
+Review the local T65–T71 implementation and UI-review screenshots. Deploy only
+after an explicit release request. Do not resume desktop, M2, collaboration or
+mobile work based on the existence of scaffolds or placeholder contracts.
 
 ## Blocked Work
 
@@ -32,6 +35,8 @@ placeholder contracts.
 
 ## Verification
 
-The deployed release, container/data retention and production checks are
-recorded in [DEVELOP_PLAN.md](./DEVELOP_PLAN.md). Historical M1.1 evidence is in
-the [acceptance archive](./docs/archive/m1-1-acceptance-2026-11-21.md).
+T65–T71 verification evidence is recorded in
+[DEVELOP_PLAN.md](./DEVELOP_PLAN.md): 55 Playwright tests, 86 Vitest tests,
+lint, formatting, typecheck, bundle budgets and full build passed. Historical
+M1.1 evidence is in the
+[acceptance archive](./docs/archive/m1-1-acceptance-2026-11-21.md).

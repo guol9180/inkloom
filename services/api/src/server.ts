@@ -489,6 +489,13 @@ async function route({
       return;
     }
 
+    if (method === "GET" && segments.length === 4 && segments[3] === "trash") {
+      sendJson(response, 200, {
+        documents: database.listDeletedDocuments(user.id, workspaceId)
+      });
+      return;
+    }
+
     if (
       method === "GET" &&
       segments.length === 4 &&
@@ -690,6 +697,35 @@ async function route({
         sendJson(response, 200, { document });
         return;
       }
+      if (segments[5] === "restore") {
+        const document = database.restoreDeletedDocument(
+          user.id,
+          workspaceId,
+          segments[4],
+          requiredRevision(input.baseRevision)
+        );
+        sendJson(response, 200, { document });
+        return;
+      }
+    }
+
+    if (
+      segments.length === 6 &&
+      segments[3] === "documents" &&
+      segments[4] &&
+      segments[5] === "permanent" &&
+      method === "DELETE"
+    ) {
+      const input = parseRecord(body);
+      database.deleteDocumentPermanently(
+        user.id,
+        workspaceId,
+        segments[4],
+        requiredRevision(input.baseRevision)
+      );
+      response.statusCode = 204;
+      response.end();
+      return;
     }
 
     if (segments.length === 5 && segments[3] === "documents" && segments[4]) {

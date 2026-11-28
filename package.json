@@ -10,6 +10,7 @@
     "node": ">=22.12.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
     "@playwright/test": "^1.65.1",
     "@types/node": "^22.20.5",
     "@vitest/coverage-v8": "5.1.0",
@@ -21,7 +22,7 @@
   "scripts": {
     "dev:web": "pnpm --filter @inkloom/web dev",
     "dev:api": "pnpm --filter @inkloom/api dev",
-    "build": "pnpm --filter @inkloom/web build && pnpm --filter @inkloom/api build",
+    "build": "pnpm --filter @inkloom/web build && pnpm --filter @inkloom/api build && node scripts/verify-bundle-budget.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint --deny-warnings .",
     "format": "prettier --write .",

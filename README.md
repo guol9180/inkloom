@@ -17,9 +17,10 @@ The current production release is **M1.1: product-grade editor and knowledge
 workflow**, and supports:
 
 - Email registration, login, logout and HttpOnly sessions.
-- User-isolated cloud workspaces.
+- Multiple user-isolated cloud workspaces with an in-product create flow.
 - Flat scratch notes and user-created knowledge bases.
 - Markdown documents, tags, revisions, history, search and conflict copies.
+- Recoverable document trash with restore and permanent deletion.
 - Product-level Milkdown editing, preview-first knowledge documents and a
   responsive Web UI.
 - Content-addressed assets, Mermaid and Excalidraw editing.
@@ -34,9 +35,11 @@ and mobile milestones remain paused until explicitly approved in
 Workspace
   ├─ Scratch
   │    └─ flat, directly editable Markdown notes with tags
-  └─ Knowledge
+  ├─ Knowledge
        └─ user-created knowledge bases
             └─ flat Markdown documents, preview-first
+  └─ Trash
+       └─ deleted documents, restorable
 ```
 
 - Scratch notes do not use user-managed folders.
@@ -75,11 +78,13 @@ semantics.
 
 - React 19 and TypeScript.
 - Vite and React Router.
-- Tailwind CSS 4 with semantic design tokens.
-- TanStack Query, React Hook Form, Zod and Zustand.
+- Tailwind CSS 4 with Notion-like neutral paper design tokens.
+- TanStack Query, React Hook Form and Zod.
 - Milkdown / ProseMirror / Remark for Markdown.
 - CodeMirror 6 only inside code and diagram source nodes.
-- Radix primitives and Lucide icons.
+- Radix primitives, cmdk, Vaul, Sonner, Floating UI and dnd-kit.
+- React Aria Components for accessible document lists.
+- Lucide icons, React Dropzone and an on-demand image lightbox.
 - Node.js 22, SQLite WAL, SQLite FTS5 and content-addressed assets.
 
 The product and architecture rationale is in

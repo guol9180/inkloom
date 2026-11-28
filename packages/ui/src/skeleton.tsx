@@ -4,7 +4,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "skeleton-shimmer block rounded-lg bg-[linear-gradient(90deg,#eef1ed_25%,#f8faf7_50%,#eef1ed_75%)] bg-[length:200%_100%]",
+        "skeleton-shimmer block rounded-lg bg-[linear-gradient(90deg,#efefed_25%,#fafafa_50%,#efefed_75%)] bg-[length:200%_100%]",
         className
       )}
       aria-hidden="true"
@@ -14,8 +14,8 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function WorkspaceSkeleton() {
   return (
-    <div className="flex h-dvh min-h-0 overflow-hidden bg-[#fafbf9]">
-      <aside className="hidden w-[17.5rem] shrink-0 border-r border-line-soft bg-white p-3 lg:block">
+    <div className="flex h-dvh min-h-0 overflow-hidden bg-canvas">
+      <aside className="hidden w-[17rem] shrink-0 border-r border-line bg-canvas p-3 lg:block">
         <Skeleton className="h-11 w-full rounded-xl" />
         <Skeleton className="mt-5 h-10 w-full rounded-xl" />
         <div className="mt-6 grid gap-2">
@@ -25,7 +25,7 @@ export function WorkspaceSkeleton() {
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-16 shrink-0 items-center border-b border-line-soft bg-white px-4">
+        <div className="flex h-14 shrink-0 items-center border-b border-line bg-paper px-4">
           <Skeleton className="h-9 w-36 rounded-xl" />
           <Skeleton className="ml-auto size-9 rounded-xl" />
         </div>

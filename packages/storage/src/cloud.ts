@@ -275,6 +275,15 @@ export class CloudClient {
     return response.documents;
   }
 
+  async listDeletedDocuments(
+    workspaceId: WorkspaceId
+  ): Promise<CloudDocumentSummary[]> {
+    const response = await this.request<{ documents: CloudDocumentSummary[] }>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/trash`
+    );
+    return response.documents;
+  }
+
   async searchDocuments(
     workspaceId: WorkspaceId,
     input: { query: string; page?: number; pageSize?: number }
@@ -404,6 +413,33 @@ export class CloudClient {
       { method: "POST", body: { baseRevision } }
     );
     return response.document;
+  }
+
+  async restoreDeletedDocument(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId,
+    baseRevision: number
+  ): Promise<DocumentSnapshot> {
+    const response = await this.request<{ document: DocumentSnapshot }>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/restore`,
+      { method: "POST", body: { baseRevision } }
+    );
+    return response.document;
+  }
+
+  async permanentlyDeleteDocument(
+    workspaceId: WorkspaceId,
+    documentId: DocumentId,
+    baseRevision: number
+  ): Promise<void> {
+    await this.request<void>(
+      `/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/documents/${encodeURIComponent(documentId)}/permanent`,
+      { method: "DELETE", body: { baseRevision } }
+    );
   }
 
   async markDocumentOpened(

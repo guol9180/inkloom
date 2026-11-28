@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock3, FileClock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { diffMarkdownBlocks } from "@inkloom/editor";
 import type { DocumentSnapshot, WorkspaceId } from "@inkloom/core";
 import type { CloudDocumentRevision } from "@inkloom/storage";
 import { cloudClient } from "../../cloud-workspace";
-import { AppDialog, Button, IconButton, Skeleton } from "@inkloom/ui";
-import { ProductMarkdownEditor } from "../editor/product-markdown-editor";
+import {
+  AppDialog,
+  AppSheet,
+  Button,
+  IconButton,
+  SegmentedControl,
+  Skeleton
+} from "@inkloom/ui";
+
+const ProductMarkdownEditor = lazy(() =>
+  import("../editor/product-markdown-editor").then((module) => ({
+    default: module.ProductMarkdownEditor
+  }))
+);
 
 export function RevisionHistoryDrawer({
   open,
@@ -81,10 +93,16 @@ export function RevisionHistoryDrawer({
 
   return (
     <>
-      <div className="fixed inset-0 z-[90] bg-ink-950/16 backdrop-blur-[2px]" />
-      <aside
-        aria-label="版本历史"
-        className="fixed inset-y-0 right-0 z-[95] flex w-[min(96vw,58rem)] flex-col border-l border-line-soft bg-white shadow-popover"
+      <AppSheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        title="版本历史"
+        description={`查看和恢复“${document.meta.title}”的历史版本。`}
+        side="right"
+        showHeader={false}
+        bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <header className="flex min-h-14 items-center gap-3 border-b border-line-soft px-4">
           <span className="grid size-8 place-items-center rounded-xl bg-brand-50 text-brand-700">
@@ -94,7 +112,7 @@ export function RevisionHistoryDrawer({
             <strong className="block truncate text-sm font-semibold text-ink-900">
               版本历史
             </strong>
-            <p className="truncate text-[0.62rem] text-ink-400">
+            <p className="truncate text-[0.75rem] text-ink-400">
               {document.meta.title}
             </p>
           </div>
@@ -141,29 +159,17 @@ export function RevisionHistoryDrawer({
           </div>
 
           <div className="flex min-h-0 min-w-0 flex-col">
-            <div className="flex items-center gap-1 border-b border-line-soft px-3 py-2">
-              <button
-                type="button"
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  mode === "preview"
-                    ? "bg-brand-50 text-brand-800"
-                    : "text-ink-400 hover:text-ink-800"
-                }`}
-                onClick={() => setMode("preview")}
-              >
-                内容预览
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  mode === "diff"
-                    ? "bg-brand-50 text-brand-800"
-                    : "text-ink-400 hover:text-ink-800"
-                }`}
-                onClick={() => setMode("diff")}
-              >
-                块差异
-              </button>
+            <div className="border-b border-line-soft px-3 py-2">
+              <SegmentedControl
+                value={mode}
+                ariaLabel="版本比较方式"
+                className="w-fit grid-cols-2"
+                onValueChange={setMode}
+                options={[
+                  { value: "preview", label: "内容预览" },
+                  { value: "diff", label: "块差异" }
+                ]}
+              />
             </div>
             {error && (
               <p className="m-3 rounded-xl bg-danger-50 px-3 py-2 text-xs text-danger-700">
@@ -174,20 +180,33 @@ export function RevisionHistoryDrawer({
               mode === "preview" ? (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {/assets\//.test(selected.markdown) && (
-                    <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl bg-sun-50 px-3 py-2 text-[0.65rem] leading-5 text-sun-700">
+                    <div className="mx-4 mt-3 flex items-start gap-2 rounded-xl bg-sun-50 px-3 py-2 text-[0.75rem] leading-5 text-sun-700">
                       <TriangleAlert size={13} className="mt-0.5 shrink-0" />
                       历史版本中的资产若已被清理，会保留引用并显示缺失占位，不会自动移除。
                     </div>
                   )}
-                  <ProductMarkdownEditor
-                    value={selected.markdown}
-                    title={selected.meta.title}
-                    documentId={selected.meta.id}
-                    workspaceId={workspaceId}
-                    readOnly
-                    onChange={() => undefined}
-                    onFocusSearch={() => undefined}
-                  />
+                  <Suspense
+                    fallback={
+                      <div className="grid gap-2 p-4">
+                        {Array.from({ length: 8 }, (_, index) => (
+                          <Skeleton
+                            key={index}
+                            className="h-4 w-full rounded-md"
+                          />
+                        ))}
+                      </div>
+                    }
+                  >
+                    <ProductMarkdownEditor
+                      value={selected.markdown}
+                      title={selected.meta.title}
+                      documentId={selected.meta.id}
+                      workspaceId={workspaceId}
+                      readOnly
+                      onChange={() => undefined}
+                      onFocusSearch={() => undefined}
+                    />
+                  </Suspense>
                 </div>
               ) : (
                 <BlockDiff diff={diff} />
@@ -199,7 +218,7 @@ export function RevisionHistoryDrawer({
             )}
           </div>
         </div>
-      </aside>
+      </AppSheet>
 
       <AppDialog
         open={restoreOpen}
@@ -260,7 +279,7 @@ function RevisionList({
         return (
           <div key={revision.revisionId}>
             {showDate && (
-              <div className="px-2 pt-3 pb-1 text-[0.62rem] font-bold tracking-[0.08em] text-ink-300 uppercase">
+              <div className="px-2 pt-3 pb-1 text-[0.75rem] font-semibold text-ink-500">
                 {date}
               </div>
             )}
@@ -275,10 +294,10 @@ function RevisionList({
             >
               <Clock3 size={13} className="mt-0.5 shrink-0" />
               <span>
-                <strong className="block text-[0.68rem] font-semibold">
+                <strong className="block text-[0.75rem] font-semibold">
                   revision {revision.meta.revision}
                 </strong>
-                <small className="mt-0.5 block text-[0.6rem] text-ink-400">
+                <small className="mt-0.5 block text-[0.68rem] text-ink-500">
                   自动检查点 ·{" "}
                   {new Intl.DateTimeFormat("zh-CN", {
                     hour: "2-digit",
@@ -299,7 +318,7 @@ function RevisionList({
 function BlockDiff({ diff }: { diff: ReturnType<typeof diffMarkdownBlocks> }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <p className="mb-3 text-[0.62rem] text-ink-400">
+      <p className="mb-3 text-[0.75rem] text-ink-400">
         以历史版本为基准，比较当前内容中的新增与移除块。
       </p>
       <div className="grid gap-2">
@@ -315,12 +334,12 @@ function BlockDiff({ diff }: { diff: ReturnType<typeof diffMarkdownBlocks> }) {
             }`}
           >
             <div
-              className={`mb-1 text-[0.62rem] font-bold tracking-[0.08em] uppercase ${
+              className={`mb-1 text-[0.75rem] font-semibold ${
                 row.kind === "added"
                   ? "text-brand-700"
                   : row.kind === "removed"
                     ? "text-danger-700"
-                    : "text-ink-300"
+                    : "text-ink-500"
               }`}
             >
               {row.kind === "added"
@@ -329,7 +348,7 @@ function BlockDiff({ diff }: { diff: ReturnType<typeof diffMarkdownBlocks> }) {
                   ? "移除"
                   : "未变"}
             </div>
-            <pre className="line-clamp-6 whitespace-pre-wrap break-words font-mono text-[0.66rem] leading-5 text-ink-700">
+            <pre className="line-clamp-6 whitespace-pre-wrap break-words font-mono text-[0.75rem] leading-5 text-ink-700">
               {row.source}
             </pre>
           </article>

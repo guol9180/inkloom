@@ -133,6 +133,7 @@ PATCH  /api/workspaces/:workspaceId
 
 GET    /api/workspaces/:workspaceId/notes
 GET    /api/workspaces/:workspaceId/notes/recent
+GET    /api/workspaces/:workspaceId/trash
 
 GET    /api/workspaces/:workspaceId/knowledge-bases
 POST   /api/workspaces/:workspaceId/knowledge-bases
@@ -153,6 +154,8 @@ DELETE /api/workspaces/:workspaceId/documents/:documentId
 POST   /api/workspaces/:workspaceId/documents/:documentId/archive
 POST   /api/workspaces/:workspaceId/documents/:documentId/restore-to-notes
 POST   /api/workspaces/:workspaceId/documents/:documentId/open
+POST   /api/workspaces/:workspaceId/documents/:documentId/restore
+DELETE /api/workspaces/:workspaceId/documents/:documentId/permanent
 ```
 
 All writes include a `baseRevision`.
@@ -160,6 +163,13 @@ All writes include a `baseRevision`.
 The metadata-only `open` route updates `lastOpenedAt` without advancing the
 document content revision. Knowledge-base ordering is submitted as one
 revision-checked array and committed atomically.
+
+`DELETE /nodes/:nodeId` sets `deleted_at`, advances the revision, removes the
+document from FTS and clears its source links. `POST /restore` reinserts the
+document into FTS, resolves incoming links, allocates a conflict-free path when
+needed and creates a revision checkpoint. Permanent deletion is allowed only
+for an already trashed document and removes its search row before cascading the
+document, revisions and asset-reference rows.
 
 ### 2.3 Search and History
 
