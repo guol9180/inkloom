@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 当前生产：M1.1 Web 产品级编辑器与知识流已上线，运行 release `5824e46`。
+- 当前生产：Notion 风格工作区、无障碍收口与可恢复删除版本已上线，运行 release `185ad9b`。
 - 当前开发目标：M1.1 已交付；M1D 与后续里程碑等待用户确认。
 - 当前实现模式：只开发 Web；保留桌面、移动、HarmonyOS 和同步的领域/adapter 接入口，不实现对应 host。
-- 当前任务：T72 发布并部署 T68–T71。
+- 当前任务：无；T72 已完成生产发布。
 - 桌面端 T4 与跨平台契约 T9 因 M1.1 范围暂停而标记 blocked；M1D、M2、M3、M4 未获确认不得开始。
 
 ## 任务清单
@@ -22,9 +22,13 @@
   - Web、API、CORS、安全头、DEPLOYED_RELEASE 与 Workbench 容器状态一致。
   - 记录上一版本 SHA、回滚目标和最终生产验证证据。
 - 边界：只发布 Web/API 当前交付；不改 DNS、Caddy 路由、数据库卷或桌面/移动里程碑。
-- 状态：in-progress
+- 状态：done
 - 进度（只追加新行，不修改旧行）：
   - 2026-11-28 计划 用户批准发版并部署；建立生产发布任务卡。
+  - 2026-11-28 执行 提交并推送 `185ad9bcdef7cc9ca1c405a849f3a2b31a9b0e84`；CI run `46136479383` 与镜像发布 run `46137002073` 成功，API/Web GHCR 精确 SHA 标签均可读取。
+  - 2026-11-28 执行 使用阿里云 Workbench 在 `cn-chengdu` 实例 `i-2vc0tsca734n4hbxofgi` 做发布前健康、资源、备份和容器基线检查；生成 `/srv/inkloom-backups/inkloom-pre-release-20261128T104215Z.tgz`（973 KB）。
+  - 2026-11-28 执行 私有控制面 verify run `46137509649` 和 deploy run `46137558609` 成功；上一生产版本 `5824e4691a3498fb2c1967a190f5a602ec968116` 保留为回滚目标。
+  - 2026-11-28 验证 Workbench 显示 `DEPLOYED_RELEASE`、API/Web 镜像和容器均为 `185ad9bcdef7cc9ca1c405a849f3a2b31a9b0e84`，API/Web/Edge 健康，重启计数为 0；API health `ok:true`，Web 200，CORS 204，HSTS/CSP 等安全头通过。
 
 ### T68: 触控操作与无障碍收口（P0）
 

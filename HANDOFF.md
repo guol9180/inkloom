@@ -11,21 +11,22 @@
 
 - Production Web: `https://inkloom.imhgl.com`.
 - Production API: `https://api.inkloom.imhgl.com`.
-- Active release: `5824e4691a3498fb2c1967a190f5a602ec968116`.
-- M1.1 Web product-grade editor and knowledge workflow are deployed.
+- Active release: `185ad9bcdef7cc9ca1c405a849f3a2b31a9b0e84`.
+- The Notion-style workspace, accessibility pass, recoverable trash and
+  performance gates are deployed.
 - T65–T71 specialized interaction, accessibility, workflow, Notion-like visual
   refresh and performance-gate work is complete locally.
-- The production release still points to the previous M1.1 build until a
-  deployment is explicitly requested.
+- Previous production release `5824e4691a3498fb2c1967a190f5a602ec968116`
+  remains the rollback target.
 - T62–T64 documentation governance, ADR alignment and push are complete.
 - Desktop, mobile, HarmonyOS, M2 synchronization and real-time collaboration
   remain paused.
 
 ## Next Work
 
-Review the local T65–T71 implementation and UI-review screenshots. Deploy only
-after an explicit release request. Do not resume desktop, M2, collaboration or
-mobile work based on the existence of scaffolds or placeholder contracts.
+Monitor the deployed release and perform a new explicit release only for future
+commits. Do not resume desktop, M2, collaboration or mobile work based on the
+existence of scaffolds or placeholder contracts.
 
 ## Blocked Work
 
