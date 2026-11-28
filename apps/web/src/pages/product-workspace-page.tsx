@@ -29,15 +29,20 @@ import {
   Archive,
   ArrowUpDown,
   BookOpen,
+  BookMarked,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock3,
   CloudOff,
   Download,
   FileText,
   FolderPlus,
+  Home,
   History,
   Import,
+  LayoutGrid,
+  LayoutList,
   LoaderCircle,
   LogOut,
   Menu,
@@ -654,8 +659,8 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   }
 
   return (
-    <div className="app-product-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-canvas text-ink-900">
-      <header className="flex h-14 shrink-0 items-center border-b border-line bg-paper px-3 sm:px-4">
+    <div className="app-product-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-white text-ink-900">
+      <header className="flex h-14 shrink-0 items-center border-b border-line bg-paper px-3 sm:px-4 lg:hidden">
         <IconButton
           className="mr-1 lg:hidden"
           aria-label="打开导航"
@@ -752,6 +757,44 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        <WorkspaceGlobalSidebar
+          workspace={workspace}
+          workspaces={workspaces.data?.workspaces ?? []}
+          mode={mode}
+          workspaceId={workspaceId}
+          knowledgeBaseId={knowledgeBaseId}
+          knowledgeBases={knowledgeBases.data ?? []}
+          query={query}
+          onQuery={setQuery}
+          searchRef={searchRef}
+          onCreateNote={createBlankNote}
+          onCreateKnowledgeBase={() => {
+            setDraftName("");
+            setDialogError("");
+            setCreateDialog("knowledge");
+          }}
+          onCreateWorkspace={() => {
+            setWorkspaceCreateName("");
+            setWorkspaceCreateError("");
+            setWorkspaceCreateOpen(true);
+          }}
+          onImportMarkdown={() => importMarkdownRef.current?.click()}
+          onImportFolder={() => importFolderRef.current?.click()}
+          onRenameKnowledgeBase={(knowledgeBase) => {
+            setKnowledgeNameDraft(knowledgeBase.name);
+            setKnowledgeDialog({ mode: "rename", knowledgeBase });
+          }}
+          onDeleteKnowledgeBase={(knowledgeBase) =>
+            setKnowledgeDialog({ mode: "delete", knowledgeBase })
+          }
+          onMoveKnowledgeBase={(knowledgeBase, direction) =>
+            void moveKnowledgeBase(knowledgeBase, direction)
+          }
+          knowledgeActionPending={knowledgeActionPending}
+          onOpenTrash={() => setTrashOpen(true)}
+          onOpenSettings={openWorkspaceSettings}
+          onLogout={() => void logout()}
+        />
         <WorkspaceSidebar
           mode={mode}
           workspaceId={workspaceId}
@@ -863,6 +906,11 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
                 }}
                 defaultInfoOpen={preferences.openDocumentInfoByDefault}
                 readingScale={preferences.readingScale}
+                onReadingScaleChange={(readingScale) => {
+                  const next = { ...preferences, readingScale };
+                  setPreferences(next);
+                  saveWorkspacePreferences(workspaceId, next);
+                }}
               />
             )
           ) : (
@@ -1234,6 +1282,372 @@ export function ProductWorkspacePage({ mode }: { mode: WorkspaceMode }) {
   );
 }
 
+function WorkspaceGlobalSidebar({
+  workspace,
+  workspaces,
+  mode,
+  workspaceId,
+  knowledgeBaseId,
+  knowledgeBases,
+  query,
+  onQuery,
+  searchRef,
+  onCreateNote,
+  onCreateKnowledgeBase,
+  onCreateWorkspace,
+  onImportMarkdown,
+  onImportFolder,
+  onRenameKnowledgeBase,
+  onDeleteKnowledgeBase,
+  onMoveKnowledgeBase,
+  knowledgeActionPending,
+  onOpenTrash,
+  onOpenSettings,
+  onLogout
+}: {
+  workspace: CloudWorkspace;
+  workspaces: readonly CloudWorkspace[];
+  mode: WorkspaceMode;
+  workspaceId: string;
+  knowledgeBaseId?: string;
+  knowledgeBases: CloudKnowledgeBase[];
+  query: string;
+  onQuery: (value: string) => void;
+  searchRef: RefObject<HTMLInputElement | null>;
+  onCreateNote: () => void;
+  onCreateKnowledgeBase: () => void;
+  onCreateWorkspace: () => void;
+  onImportMarkdown: () => void;
+  onImportFolder: () => void;
+  onRenameKnowledgeBase: (knowledgeBase: CloudKnowledgeBase) => void;
+  onDeleteKnowledgeBase: (knowledgeBase: CloudKnowledgeBase) => void;
+  onMoveKnowledgeBase: (
+    knowledgeBase: CloudKnowledgeBase,
+    direction: "up" | "down"
+  ) => void;
+  knowledgeActionPending: boolean;
+  onOpenTrash: () => void;
+  onOpenSettings: () => void;
+  onLogout: () => void;
+}) {
+  const navigate = useNavigate();
+  const goToMode = (nextMode: WorkspaceMode) => {
+    navigate(`/workspaces/${encodeURIComponent(workspaceId)}/${nextMode}`);
+  };
+
+  return (
+    <aside
+      data-workspace-navigation="true"
+      className="hidden w-[254px] shrink-0 flex-col border-r border-[#eeeeec] bg-white px-3 py-3 lg:flex"
+    >
+      <div className="flex h-10 items-center gap-1.5">
+        <BrandLockup />
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="grid size-7 place-items-center rounded-md text-ink-500 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+              aria-label="切换工作区"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="start"
+              sideOffset={8}
+              className="z-50 w-60 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+            >
+              <DropdownMenu.Label className="px-2 py-1.5 text-xs font-medium text-ink-500">
+                工作区
+              </DropdownMenu.Label>
+              {workspaces.map((item) => (
+                <DropdownMenu.Item
+                  key={item.id}
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                  onSelect={() =>
+                    navigate(`/workspaces/${encodeURIComponent(item.id)}/notes`)
+                  }
+                >
+                  <BookMarked size={14} className="text-ink-400" />
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                  {item.id === workspace.id && <Check size={13} />}
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+              <SidebarMenuItem
+                icon={<Plus size={14} />}
+                onSelect={onCreateWorkspace}
+              >
+                新建工作区
+              </SidebarMenuItem>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-transparent bg-[#f4f4f2] px-2.5 text-ink-500 transition focus-within:border-brand-300 focus-within:bg-white">
+          <Search size={14} />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                !query.trim() ||
+                !["ArrowDown", "ArrowUp", "Enter"].includes(event.key)
+              ) {
+                return;
+              }
+              const commandRoot =
+                document.querySelector<HTMLElement>("[cmdk-root]");
+              if (!commandRoot) return;
+              event.preventDefault();
+              commandRoot.focus();
+              commandRoot.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                  key: event.key,
+                  bubbles: true,
+                  cancelable: true
+                })
+              );
+            }}
+            className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
+            placeholder="搜索"
+          />
+          <span className="text-[0.65rem] font-medium text-ink-500">
+            Ctrl J
+          </span>
+        </label>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-white text-ink-600 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+              aria-label="新建"
+            >
+              <Plus size={16} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={6}
+              className="z-50 w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+            >
+              <SidebarMenuItem
+                icon={<FileText size={14} />}
+                onSelect={onCreateNote}
+              >
+                新建随记
+              </SidebarMenuItem>
+              <SidebarMenuItem
+                icon={<FolderPlus size={14} />}
+                onSelect={onCreateKnowledgeBase}
+              >
+                新建知识库
+              </SidebarMenuItem>
+              <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+              <SidebarMenuItem
+                icon={<Import size={14} />}
+                onSelect={onImportMarkdown}
+              >
+                导入 Markdown
+              </SidebarMenuItem>
+              <SidebarMenuItem
+                icon={<Import size={14} />}
+                onSelect={onImportFolder}
+              >
+                导入文件夹
+              </SidebarMenuItem>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+
+      <nav
+        className="mt-4 min-h-0 flex-1 overflow-y-auto"
+        aria-label="工作区导航"
+      >
+        <button
+          type="button"
+          className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium text-ink-700 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+          onClick={() =>
+            navigate(`/workspaces/${encodeURIComponent(workspaceId)}/notes`)
+          }
+        >
+          <Home size={16} className="text-ink-500" />
+          开始
+        </button>
+        <ToggleGroupRoot
+          type="single"
+          orientation="vertical"
+          value={mode}
+          onValueChange={(value) => {
+            if (value === "notes" || value === "knowledge") goToMode(value);
+          }}
+          aria-label="工作区模式"
+          className="mt-1 grid gap-0.5"
+        >
+          <ToggleGroupItem
+            value="notes"
+            className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium text-ink-700 outline-none transition hover:bg-[#f4f4f2] data-[state=on]:bg-[#f2f2f0] data-[state=on]:text-ink-950"
+          >
+            <FileText size={16} className="text-brand-700" />
+            小记
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="knowledge"
+            className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium text-ink-700 outline-none transition hover:bg-[#f4f4f2] data-[state=on]:bg-[#f2f2f0] data-[state=on]:text-ink-950"
+          >
+            <BookOpen size={16} className="text-[#5b8ff9]" />
+            知识库
+            <ChevronRight size={13} className="ml-auto text-ink-300" />
+          </ToggleGroupItem>
+        </ToggleGroupRoot>
+
+        {knowledgeBases.length > 0 && (
+          <div className="mt-2 grid gap-0.5 border-l border-line-soft pl-3">
+            {knowledgeBases.map((knowledgeBase) => (
+              <div
+                key={knowledgeBase.id}
+                className={`group flex h-8 items-center rounded-md pr-0.5 transition ${
+                  knowledgeBaseId === knowledgeBase.id
+                    ? "bg-[#f2f2f0] font-semibold text-ink-900"
+                    : "font-medium text-ink-600"
+                }`}
+              >
+                <button
+                  type="button"
+                  className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+                  onClick={() =>
+                    navigate(
+                      `/workspaces/${encodeURIComponent(
+                        workspaceId
+                      )}/knowledge/${encodeURIComponent(knowledgeBase.id)}`
+                    )
+                  }
+                >
+                  <BookMarked size={14} className="text-[#5b8ff9]" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {knowledgeBase.name}
+                  </span>
+                </button>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      className="grid size-7 shrink-0 place-items-center rounded text-ink-300 opacity-0 outline-none transition hover:bg-white hover:text-ink-700 focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={`${knowledgeBase.name} 操作`}
+                      disabled={knowledgeActionPending}
+                    >
+                      <MoreHorizontal size={13} />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      align="end"
+                      sideOffset={6}
+                      className="z-50 w-40 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+                    >
+                      <DropdownMenu.Item
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                        onSelect={() => onRenameKnowledgeBase(knowledgeBase)}
+                      >
+                        <Pencil size={14} />
+                        重命名
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                        onSelect={() =>
+                          onMoveKnowledgeBase(knowledgeBase, "up")
+                        }
+                      >
+                        <ChevronDown size={14} className="-rotate-90" />
+                        上移
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                        onSelect={() =>
+                          onMoveKnowledgeBase(knowledgeBase, "down")
+                        }
+                      >
+                        <ChevronDown size={14} className="rotate-90" />
+                        下移
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                      <DropdownMenu.Item
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+                        onSelect={() => onDeleteKnowledgeBase(knowledgeBase)}
+                      >
+                        <Trash2 size={14} />
+                        删除知识库
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-2 grid gap-0.5">
+          <button
+            type="button"
+            className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium text-ink-600 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+            onClick={onOpenTrash}
+          >
+            <Trash2 size={16} className="text-ink-400" />
+            回收站
+          </button>
+        </div>
+      </nav>
+
+      <div className="mt-2 grid gap-0.5 border-t border-[#eeeeec] pt-2">
+        <button
+          type="button"
+          className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium text-ink-600 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+          onClick={onOpenSettings}
+        >
+          <Settings size={16} className="text-ink-400" />
+          工作区设置
+        </button>
+        <div className="flex items-center gap-2 px-1 pt-1">
+          <span className="grid size-7 place-items-center rounded-full bg-ink-950 text-white">
+            <BrandMark className="size-7 border-0 bg-transparent text-white shadow-none" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink-600">
+            {workspace.name}
+          </span>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <IconButton aria-label="账号设置">
+                <LogOut size={14} />
+              </IconButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={8}
+                className="z-50 w-44 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+              >
+                <DropdownMenu.Item
+                  className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                  onSelect={() => void onLogout()}
+                >
+                  <LogOut size={14} />
+                  退出登录
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function WorkspaceSidebar({
   mode,
   workspaceId,
@@ -1315,6 +1729,10 @@ function WorkspaceSidebar({
   const desktop = useMediaQuery("(min-width: 1024px)");
   const normalizedQuery = query.trim().toLowerCase();
   const searchInputFocusedRef = useRef(false);
+  const [noteView, setNoteView] = useState<"list" | "grid">(() => {
+    const stored = localStorage.getItem(`inkloom.notes-view.${workspaceId}`);
+    return stored === "grid" ? "grid" : "list";
+  });
   const filteredNotes = notes.filter(
     (item) =>
       (!tagFilter ||
@@ -1346,6 +1764,10 @@ function WorkspaceSidebar({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [Boolean(query.trim()), searchRef]);
+
+  useEffect(() => {
+    localStorage.setItem(`inkloom.notes-view.${workspaceId}`, noteView);
+  }, [noteView, workspaceId]);
   const scratchActions = (item: CloudDocumentSummary): DocumentRowAction[] => [
     {
       label: "重命名",
@@ -1394,104 +1816,240 @@ function WorkspaceSidebar({
         </IconButton>
       </div>
 
-      <SegmentedControl
-        value={mode}
-        ariaLabel="工作区模式"
-        className="m-3 grid-cols-2 bg-[#ececea]"
-        itemClassName="rounded-md data-[state=on]:shadow-none"
-        onValueChange={(nextMode) => {
-          navigate(
-            `/workspaces/${encodeURIComponent(workspaceId)}/${nextMode}`
-          );
-          onClose();
-        }}
-        options={[
-          {
-            value: "notes",
-            label: "随记",
-            icon: <FileText size={14} />
-          },
-          {
-            value: "knowledge",
-            label: "知识库",
-            icon: <BookOpen size={14} />
-          }
-        ]}
-      />
-
-      <div className="flex items-center gap-2 px-3 pb-3">
-        <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-paper px-3 text-ink-500 transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
-          <Search size={15} />
-          {normalizedQuery ? (
-            <Command.Input
-              ref={searchRef}
-              className="min-w-0 flex-1 border-0 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
-              value={query}
+      {desktop && (
+        <div className="flex h-[72px] shrink-0 items-center gap-2 px-4">
+          <h1 className="min-w-0 flex-1 text-lg font-medium text-ink-700">
+            {mode === "knowledge"
+              ? (selectedKnowledgeBase?.name ?? "知识库")
+              : "小记"}
+          </h1>
+          {mode === "notes" ? (
+            <ToggleGroupRoot
+              type="single"
+              value={noteView}
+              aria-label="小记视图"
+              className="flex items-center gap-0.5 rounded-md bg-[#f1f1ef] p-0.5"
               onValueChange={(value) => {
-                searchInputFocusedRef.current = true;
-                onQuery(value);
+                if (value === "list" || value === "grid") setNoteView(value);
               }}
-              placeholder="搜索"
-            />
+            >
+              <ToggleGroupItem
+                value="list"
+                aria-label="列表视图"
+                className="grid size-7 place-items-center rounded text-ink-500 outline-none data-[state=on]:bg-white data-[state=on]:text-ink-900 data-[state=on]:shadow-xs"
+              >
+                <LayoutList size={15} />
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="grid"
+                aria-label="卡片视图"
+                className="grid size-7 place-items-center rounded text-ink-400 outline-none data-[state=on]:bg-white data-[state=on]:text-ink-900 data-[state=on]:shadow-xs"
+              >
+                <LayoutGrid size={15} />
+              </ToggleGroupItem>
+            </ToggleGroupRoot>
           ) : (
-            <input
-              ref={searchRef}
-              className="min-w-0 flex-1 border-0 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
-              value={query}
-              onChange={(event) => {
-                searchInputFocusedRef.current = true;
-                onQuery(event.target.value);
-              }}
-              placeholder="搜索"
+            <KnowledgeSortMenu
+              value={knowledgeSort}
+              onChange={onKnowledgeSort}
             />
           )}
-        </label>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <IconButton
-              className="size-9 min-h-9 rounded-lg border border-line bg-paper shadow-none"
-              aria-label="新建"
-            >
-              <Plus size={16} />
-            </IconButton>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={8}
-              className="z-50 w-52 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-            >
-              <SidebarMenuItem
-                icon={<FileText size={14} />}
-                onSelect={onCreateNote}
-              >
-                新建随记
-              </SidebarMenuItem>
-              <SidebarMenuItem
-                icon={<FolderPlus size={14} />}
-                onSelect={onCreateKnowledgeBase}
-              >
-                新建知识库
-              </SidebarMenuItem>
-              <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-              <SidebarMenuItem
-                icon={<Import size={14} />}
-                onSelect={onImportMarkdown}
-              >
-                导入 Markdown
-              </SidebarMenuItem>
-              <SidebarMenuItem
-                icon={<Import size={14} />}
-                onSelect={onImportFolder}
-              >
-                导入文件夹
-              </SidebarMenuItem>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      </div>
+          <button
+            type="button"
+            aria-label="新建小记"
+            className="ml-1 grid size-8 place-items-center rounded-full bg-white text-[36px] leading-none text-[#18b36b] shadow-[0_1px_3px_rgb(0_0_0_/_0.12)] outline-none transition hover:bg-brand-50 focus-visible:ring-2 focus-visible:ring-brand-300"
+            onClick={onCreateNote}
+          >
+            <Plus size={20} strokeWidth={1.7} />
+          </button>
+        </div>
+      )}
 
-      {mode === "notes" && availableTags.length > 0 && (
+      {!desktop && (
+        <>
+          <SegmentedControl
+            value={mode}
+            ariaLabel="工作区模式"
+            className="m-3 grid-cols-2 bg-[#ececea]"
+            itemClassName="rounded-md data-[state=on]:shadow-none"
+            onValueChange={(nextMode) => {
+              navigate(
+                `/workspaces/${encodeURIComponent(workspaceId)}/${nextMode}`
+              );
+              onClose();
+            }}
+            options={[
+              {
+                value: "notes",
+                label: "随记",
+                icon: <FileText size={14} />
+              },
+              {
+                value: "knowledge",
+                label: "知识库",
+                icon: <BookOpen size={14} />
+              }
+            ]}
+          />
+
+          <div className="flex items-center gap-2 px-3 pb-3">
+            <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-paper px-3 text-ink-500 transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+              <Search size={15} />
+              {normalizedQuery ? (
+                <Command.Input
+                  ref={searchRef}
+                  className="min-w-0 flex-1 border-0 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
+                  value={query}
+                  onValueChange={(value) => {
+                    searchInputFocusedRef.current = true;
+                    onQuery(value);
+                  }}
+                  placeholder="搜索"
+                />
+              ) : (
+                <input
+                  ref={searchRef}
+                  className="min-w-0 flex-1 border-0 bg-transparent text-xs text-ink-900 outline-none placeholder:text-ink-500"
+                  value={query}
+                  onChange={(event) => {
+                    searchInputFocusedRef.current = true;
+                    onQuery(event.target.value);
+                  }}
+                  placeholder="搜索"
+                />
+              )}
+            </label>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <IconButton
+                  className="size-9 min-h-9 rounded-lg border border-line bg-paper shadow-none"
+                  aria-label="新建"
+                >
+                  <Plus size={16} />
+                </IconButton>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 w-52 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
+                >
+                  <SidebarMenuItem
+                    icon={<FileText size={14} />}
+                    onSelect={onCreateNote}
+                  >
+                    新建随记
+                  </SidebarMenuItem>
+                  <SidebarMenuItem
+                    icon={<FolderPlus size={14} />}
+                    onSelect={onCreateKnowledgeBase}
+                  >
+                    新建知识库
+                  </SidebarMenuItem>
+                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                  <SidebarMenuItem
+                    icon={<Import size={14} />}
+                    onSelect={onImportMarkdown}
+                  >
+                    导入 Markdown
+                  </SidebarMenuItem>
+                  <SidebarMenuItem
+                    icon={<Import size={14} />}
+                    onSelect={onImportFolder}
+                  >
+                    导入文件夹
+                  </SidebarMenuItem>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
+        </>
+      )}
+
+      {desktop && mode === "notes" && (
+        <div className="flex h-9 shrink-0 items-center gap-1 px-3 pb-1">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                className="flex h-8 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-ink-600 outline-none transition hover:bg-[#efefed] focus-visible:ring-2 focus-visible:ring-brand-300"
+              >
+                <Tag size={14} className="text-ink-400" />
+                {tagFilter ? `#${tagFilter}` : "标签"}
+                <ChevronDown size={12} className="text-ink-300" />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="start"
+                sideOffset={6}
+                className="z-50 w-44 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+              >
+                <DropdownMenu.Item
+                  className="flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                  onSelect={() => onTagFilter("")}
+                >
+                  全部标签
+                  {!tagFilter && <Check size={13} className="ml-auto" />}
+                </DropdownMenu.Item>
+                {availableTags.map((tag) => (
+                  <DropdownMenu.Item
+                    key={tag}
+                    className="flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                    onSelect={() => onTagFilter(tag)}
+                  >
+                    {tag}
+                    {tagFilter === tag && (
+                      <Check size={13} className="ml-auto" />
+                    )}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+          <button
+            type="button"
+            className="ml-auto grid size-7 place-items-center rounded-md text-ink-400 outline-none transition hover:bg-[#efefed] hover:text-ink-700 focus-visible:ring-2 focus-visible:ring-brand-300"
+            aria-label="搜索小记"
+            onClick={() => searchRef.current?.focus()}
+          >
+            <Search size={15} />
+          </button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                className="grid size-7 place-items-center rounded-md text-ink-400 outline-none transition hover:bg-[#efefed] hover:text-ink-700 focus-visible:ring-2 focus-visible:ring-brand-300"
+                aria-label="小记更多操作"
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                className="z-50 w-44 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+              >
+                <SidebarMenuItem
+                  icon={<FileText size={14} />}
+                  onSelect={onCreateNote}
+                >
+                  新建小记
+                </SidebarMenuItem>
+                <SidebarMenuItem
+                  icon={<Import size={14} />}
+                  onSelect={onImportMarkdown}
+                >
+                  导入 Markdown
+                </SidebarMenuItem>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
+      )}
+
+      {mode === "notes" && availableTags.length > 0 && !desktop && (
         <ToggleGroupRoot
           type="single"
           value={tagFilter || "all"}
@@ -1571,116 +2129,145 @@ function WorkspaceSidebar({
             </>
           )
         ) : mode === "notes" ? (
-          <DocumentGridList
-            sections={[
-              ...(recent.length > 0 && !normalizedQuery && !tagFilter
-                ? [
-                    {
-                      id: "recent",
-                      title: "最近打开",
-                      icon: <Clock3 size={13} />,
-                      documents: recentDocuments
-                    }
-                  ]
-                : []),
-              {
-                id: "notes",
-                title: "全部随记",
-                icon: <FileText size={13} />,
-                documents: notesWithoutRecentDuplicates
+          desktop ? (
+            <DocumentGridList
+              sections={[
+                {
+                  id: "notes",
+                  title: "小记",
+                  icon: <FileText size={13} />,
+                  documents: filteredNotes
+                }
+              ]}
+              activeDocumentId={documentId}
+              actions={scratchActions}
+              showSectionHeaders={false}
+              variant={noteView === "grid" ? "card" : "yuque"}
+              emptyMessage="没有匹配的小记。"
+              onOpen={(item) =>
+                navigate(
+                  `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(item.id)}`
+                )
               }
-            ]}
-            activeDocumentId={documentId}
-            actions={scratchActions}
-            emptyMessage="没有匹配的随记。"
-            onOpen={(item) =>
-              navigate(
-                `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(item.id)}`
-              )
-            }
-          />
+            />
+          ) : (
+            <DocumentGridList
+              sections={[
+                ...(recent.length > 0 && !normalizedQuery && !tagFilter
+                  ? [
+                      {
+                        id: "recent",
+                        title: "最近打开",
+                        icon: <Clock3 size={13} />,
+                        documents: recentDocuments
+                      }
+                    ]
+                  : []),
+                {
+                  id: "notes",
+                  title: "全部随记",
+                  icon: <FileText size={13} />,
+                  documents: notesWithoutRecentDuplicates
+                }
+              ]}
+              activeDocumentId={documentId}
+              actions={scratchActions}
+              emptyMessage="没有匹配的随记。"
+              onOpen={(item) =>
+                navigate(
+                  `/workspaces/${encodeURIComponent(workspaceId)}/notes/${encodeURIComponent(item.id)}`
+                )
+              }
+            />
+          )
         ) : (
           <>
-            <SidebarGroup icon={<BookOpen size={13} />} title="知识库">
-              {knowledgeBases.map((item) => (
-                <div
-                  key={item.id}
-                  className={`group flex min-h-10 w-full items-center rounded-xl pr-1 transition ${
-                    item.id === knowledgeBaseId
-                      ? "bg-surface-selected text-brand-800"
-                      : "text-ink-600 hover:bg-canvas hover:text-ink-900"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-left text-xs font-semibold"
-                    onClick={() =>
-                      navigate(
-                        `/workspaces/${encodeURIComponent(
-                          workspaceId
-                        )}/knowledge/${encodeURIComponent(item.id)}`
-                      )
-                    }
+            {!desktop && (
+              <SidebarGroup icon={<BookOpen size={13} />} title="知识库">
+                {knowledgeBases.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`group flex min-h-10 w-full items-center rounded-xl pr-1 transition ${
+                      item.id === knowledgeBaseId
+                        ? "bg-surface-selected text-brand-800"
+                        : "text-ink-600 hover:bg-canvas hover:text-ink-900"
+                    }`}
                   >
-                    <BookOpen size={14} className="text-brand-600" />
-                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  </button>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button
-                        type="button"
-                        className="grid size-7 place-items-center rounded-lg text-ink-300 opacity-100 transition hover:bg-white hover:text-ink-700 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                        aria-label={`${item.name} 操作`}
-                        disabled={knowledgeActionPending}
-                      >
-                        <MoreHorizontal size={14} />
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        align="end"
-                        sideOffset={6}
-                        className="z-50 w-40 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                      >
-                        <SidebarMenuItem
-                          icon={<Pencil size={14} />}
-                          onSelect={() => onRenameKnowledgeBase(item)}
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-left text-xs font-semibold"
+                      onClick={() =>
+                        navigate(
+                          `/workspaces/${encodeURIComponent(
+                            workspaceId
+                          )}/knowledge/${encodeURIComponent(item.id)}`
+                        )
+                      }
+                    >
+                      <BookOpen size={14} className="text-brand-600" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {item.name}
+                      </span>
+                    </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          className="grid size-7 place-items-center rounded-lg text-ink-300 opacity-100 transition hover:bg-white hover:text-ink-700 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                          aria-label={`${item.name} 操作`}
+                          disabled={knowledgeActionPending}
                         >
-                          重命名
-                        </SidebarMenuItem>
-                        <SidebarMenuItem
-                          icon={
-                            <ChevronDown size={14} className="-rotate-90" />
-                          }
-                          onSelect={() => onMoveKnowledgeBase(item, "up")}
+                          <MoreHorizontal size={14} />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          align="end"
+                          sideOffset={6}
+                          className="z-50 w-40 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
                         >
-                          上移
-                        </SidebarMenuItem>
-                        <SidebarMenuItem
-                          icon={<ChevronDown size={14} className="rotate-90" />}
-                          onSelect={() => onMoveKnowledgeBase(item, "down")}
-                        >
-                          下移
-                        </SidebarMenuItem>
-                        <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                        <DropdownMenu.Item
-                          className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
-                          onSelect={() => onDeleteKnowledgeBase(item)}
-                        >
-                          <Trash2 size={14} />
-                          删除知识库
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                </div>
-              ))}
-              {knowledgeBases.length === 0 && (
-                <p className="px-3 py-5 text-center text-xs leading-5 text-ink-400">
-                  还没有知识库。
-                </p>
-              )}
-            </SidebarGroup>
+                          <SidebarMenuItem
+                            icon={<Pencil size={14} />}
+                            onSelect={() => onRenameKnowledgeBase(item)}
+                          >
+                            重命名
+                          </SidebarMenuItem>
+                          <SidebarMenuItem
+                            icon={
+                              <ChevronDown size={14} className="-rotate-90" />
+                            }
+                            onSelect={() => onMoveKnowledgeBase(item, "up")}
+                          >
+                            上移
+                          </SidebarMenuItem>
+                          <SidebarMenuItem
+                            icon={
+                              <ChevronDown size={14} className="rotate-90" />
+                            }
+                            onSelect={() => onMoveKnowledgeBase(item, "down")}
+                          >
+                            下移
+                          </SidebarMenuItem>
+                          <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+                          <DropdownMenu.Item
+                            className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+                            onSelect={() => onDeleteKnowledgeBase(item)}
+                          >
+                            <Trash2 size={14} />
+                            删除知识库
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                  </div>
+                ))}
+                {knowledgeBases.length === 0 && (
+                  <p className="px-3 py-5 text-center text-xs leading-5 text-ink-400">
+                    还没有知识库。
+                  </p>
+                )}
+              </SidebarGroup>
+            )}
             {selectedKnowledgeBase && (
               <DocumentGridList
                 sections={[
@@ -1693,12 +2280,8 @@ function WorkspaceSidebar({
                 ]}
                 activeDocumentId={documentId}
                 actions={knowledgeDocumentActions}
-                headerAction={
-                  <KnowledgeSortMenu
-                    value={knowledgeSort}
-                    onChange={onKnowledgeSort}
-                  />
-                }
+                showSectionHeaders={!desktop}
+                variant={desktop ? "yuque" : "standard"}
                 emptyMessage="知识库中还没有文档。"
                 onOpen={(item) =>
                   navigate(
@@ -1715,26 +2298,28 @@ function WorkspaceSidebar({
         )}
       </div>
 
-      <div className="border-t border-line-soft p-3">
-        <div className="grid gap-0.5">
-          <button
-            type="button"
-            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-600 transition hover:bg-canvas hover:text-ink-900"
-            onClick={onOpenTrash}
-          >
-            <Trash2 size={14} />
-            回收站
-          </button>
-          <button
-            type="button"
-            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-600 transition hover:bg-canvas hover:text-ink-900"
-            onClick={onOpenSettings}
-          >
-            <Settings size={14} />
-            工作区设置
-          </button>
+      {!desktop && (
+        <div className="border-t border-line-soft p-3">
+          <div className="grid gap-0.5">
+            <button
+              type="button"
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-600 transition hover:bg-canvas hover:text-ink-900"
+              onClick={onOpenTrash}
+            >
+              <Trash2 size={14} />
+              回收站
+            </button>
+            <button
+              type="button"
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-600 transition hover:bg-canvas hover:text-ink-900"
+              onClick={onOpenSettings}
+            >
+              <Settings size={14} />
+              工作区设置
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </Command>
   );
 
@@ -1756,7 +2341,10 @@ function WorkspaceSidebar({
   }
 
   return (
-    <aside className="relative z-10 flex w-[17rem] shrink-0 flex-col border-r border-line bg-canvas xl:w-[18rem]">
+    <aside
+      data-workspace-list="true"
+      className="relative z-10 flex w-[254px] shrink-0 flex-col border-r border-[#eeeeec] bg-[#fafafa]"
+    >
       {content}
     </aside>
   );
@@ -1890,6 +2478,8 @@ function DocumentGridList({
   activeDocumentId,
   actions,
   headerAction,
+  showSectionHeaders = true,
+  variant = "standard",
   emptyMessage,
   onOpen
 }: {
@@ -1897,6 +2487,8 @@ function DocumentGridList({
   activeDocumentId?: string;
   actions: (document: CloudDocumentSummary) => DocumentRowAction[];
   headerAction?: ReactNode;
+  showSectionHeaders?: boolean;
+  variant?: "standard" | "yuque" | "card";
   emptyMessage: string;
   onOpen: (document: CloudDocumentSummary) => void;
 }) {
@@ -1963,11 +2555,21 @@ function DocumentGridList({
         <GridList
           aria-label="文档列表"
           selectionMode="none"
-          className="grid gap-0.5"
+          className={
+            variant === "card"
+              ? "grid grid-cols-2 gap-2 px-2"
+              : "grid gap-0.5 px-2"
+          }
         >
           {populated.map((section) => (
             <GridListSection key={section.id} id={section.id} className="mb-4">
-              <GridListHeader className="flex min-h-8 items-center gap-1.5 px-2.5 py-1.5 text-[0.75rem] font-semibold text-ink-500">
+              <GridListHeader
+                className={
+                  showSectionHeaders
+                    ? "flex min-h-8 items-center gap-1.5 px-2.5 py-1.5 text-[0.75rem] font-semibold text-ink-500"
+                    : "sr-only"
+                }
+              >
                 <span className="flex items-center gap-1.5">
                   {section.icon}
                   {section.title}
@@ -1983,6 +2585,7 @@ function DocumentGridList({
                   document={document}
                   active={document.id === activeDocumentId}
                   actions={actions(document)}
+                  variant={variant}
                   onClick={() => onOpen(document)}
                 />
               ))}
@@ -2045,14 +2648,111 @@ function DocumentGridItem({
   document,
   active,
   actions,
+  variant = "standard",
   onClick
 }: {
   itemId: string;
   document: CloudDocumentSummary;
   active: boolean;
   actions: readonly DocumentRowAction[];
+  variant: "standard" | "yuque" | "card";
   onClick: () => void;
 }) {
+  if (variant === "yuque" || variant === "card") {
+    const card = variant === "card";
+    return (
+      <GridListItem
+        id={itemId}
+        textValue={document.title}
+        data-document-id={document.id}
+        data-document-title={document.title}
+        aria-current={active ? "page" : undefined}
+        allowsArrowNavigation
+        focusMode="child"
+        onPointerEnter={() => void preloadProductMarkdownEditor()}
+        className={`group outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-brand-300 ${
+          card
+            ? "min-h-[94px] rounded-lg border border-[#ececea] bg-white p-2.5"
+            : "min-h-[52px] rounded-md"
+        } ${
+          active
+            ? "bg-[#f1f1ef] text-ink-950"
+            : "text-ink-700 hover:bg-[#f1f1ef]"
+        }`}
+      >
+        <div className="flex h-full min-w-0 items-center gap-1">
+          <button
+            type="button"
+            className={`min-w-0 flex-1 text-left outline-none ${
+              card
+                ? "grid h-full content-between p-0.5"
+                : "flex min-h-[52px] items-center gap-2 px-2.5"
+            }`}
+            onClick={onClick}
+          >
+            <span className="min-w-0 flex-1">
+              <strong
+                className="block truncate text-sm font-medium"
+                title={document.title}
+              >
+                {document.title}
+              </strong>
+              {card && (
+                <small className="mt-2 line-clamp-2 block text-[0.7rem] leading-5 text-ink-500">
+                  {document.excerpt || "空白小记"}
+                </small>
+              )}
+            </span>
+            <time
+              className="shrink-0 text-[0.68rem] font-normal text-ink-500"
+              dateTime={document.updatedAt}
+            >
+              {formatYuqueNoteDate(document.updatedAt)}
+            </time>
+          </button>
+          {actions.length > 0 && (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  className="grid size-7 shrink-0 place-items-center rounded text-ink-400 opacity-0 transition hover:bg-white hover:text-ink-800 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                  aria-label={`${document.title} 操作`}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={6}
+                  className="z-50 w-44 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+                >
+                  {actions.map((action) => (
+                    <DropdownMenu.Item
+                      key={action.label}
+                      className={`flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 ${
+                        action.danger
+                          ? "text-danger-700 data-[highlighted]:bg-danger-50"
+                          : "text-ink-700 data-[highlighted]:bg-[#f4f4f2]"
+                      }`}
+                      disabled={action.disabled}
+                      onSelect={action.onSelect}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          )}
+        </div>
+      </GridListItem>
+    );
+  }
+
   return (
     <GridListItem
       id={itemId}
@@ -2160,6 +2860,28 @@ function formatDocumentTime(value: string) {
   }).format(date);
 }
 
+function formatYuqueNoteDate(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (sameDay) {
+    return `今天 ${new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(date)}`;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit"
+  })
+    .format(date)
+    .replace(/\//g, "-");
+}
+
 function SidebarMenuItem({
   icon,
   onSelect,
@@ -2251,7 +2973,8 @@ function DocumentSurface({
   onFocusSearch,
   onSaved,
   defaultInfoOpen,
-  readingScale
+  readingScale,
+  onReadingScaleChange
 }: {
   document: DocumentSnapshot;
   userId: string;
@@ -2263,6 +2986,9 @@ function DocumentSurface({
   onSaved: (snapshot: DocumentSnapshot) => Promise<void>;
   defaultInfoOpen: boolean;
   readingScale: WorkspacePreferences["readingScale"];
+  onReadingScaleChange: (
+    readingScale: WorkspacePreferences["readingScale"]
+  ) => void;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -2681,156 +3407,129 @@ function DocumentSurface({
   }
 
   const showEditor = editorActive;
+  const toolbarEnd = (
+    <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
+      {!/^#\s/m.test(autosave.markdown) && (
+        <h1 className="sr-only">{autosave.title}</h1>
+      )}
+      {editorActive && (
+        <AutosaveIndicator
+          status={autosave.status}
+          lastSavedAt={autosave.lastSavedAt}
+        />
+      )}
+      <IconButton
+        aria-label={exporting ? "导出中" : "导出"}
+        onClick={() => void exportCurrentDocument()}
+        disabled={exporting}
+      >
+        <Download size={15} />
+      </IconButton>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <IconButton aria-label="文档操作">
+            <MoreHorizontal size={16} />
+          </IconButton>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            sideOffset={8}
+            className="z-50 w-48 rounded-lg border border-line-soft bg-white p-1.5 shadow-popover"
+          >
+            <DropdownMenu.Item
+              className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+              onSelect={() => {
+                setRenameDraft(autosave.title);
+                setRenameOpen(true);
+              }}
+            >
+              <Pencil size={14} />
+              重命名文档
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+              onSelect={() => setHistoryOpen(true)}
+            >
+              <History size={14} />
+              版本历史
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+              onSelect={() => {
+                setTagDraft(autosave.tags.join(", "));
+                setTagDialogOpen(true);
+              }}
+            >
+              <Tag size={14} />
+              管理标签
+            </DropdownMenu.Item>
+            {mode === "notes" && (
+              <DropdownMenu.Item
+                className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2] data-[disabled]:opacity-40"
+                disabled={knowledgeBases.length === 0}
+                onSelect={() => {
+                  setArchiveKnowledgeBaseId(knowledgeBases[0]?.id ?? "");
+                  setArchiveOpen(true);
+                }}
+              >
+                <Archive size={14} />
+                归档到知识库
+              </DropdownMenu.Item>
+            )}
+            {mode === "knowledge" && (
+              <DropdownMenu.Item
+                className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                onSelect={() => void restoreCurrentDocumentToNotes()}
+              >
+                <FileText size={14} />
+                移回随记
+              </DropdownMenu.Item>
+            )}
+            <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+            <DropdownMenu.Item
+              className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
+              onSelect={() => setDeleteOpen(true)}
+            >
+              <Trash2 size={14} />
+              删除文档
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <IconButton
+        aria-label={infoOpen ? "关闭文档信息" : "打开文档信息"}
+        aria-pressed={infoOpen}
+        className={infoOpen ? "bg-brand-50 text-brand-800" : ""}
+        onClick={() => setInfoOpen((current) => !current)}
+      >
+        <PanelRight size={16} />
+      </IconButton>
+      {mode === "knowledge" && !editing && ownsEditor && (
+        <Button variant="secondary" size="sm" onClick={beginEditing}>
+          编辑
+        </Button>
+      )}
+      {mode === "knowledge" && editing && ownsEditor && (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => void finishEditing()}
+          disabled={autosave.status === "saving"}
+        >
+          完成
+        </Button>
+      )}
+    </div>
+  );
 
   return (
-    <div className="relative flex h-full min-h-0 bg-canvas">
+    <div className="relative flex h-full min-h-0 bg-white">
       <div
         ref={scrollViewportRef}
         className="document-reader-scroll min-w-0 flex-1 overflow-y-auto"
       >
         <article className="min-h-full w-full bg-paper">
-          <header className="sticky top-0 z-20 flex min-h-12 items-center gap-2 border-b border-line-soft bg-paper/96 px-3 backdrop-blur-md sm:px-5">
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-sm font-semibold text-ink-900">
-                {autosave.title}
-              </h1>
-              <p className="mt-0.5 truncate whitespace-nowrap text-[0.75rem] font-medium text-ink-500">
-                {document.meta.lifecycle === "knowledge"
-                  ? "知识库 · 预览优先"
-                  : "随记 · Markdown"}
-              </p>
-              {autosave.tags.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {autosave.tags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className="rounded-full bg-surface-subtle px-2 py-0.5 text-[0.75rem] font-medium text-ink-500 transition hover:bg-brand-50 hover:text-brand-800"
-                      onClick={() => {
-                        setTagDraft(autosave.tags.join(", "));
-                        setTagDialogOpen(true);
-                      }}
-                    >
-                      #{tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {editorActive && (
-              <AutosaveIndicator
-                status={autosave.status}
-                lastSavedAt={autosave.lastSavedAt}
-              />
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              aria-label={exporting ? "导出中" : "导出"}
-              onClick={() => void exportCurrentDocument()}
-              disabled={exporting}
-            >
-              <Download size={13} />
-              <span className="hidden sm:inline">
-                {exporting ? "导出中…" : "导出"}
-              </span>
-            </Button>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <IconButton aria-label="文档操作">
-                  <MoreHorizontal size={16} />
-                </IconButton>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  align="end"
-                  sideOffset={8}
-                  className="z-50 w-48 rounded-xl border border-line-soft bg-white p-1.5 shadow-popover"
-                >
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                    onSelect={() => {
-                      setRenameDraft(autosave.title);
-                      setRenameOpen(true);
-                    }}
-                  >
-                    <Pencil size={14} />
-                    重命名文档
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                    onSelect={() => setHistoryOpen(true)}
-                  >
-                    <History size={14} />
-                    版本历史
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                    onSelect={() => {
-                      setTagDraft(autosave.tags.join(", "));
-                      setTagDialogOpen(true);
-                    }}
-                  >
-                    <Tag size={14} />
-                    管理标签
-                  </DropdownMenu.Item>
-                  {mode === "notes" && (
-                    <DropdownMenu.Item
-                      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:opacity-40"
-                      disabled={knowledgeBases.length === 0}
-                      onSelect={() => {
-                        setArchiveKnowledgeBaseId(knowledgeBases[0]?.id ?? "");
-                        setArchiveOpen(true);
-                      }}
-                    >
-                      <Archive size={14} />
-                      归档到知识库
-                    </DropdownMenu.Item>
-                  )}
-                  {mode === "knowledge" && (
-                    <DropdownMenu.Item
-                      className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                      onSelect={() => void restoreCurrentDocumentToNotes()}
-                    >
-                      <FileText size={14} />
-                      移回随记
-                    </DropdownMenu.Item>
-                  )}
-                  <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
-                  <DropdownMenu.Item
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-danger-700 outline-none data-[highlighted]:bg-danger-50"
-                    onSelect={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 size={14} />
-                    删除文档
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-            <IconButton
-              aria-label={infoOpen ? "关闭文档信息" : "打开文档信息"}
-              aria-pressed={infoOpen}
-              className={infoOpen ? "bg-brand-50 text-brand-800" : ""}
-              onClick={() => setInfoOpen((current) => !current)}
-            >
-              <PanelRight size={16} />
-            </IconButton>
-            {mode === "knowledge" && !editing && ownsEditor && (
-              <Button variant="secondary" size="sm" onClick={beginEditing}>
-                编辑
-              </Button>
-            )}
-            {mode === "knowledge" && editing && ownsEditor && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => void finishEditing()}
-                disabled={autosave.status === "saving"}
-              >
-                完成
-              </Button>
-            )}
-          </header>
           {ownership === "blocked" && (
             <DocumentNotice
               tone="warning"
@@ -2896,9 +3595,38 @@ function DocumentSurface({
               workspaceId={document.meta.workspaceId}
               readOnly={!showEditor}
               readingScale={readingScale}
+              onReadingScaleChange={onReadingScaleChange}
               legacyCanvas={
                 document.extensions?.canvas as unknown as
                   CanvasScene | undefined
+              }
+              toolbarEnd={toolbarEnd}
+              footer={
+                <div className="mx-auto flex w-full max-w-[760px] flex-wrap items-center gap-2 px-10 pb-10">
+                  {autosave.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="rounded-md border border-[#e7e7e4] bg-white px-2.5 py-1 text-xs font-medium text-ink-600 transition hover:bg-[#f7f7f5]"
+                      onClick={() => {
+                        setTagDraft(autosave.tags.join(", "));
+                        setTagDialogOpen(true);
+                      }}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="rounded-md border border-[#e7e7e4] bg-white px-2.5 py-1 text-xs font-medium text-ink-500 transition hover:bg-[#f7f7f5]"
+                    onClick={() => {
+                      setTagDraft(autosave.tags.join(", "));
+                      setTagDialogOpen(true);
+                    }}
+                  >
+                    + 添加标签
+                  </button>
+                </div>
               }
               onChange={autosave.changeMarkdown}
               onFocusSearch={onFocusSearch}

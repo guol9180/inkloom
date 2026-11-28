@@ -62,6 +62,13 @@ import {
   type FileBlockAttrs
 } from "../editor/editor-blocks";
 import type { CalloutKind } from "../editor/editor-block-meta";
+import {
+  clearFormatting,
+  INLINE_FORMAT_PLUGINS,
+  setHighlight,
+  setTextColor,
+  toggleUnderline
+} from "../editor/inline-format-marks";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
@@ -69,6 +76,8 @@ export type RichMarkdownEditorHandle = {
   focus: () => void;
   setHeading: (level: 1 | 2 | 3 | 4 | 5 | 6 | null) => void;
   run: (action: RichToolbarAction) => void;
+  setTextColor: (color: string) => void;
+  setHighlight: (color: string) => void;
   setLink: (href: string) => void;
   insertBlock: (kind: "mermaid" | "canvas") => void;
   insertBlockAt: (blockIndex: number, kind: "mermaid" | "canvas") => void;
@@ -103,7 +112,9 @@ export type RichToolbarAction =
   | "bold"
   | "italic"
   | "strike"
+  | "underline"
   | "inline-code"
+  | "clear-formatting"
   | "bullet-list"
   | "ordered-list"
   | "task-list"
@@ -207,7 +218,11 @@ export const RichMarkdownEditor = forwardRef<
             ...(level === null ? {} : { attrs: { level } })
           });
         });
-        this.focus();
+        onBlockTypeChangeRef.current(
+          level === null
+            ? "paragraph"
+            : (`heading-${level}` as MarkdownBlockType)
+        );
       },
       run(action) {
         const crepe = crepeRef.current;
@@ -225,8 +240,12 @@ export const RichMarkdownEditor = forwardRef<
             commands.call(toggleEmphasisCommand.key);
           } else if (action === "strike") {
             commands.call(toggleStrikethroughCommand.key);
+          } else if (action === "underline") {
+            toggleUnderline(ctx);
           } else if (action === "inline-code") {
             commands.call(toggleInlineCodeCommand.key);
+          } else if (action === "clear-formatting") {
+            clearFormatting(ctx);
           } else if (action === "bullet-list") {
             commands.call(wrapInBlockTypeCommand.key, {
               nodeType: bulletListSchema.type(ctx)
@@ -275,6 +294,16 @@ export const RichMarkdownEditor = forwardRef<
           }
           view.focus();
         });
+      },
+      setTextColor(color) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => setTextColor(ctx, color));
+      },
+      setHighlight(color) {
+        const crepe = crepeRef.current;
+        if (!crepe || !readyRef.current) return;
+        crepe.editor.action((ctx) => setHighlight(ctx, color));
       },
       setLink(href) {
         const crepe = crepeRef.current;
@@ -536,6 +565,7 @@ export const RichMarkdownEditor = forwardRef<
       }
     });
     crepe.editor.use(PRODUCT_BLOCK_PLUGINS);
+    crepe.editor.use(INLINE_FORMAT_PLUGINS);
     crepe.editor.use(createMermaidNodeViewPlugin(() => readOnlyRef.current));
     crepe.editor.use(
       createCanvasNodeViewPlugin(

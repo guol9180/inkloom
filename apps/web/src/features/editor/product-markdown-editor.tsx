@@ -16,6 +16,7 @@ import {
   type ReactNode
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Popover from "@radix-ui/react-popover";
 import {
   DndContext,
   KeyboardSensor,
@@ -46,10 +47,13 @@ import { Command } from "cmdk";
 import { useDropzone } from "react-dropzone";
 import {
   Bold,
+  Check,
+  ChevronDown,
   Code2,
   Columns3,
   Copy,
   ChevronsDownUp,
+  Eraser,
   Heading1,
   Heading2,
   Heading3,
@@ -58,6 +62,7 @@ import {
   Heading6,
   Image,
   Italic,
+  Highlighter,
   Link2,
   List,
   ListChecks,
@@ -67,11 +72,14 @@ import {
   MoreHorizontal,
   Network,
   Paperclip,
+  Palette,
   Pilcrow,
+  Plus,
   Quote,
   Redo2,
   RotateCcw,
   Rows3,
+  Search,
   Shapes,
   Sigma,
   Strikethrough,
@@ -80,6 +88,7 @@ import {
   TextAlignEnd,
   TextAlignStart,
   Trash2,
+  Underline,
   Undo2,
   X
 } from "lucide-react";
@@ -148,25 +157,97 @@ const DIAGRAM_EDGE_HIT_PX = 20;
 const PRIMARY_TOOLBAR_IDS = new Set([
   "undo",
   "redo",
-  "paragraph",
-  "heading-1",
-  "heading-2",
+  "bold",
+  "italic",
+  "strike"
+]);
+const INLINE_SELECTION_COMMANDS = new Set<EditorCommandId>([
   "bold",
   "italic",
   "strike",
-  "bullet-list",
-  "ordered-list",
-  "task-list",
-  "link",
-  "image",
-  "quote",
-  "table"
+  "inline-code",
+  "link"
+]);
+
+const INSERT_MENU_GROUPS = [
+  {
+    label: "基础",
+    commands: [
+      "paragraph",
+      "heading-1",
+      "heading-2",
+      "quote",
+      "bullet-list",
+      "ordered-list",
+      "task-list",
+      "code-block"
+    ] satisfies EditorCommandId[]
+  },
+  {
+    label: "智能专区",
+    commands: [
+      "callout",
+      "toggle",
+      "formula",
+      "table"
+    ] satisfies EditorCommandId[]
+  },
+  {
+    label: "画板类",
+    commands: ["mermaid", "canvas"] satisfies EditorCommandId[]
+  },
+  {
+    label: "资源与布局",
+    commands: ["image", "attachment", "divider"] satisfies EditorCommandId[]
+  }
+] as const;
+
+const TEXT_COLORS = [
+  { label: "默认", color: "#262626" },
+  { label: "灰色", color: "#8c8c89" },
+  { label: "红色", color: "#d64242" },
+  { label: "橙色", color: "#d9730d" },
+  { label: "黄色", color: "#b78000" },
+  { label: "绿色", color: "#2f855a" },
+  { label: "蓝色", color: "#2563a8" },
+  { label: "紫色", color: "#7c5cb1" },
+  { label: "粉色", color: "#c74b79" }
+] as const;
+
+const HIGHLIGHT_COLORS = [
+  { label: "无", color: "#ffffff" },
+  { label: "浅灰", color: "#ececea" },
+  { label: "黄色", color: "#fff0a8" },
+  { label: "绿色", color: "#dcf2e4" },
+  { label: "蓝色", color: "#dfeeff" },
+  { label: "紫色", color: "#eee4ff" },
+  { label: "粉色", color: "#ffe1e8" },
+  { label: "橙色", color: "#ffe7d1" }
+] as const;
+const BLOCK_TOOLBAR_IDS = new Set([
+  "paragraph",
+  "heading-1",
+  "heading-2",
+  "heading-3",
+  "heading-4",
+  "heading-5",
+  "heading-6"
 ]);
 const PRIMARY_TOOLBAR_COMMANDS = TOOLBAR_COMMANDS.filter((command) =>
   PRIMARY_TOOLBAR_IDS.has(command.id)
 );
+const BLOCK_TOOLBAR_COMMANDS = TOOLBAR_COMMANDS.filter((command) =>
+  BLOCK_TOOLBAR_IDS.has(command.id)
+);
+const HISTORY_TOOLBAR_COMMANDS = PRIMARY_TOOLBAR_COMMANDS.filter(
+  (command) => command.group === "history"
+);
+const FORMAT_TOOLBAR_COMMANDS = PRIMARY_TOOLBAR_COMMANDS.filter(
+  (command) => command.group !== "history"
+);
 const MORE_TOOLBAR_COMMANDS = TOOLBAR_COMMANDS.filter(
-  (command) => !PRIMARY_TOOLBAR_IDS.has(command.id)
+  (command) =>
+    !PRIMARY_TOOLBAR_IDS.has(command.id) && !BLOCK_TOOLBAR_IDS.has(command.id)
 );
 
 type BlockHandle = {
@@ -209,7 +290,10 @@ export const ProductMarkdownEditor = forwardRef<
     workspaceId: string;
     readOnly?: boolean;
     readingScale?: "compact" | "comfortable" | "large";
+    onReadingScaleChange?: (scale: "compact" | "comfortable" | "large") => void;
     legacyCanvas?: CanvasScene;
+    toolbarEnd?: ReactNode;
+    footer?: ReactNode;
     onChange: (value: string) => void;
     onFocusSearch: () => void;
   }
@@ -221,7 +305,10 @@ export const ProductMarkdownEditor = forwardRef<
     workspaceId,
     readOnly = false,
     readingScale = "comfortable",
+    onReadingScaleChange,
     legacyCanvas,
+    toolbarEnd,
+    footer,
     onChange,
     onFocusSearch
   },
@@ -237,6 +324,10 @@ export const ProductMarkdownEditor = forwardRef<
   const dropIndexRef = useRef<number | undefined>(undefined);
   const [keyboardDragging, setKeyboardDragging] = useState(false);
   const [openMenuIndex, setOpenMenuIndex] = useState<number>();
+  const [blockMenuOpen, setBlockMenuOpen] = useState(false);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const [insertQuery, setInsertQuery] = useState("");
+  const [recentInsertIds, setRecentInsertIds] = useState<EditorCommandId[]>([]);
   const [selection, setSelection] = useState<FloatingSelection>();
   const [slash, setSlash] = useState<{
     range: Range;
@@ -680,10 +771,14 @@ export const ProductMarkdownEditor = forwardRef<
     }
     localStorage.removeItem(canvasDraftKey(workspaceId, documentId, canvas.id));
     setCanvasEditor(undefined);
-    window.requestAnimationFrame(syncHandles);
+    window.requestAnimationFrame(() => {
+      syncHandles();
+      editorRef.current?.focus();
+    });
   }
 
   function executeCommand(command: EditorCommandId) {
+    let forcedBlockType: MarkdownBlockType | undefined;
     if (command === "image") {
       replaceImageIndexRef.current = undefined;
       imageDropzone.open();
@@ -714,6 +809,7 @@ export const ProductMarkdownEditor = forwardRef<
       return;
     }
     if (command === "paragraph") {
+      forcedBlockType = "paragraph";
       editorRef.current?.setHeading(null);
     } else if (
       command === "heading-1" ||
@@ -723,13 +819,27 @@ export const ProductMarkdownEditor = forwardRef<
       command === "heading-5" ||
       command === "heading-6"
     ) {
+      forcedBlockType = `heading-${command.at(-1)}` as
+        | "heading-1"
+        | "heading-2"
+        | "heading-3"
+        | "heading-4"
+        | "heading-5"
+        | "heading-6";
       editorRef.current?.setHeading(
         Number(command.at(-1)) as 1 | 2 | 3 | 4 | 5 | 6
       );
     } else {
+      if (!INLINE_SELECTION_COMMANDS.has(command)) {
+        setSelection(undefined);
+      }
       editorRef.current?.run(command as RichToolbarAction);
     }
-    window.requestAnimationFrame(syncHandles);
+    window.requestAnimationFrame(() => {
+      syncHandles();
+      editorRef.current?.focus();
+      if (forcedBlockType) setBlockType(forcedBlockType);
+    });
   }
 
   function selectSlashCommand(command: EditorCommandId) {
@@ -974,6 +1084,27 @@ export const ProductMarkdownEditor = forwardRef<
     window.requestAnimationFrame(syncHandles);
   }
 
+  const normalizedInsertQuery = insertQuery.trim().toLowerCase();
+  const insertCommandMatches = (command: EditorCommandDefinition) =>
+    !normalizedInsertQuery ||
+    command.label.toLowerCase().includes(normalizedInsertQuery) ||
+    command.keywords.some((keyword) =>
+      keyword.toLowerCase().includes(normalizedInsertQuery)
+    );
+  const isMatchingInsertCommand = (
+    command: EditorCommandDefinition | undefined
+  ): command is EditorCommandDefinition =>
+    command !== undefined && insertCommandMatches(command);
+
+  function selectInsertCommand(command: EditorCommandDefinition) {
+    executeCommand(command.id);
+    setRecentInsertIds((current) =>
+      [command.id, ...current.filter((id) => id !== command.id)].slice(0, 4)
+    );
+    setInsertOpen(false);
+    setInsertQuery("");
+  }
+
   return (
     <div
       {...editorDropzone.getRootProps({
@@ -1010,12 +1141,116 @@ export const ProductMarkdownEditor = forwardRef<
           {legacyCanvasError}
         </div>
       )}
-      {!readOnly && (
+      {(!readOnly || toolbarEnd) && (
         <ToolbarRoot
-          className="sticky top-12 z-30 flex min-h-11 items-center gap-1 overflow-x-auto border-b border-line-soft bg-paper/96 px-2.5 py-1.5 backdrop-blur-md"
-          aria-label="文档格式"
+          className="sticky top-0 z-30 flex h-[50px] items-center gap-1 overflow-x-auto border-b border-[#f1f1ef] bg-white px-3 py-1.5"
+          aria-label={readOnly ? "文档操作" : "文档格式"}
         >
-          {blockType === "table" ? (
+          {!readOnly && (
+            <>
+              <Popover.Root
+                open={insertOpen}
+                onOpenChange={(open) => {
+                  setInsertOpen(open);
+                  if (!open) setInsertQuery("");
+                }}
+              >
+                <Popover.Trigger asChild>
+                  <ToolbarButton
+                    className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-600 text-white shadow-[0_1px_4px_rgb(0_0_0_/_0.16)] outline-none transition hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-300"
+                    aria-label="插入内容"
+                  >
+                    <Plus size={19} strokeWidth={1.8} />
+                  </ToolbarButton>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    align="start"
+                    sideOffset={7}
+                    className="z-[80] w-[min(27rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[#e8e8e5] bg-white p-0 shadow-[0_12px_34px_rgb(31_31_28_/_0.13),0_2px_8px_rgb(31_31_28_/_0.06)] outline-none"
+                  >
+                    <Command
+                      shouldFilter={false}
+                      loop
+                      className="flex max-h-[min(34rem,calc(100dvh-5rem))] flex-col"
+                    >
+                      <div className="flex items-center gap-2 border-b border-[#efefed] px-3.5 py-3">
+                        <Search size={15} className="shrink-0 text-[#8b8b87]" />
+                        <Command.Input
+                          value={insertQuery}
+                          onValueChange={setInsertQuery}
+                          placeholder="搜索插入内容"
+                          autoFocus
+                          className="min-w-0 flex-1 bg-transparent text-[13px] text-[#292927] outline-none placeholder:text-[#9a9a96]"
+                        />
+                        <kbd className="rounded border border-[#e7e7e4] bg-[#fafaf8] px-1.5 py-0.5 text-[10px] text-[#989894]">
+                          ESC
+                        </kbd>
+                      </div>
+                      <Command.List className="min-h-0 overflow-y-auto p-2">
+                        <Command.Empty className="px-3 py-10 text-center text-xs text-[#888884]">
+                          没有匹配的插入内容
+                        </Command.Empty>
+                        {recentInsertIds.length > 0 && (
+                          <Command.Group
+                            heading="最近使用"
+                            className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-[#8c8c88]"
+                          >
+                            {recentInsertIds
+                              .map((id) =>
+                                EDITOR_COMMANDS.find(
+                                  (command) => command.id === id
+                                )
+                              )
+                              .filter(isMatchingInsertCommand)
+                              .map((command) => (
+                                <InsertCommandItem
+                                  key={`recent-${command.id}`}
+                                  command={command}
+                                  onSelect={() => selectInsertCommand(command)}
+                                />
+                              ))}
+                          </Command.Group>
+                        )}
+                        {INSERT_MENU_GROUPS.map((group) => {
+                          const commands = group.commands
+                            .map((id) =>
+                              EDITOR_COMMANDS.find(
+                                (command) => command.id === id
+                              )
+                            )
+                            .filter(isMatchingInsertCommand);
+                          if (commands.length === 0) return null;
+                          return (
+                            <Command.Group
+                              key={group.label}
+                              heading={group.label}
+                              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-[#8c8c88]"
+                            >
+                              {commands.map((command) => (
+                                <InsertCommandItem
+                                  key={command.id}
+                                  command={command}
+                                  onSelect={() => selectInsertCommand(command)}
+                                />
+                              ))}
+                            </Command.Group>
+                          );
+                        })}
+                      </Command.List>
+                    </Command>
+                    <Popover.Arrow
+                      className="fill-white"
+                      width={12}
+                      height={6}
+                    />
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
+            </>
+          )}
+          {readOnly ? null : blockType === "table" ? (
             <>
               <span className="mx-1 shrink-0 text-[0.75rem] font-semibold text-ink-500">
                 表格
@@ -1068,8 +1303,8 @@ export const ProductMarkdownEditor = forwardRef<
               />
             </>
           ) : (
-            PRIMARY_TOOLBAR_COMMANDS.map((command, index) => {
-              const previous = PRIMARY_TOOLBAR_COMMANDS[index - 1];
+            HISTORY_TOOLBAR_COMMANDS.map((command, index) => {
+              const previous = HISTORY_TOOLBAR_COMMANDS[index - 1];
               const separator = previous && previous.group !== command.group;
               return (
                 <span className="contents" key={command.id}>
@@ -1094,49 +1329,199 @@ export const ProductMarkdownEditor = forwardRef<
               );
             })
           )}
-          <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <ToolbarButton
-                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[0.75rem] font-semibold text-ink-600 transition hover:bg-surface-hover hover:text-ink-950 focus-visible:ring-4 focus-visible:ring-brand-100"
-                aria-label="更多格式"
+          {!readOnly && (
+            <>
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <DropdownMenu.Root
+                open={blockMenuOpen}
+                onOpenChange={setBlockMenuOpen}
               >
-                <MoreHorizontal size={15} />
-                <span className="hidden sm:inline">更多</span>
-              </ToolbarButton>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="end"
-                sideOffset={6}
-                className="z-[70] w-52 rounded-xl border border-line bg-paper p-1.5 shadow-popover"
-              >
-                {MORE_TOOLBAR_COMMANDS.map((command) => (
-                  <DropdownMenu.Item
-                    key={command.id}
-                    className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
-                    onSelect={() => executeCommand(command.id)}
+                <DropdownMenu.Trigger asChild>
+                  <ToolbarButton
+                    className="flex h-8 min-w-[5.25rem] shrink-0 items-center justify-between gap-2 rounded-md px-2 text-[0.8rem] font-medium text-ink-700 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+                    aria-label="正文与标题"
                   >
-                    <span className="grid size-5 place-items-center text-ink-500">
-                      <CommandIcon command={command} />
-                    </span>
-                    <span className="min-w-0 flex-1">{command.label}</span>
-                    {command.hint && (
-                      <span className="text-[0.68rem] text-ink-400">
-                        {command.hint}
-                      </span>
+                    <span>{toolbarBlockLabel(blockType)}</span>
+                    <ChevronDown size={13} className="text-ink-400" />
+                  </ToolbarButton>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="start"
+                    sideOffset={6}
+                    className="z-[70] w-44 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+                  >
+                    {BLOCK_TOOLBAR_COMMANDS.map((command) => (
+                      <DropdownMenu.Item
+                        key={command.id}
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-sm font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          setBlockMenuOpen(false);
+                          window.requestAnimationFrame(() =>
+                            executeCommand(command.id)
+                          );
+                        }}
+                      >
+                        <span className="min-w-0 flex-1">{command.label}</span>
+                        {command.hint && (
+                          <span className="text-[0.68rem] text-ink-300">
+                            {command.hint}
+                          </span>
+                        )}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <ToolbarButton
+                    className="flex h-8 min-w-14 shrink-0 items-center justify-between gap-1 rounded-md px-2 text-[0.78rem] font-medium text-ink-600 outline-none transition hover:bg-[#f4f4f2] focus-visible:ring-2 focus-visible:ring-brand-300"
+                    aria-label="字号"
+                  >
+                    {readingScale === "compact"
+                      ? "14px"
+                      : readingScale === "large"
+                        ? "16px"
+                        : "15px"}
+                    <ChevronDown size={13} className="text-ink-400" />
+                  </ToolbarButton>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="start"
+                    sideOffset={6}
+                    className="z-[70] w-32 rounded-lg border border-line bg-white p-1.5 shadow-popover"
+                  >
+                    {[
+                      ["compact", "小号 14px"],
+                      ["comfortable", "标准 15px"],
+                      ["large", "大号 16px"]
+                    ].map(([scale, label]) => (
+                      <DropdownMenu.Item
+                        key={scale}
+                        className="flex min-h-9 cursor-default items-center justify-between rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-[#f4f4f2]"
+                        onSelect={() =>
+                          onReadingScaleChange?.(
+                            scale as "compact" | "comfortable" | "large"
+                          )
+                        }
+                      >
+                        {label}
+                        {readingScale === scale && <Check size={13} />}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              {FORMAT_TOOLBAR_COMMANDS.map((command, index) => {
+                const previous = FORMAT_TOOLBAR_COMMANDS[index - 1];
+                const separator = previous && previous.group !== command.group;
+                return (
+                  <span className="contents" key={command.id}>
+                    {separator && (
+                      <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
                     )}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+                    <AppTooltip label={command.label} shortcut={command.hint}>
+                      <ToolbarButton
+                        className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-md px-1.5 text-[0.75rem] font-semibold transition hover:bg-[#f4f4f2] hover:text-brand-800 focus-visible:ring-2 focus-visible:ring-brand-300 ${
+                          commandIdMatchesBlockType(command.id, blockType)
+                            ? "bg-[#f1f1ef] text-ink-900"
+                            : "text-ink-500"
+                        }`}
+                        aria-label={command.label}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => executeCommand(command.id)}
+                      >
+                        <CommandIcon command={command} />
+                      </ToolbarButton>
+                    </AppTooltip>
+                  </span>
+                );
+              })}
+            </>
+          )}
+          {!readOnly && (
+            <>
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <AppTooltip label="下划线">
+                <ToolbarButton
+                  className="grid h-8 min-w-8 shrink-0 place-items-center rounded-md px-1.5 text-ink-500 transition hover:bg-[#f4f4f2] hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-brand-300"
+                  aria-label="下划线"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => editorRef.current?.run("underline")}
+                >
+                  <Underline size={15} />
+                </ToolbarButton>
+              </AppTooltip>
+              <ColorMenuButton
+                label="文字颜色"
+                icon={<Palette size={15} />}
+                colors={TEXT_COLORS}
+                onSelect={(color) => editorRef.current?.setTextColor(color)}
+              />
+              <ColorMenuButton
+                label="背景高亮"
+                icon={<Highlighter size={15} />}
+                colors={HIGHLIGHT_COLORS}
+                onSelect={(color) => editorRef.current?.setHighlight(color)}
+              />
+              <AppTooltip label="清除格式">
+                <ToolbarButton
+                  className="grid h-8 min-w-8 shrink-0 place-items-center rounded-md px-1.5 text-ink-500 transition hover:bg-[#f4f4f2] hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-brand-300"
+                  aria-label="清除格式"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => editorRef.current?.run("clear-formatting")}
+                >
+                  <Eraser size={15} />
+                </ToolbarButton>
+              </AppTooltip>
+              <ToolbarSeparator className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <ToolbarButton
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[0.75rem] font-semibold text-ink-600 transition hover:bg-surface-hover hover:text-ink-950 focus-visible:ring-4 focus-visible:ring-brand-100"
+                    aria-label="更多格式"
+                  >
+                    <MoreHorizontal size={15} />
+                  </ToolbarButton>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    sideOffset={6}
+                    className="z-[70] w-52 rounded-xl border border-line bg-paper p-1.5 shadow-popover"
+                  >
+                    {MORE_TOOLBAR_COMMANDS.map((command) => (
+                      <DropdownMenu.Item
+                        key={command.id}
+                        className="flex min-h-9 cursor-default items-center gap-2 rounded-md px-2.5 text-xs font-medium text-ink-700 outline-none data-[highlighted]:bg-surface-subtle"
+                        onSelect={() => executeCommand(command.id)}
+                      >
+                        <span className="grid size-5 place-items-center text-ink-500">
+                          <CommandIcon command={command} />
+                        </span>
+                        <span className="min-w-0 flex-1">{command.label}</span>
+                        {command.hint && (
+                          <span className="text-[0.68rem] text-ink-400">
+                            {command.hint}
+                          </span>
+                        )}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </>
+          )}
+          {toolbarEnd}
         </ToolbarRoot>
       )}
 
       <div
         ref={handleLayerRef}
-        className="relative mx-auto min-h-[calc(100dvh-10.5rem)] w-full max-w-[76ch]"
+        className="relative min-h-[calc(100dvh-3.125rem)] w-full max-w-[760px]"
         onPointerDownCapture={focusDiagramBoundary}
       >
         {!readOnly && hasDocumentContent && (
@@ -1189,6 +1574,8 @@ export const ProductMarkdownEditor = forwardRef<
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
+                            setSelection(undefined);
+                            window.getSelection()?.removeAllRanges();
                             setOpenMenuIndex(handle.index);
                           }}
                         >
@@ -1436,9 +1823,10 @@ export const ProductMarkdownEditor = forwardRef<
             onTableHeaderChange={setTableHeader}
             onRequestCanvas={() => undefined}
             onOpenCanvas={(canvas) => void openCanvasEditor(canvas)}
-            className="min-h-[calc(100dvh-10.5rem)]"
+            className="min-h-0"
           />
         </Suspense>
+        {footer}
       </div>
 
       {canvasEditor && !canvasEditor.loading && (
@@ -1555,24 +1943,55 @@ export const ProductMarkdownEditor = forwardRef<
       {selection && (
         <ToolbarRoot
           ref={selectionFloating.refs.setFloating}
-          className="z-[80] rounded-xl border border-line-soft bg-white p-1 shadow-popover"
+          orientation="horizontal"
+          className="z-[80] flex flex-row items-center rounded-xl border border-line-soft bg-white p-1 shadow-popover"
           style={selectionFloating.floatingStyles}
           aria-label="选区格式"
           onMouseDown={(event) => event.preventDefault()}
         >
-          {(["bold", "italic", "strike", "inline-code", "link"] as const).map(
-            (command) => (
-              <AppTooltip label={editorCommandLabel(command)} key={command}>
-                <ToolbarButton
-                  className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
-                  aria-label={editorCommandLabel(command)}
-                  onClick={() => executeCommand(command)}
-                >
-                  <SelectionCommandIcon command={command} />
-                </ToolbarButton>
-              </AppTooltip>
-            )
-          )}
+          {(["bold", "italic", "strike"] as const).map((command) => (
+            <AppTooltip label={editorCommandLabel(command)} key={command}>
+              <ToolbarButton
+                className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
+                aria-label={editorCommandLabel(command)}
+                onClick={() => executeCommand(command)}
+              >
+                <SelectionCommandIcon command={command} />
+              </ToolbarButton>
+            </AppTooltip>
+          ))}
+          <AppTooltip label="下划线">
+            <ToolbarButton
+              className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
+              aria-label="下划线"
+              onClick={() => editorRef.current?.run("underline")}
+            >
+              <Underline size={14} />
+            </ToolbarButton>
+          </AppTooltip>
+          {(["inline-code", "link"] as const).map((command) => (
+            <AppTooltip label={editorCommandLabel(command)} key={command}>
+              <ToolbarButton
+                className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface-hover hover:text-ink-900"
+                aria-label={editorCommandLabel(command)}
+                onClick={() => executeCommand(command)}
+              >
+                <SelectionCommandIcon command={command} />
+              </ToolbarButton>
+            </AppTooltip>
+          ))}
+          <ColorMenuButton
+            label="文字颜色"
+            icon={<Palette size={14} />}
+            colors={TEXT_COLORS}
+            onSelect={(color) => editorRef.current?.setTextColor(color)}
+          />
+          <ColorMenuButton
+            label="背景高亮"
+            icon={<Highlighter size={14} />}
+            colors={HIGHLIGHT_COLORS}
+            onSelect={(color) => editorRef.current?.setHighlight(color)}
+          />
         </ToolbarRoot>
       )}
 
@@ -1738,6 +2157,86 @@ export const ProductMarkdownEditor = forwardRef<
     </div>
   );
 });
+
+function ColorMenuButton({
+  label,
+  icon,
+  colors,
+  onSelect
+}: {
+  label: string;
+  icon: ReactNode;
+  colors: readonly { label: string; color: string }[];
+  onSelect: (color: string) => void;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <ToolbarButton
+          className="grid h-8 min-w-8 shrink-0 place-items-center rounded-md px-1.5 text-ink-500 transition hover:bg-[#f4f4f2] hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-brand-300"
+          aria-label={label}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {icon}
+        </ToolbarButton>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={7}
+          className="z-[80] w-44 rounded-xl border border-[#e8e8e5] bg-white p-2.5 shadow-[0_10px_28px_rgb(31_31_28_/_0.13)]"
+        >
+          <DropdownMenu.Label className="px-0.5 pb-2 text-[11px] font-medium text-[#8c8c88]">
+            {label}
+          </DropdownMenu.Label>
+          <div className="grid grid-cols-5 gap-1.5">
+            {colors.map((option) => (
+              <DropdownMenu.Item
+                key={option.color}
+                className="grid size-7 cursor-default place-items-center rounded-md outline-none ring-offset-1 data-[highlighted]:ring-2 data-[highlighted]:ring-[#cfcfca]"
+                aria-label={`${label}：${option.label}`}
+                title={option.label}
+                onSelect={() => onSelect(option.color)}
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-5 rounded-[5px] border border-black/10"
+                  style={{ background: option.color }}
+                />
+              </DropdownMenu.Item>
+            ))}
+          </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function InsertCommandItem({
+  command,
+  onSelect
+}: {
+  command: EditorCommandDefinition;
+  onSelect: () => void;
+}) {
+  return (
+    <Command.Item
+      value={`${command.label} ${command.keywords.join(" ")}`}
+      onSelect={onSelect}
+      className="flex min-h-10 cursor-default items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium text-[#3c3c39] outline-none data-[selected=true]:bg-[#f4f4f1] data-[selected=true]:text-[#1f1f1d]"
+    >
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[#f5f5f2] text-[#666662]">
+        <CommandIcon command={command} />
+      </span>
+      <span className="min-w-0 flex-1">{command.label}</span>
+      {command.hint && (
+        <span className="text-[10px] font-normal text-[#9a9a96]">
+          {command.hint}
+        </span>
+      )}
+    </Command.Item>
+  );
+}
 
 function CommandIcon({ command }: { command: EditorCommandDefinition }) {
   switch (command.id) {
@@ -1938,6 +2437,15 @@ function commandIdMatchesBlockType(
   return (
     command === blockType ||
     (blockType === "paragraph" && command === "paragraph")
+  );
+}
+
+function toolbarBlockLabel(blockType: MarkdownBlockType) {
+  if (blockType.startsWith("heading-")) {
+    return `标题${blockType.at(-1)}`;
+  }
+  return (
+    EDITOR_COMMANDS.find((command) => command.id === blockType)?.label ?? "正文"
   );
 }
 

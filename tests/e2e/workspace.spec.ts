@@ -416,10 +416,14 @@ test("creates and refreshes a flat knowledge base route", async ({ page }) => {
   await page.getByRole("dialog").getByLabel("知识库名称").fill("产品资料");
   await page.getByRole("button", { name: "创建" }).click();
   await expect(page).toHaveURL(/\/knowledge\/[^/]+$/);
-  await expect(page.getByRole("heading", { name: "产品资料" })).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("heading", { name: "产品资料" })
+  ).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "产品资料" })).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("heading", { name: "产品资料" })
+  ).toBeVisible();
   await expect(
     page.getByRole("radio", { name: "知识库", exact: true })
   ).toHaveAttribute("aria-checked", "true");

@@ -78,7 +78,7 @@ semantics.
 
 - React 19 and TypeScript.
 - Vite and React Router.
-- Tailwind CSS 4 with Notion-like neutral paper design tokens.
+- Tailwind CSS 4 with a Yuque-inspired, dense three-column document workspace.
 - TanStack Query, React Hook Form and Zod.
 - Milkdown / ProseMirror / Remark for Markdown.
 - CodeMirror 6 only inside code and diagram source nodes.

@@ -243,27 +243,28 @@
 }
 
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror {
-  min-height: calc(100dvh - 10.5rem);
-  width: min(100%, 76ch);
-  margin-inline: auto;
-  padding: 2rem clamp(2rem, 4vw, 3.5rem) 7rem clamp(3.25rem, 5vw, 4.5rem);
+  min-height: calc(100dvh - 7.5rem);
+  width: 100%;
+  max-width: 760px;
+  margin-inline: 0;
+  padding: 20px 40px 40px;
   font-family: var(--font-reading);
-  font-size: clamp(1rem, 0.16vw + 0.96rem, 1.08rem);
-  line-height: 1.78;
+  font-size: 15px;
+  line-height: 1.74;
 }
 
 .product-markdown-editor[data-empty-document="true"]
   .rich-markdown-shell
   .milkdown
   .ProseMirror {
-  padding-left: clamp(2rem, 4vw, 3.5rem);
+  padding-left: 40px;
 }
 
 .product-markdown-editor[data-reading-scale="compact"]
   .rich-markdown-shell
   .milkdown
   .ProseMirror {
-  font-size: clamp(0.92rem, 0.12vw + 0.88rem, 1rem);
+  font-size: 14px;
   line-height: 1.78;
 }
 
@@ -271,8 +272,8 @@
   .rich-markdown-shell
   .milkdown
   .ProseMirror {
-  font-size: clamp(1.06rem, 0.26vw + 0.99rem, 1.16rem);
-  line-height: 1.98;
+  font-size: 16px;
+  line-height: 1.82;
 }
 
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1,
@@ -282,7 +283,32 @@
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h5,
 .product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h6 {
   font-family: var(--font-sans);
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h1 {
+  margin: 0 0 19px;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 38px;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h2 {
+  margin: 28px 0 12px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror h3 {
+  margin: 22px 0 10px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror > p {
+  margin: 0 0 7.83px;
+  line-height: 26.1px;
 }
 
 .product-markdown-editor
@@ -291,6 +317,18 @@
   .ProseMirror
   > :first-child {
   margin-top: 0;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror u {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.product-markdown-editor .rich-markdown-shell .milkdown .ProseMirror mark {
+  border-radius: 2px;
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .product-markdown-editor
@@ -302,7 +340,7 @@
 }
 
 .product-markdown-editor .pm-block-handle {
-  left: max(0.5rem, calc(50% - 38ch - 2.25rem));
+  left: 0.25rem;
   cursor: grab;
   touch-action: none;
 }
@@ -318,7 +356,7 @@
 
 @media (min-width: 640px) {
   .product-markdown-editor .pm-block-handle {
-    left: max(0.75rem, calc(50% - 38ch - 2.25rem));
+    left: 0.25rem;
   }
 }
 

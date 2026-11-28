@@ -9,7 +9,9 @@ const viewports = [
   { width: 375, height: 812 },
   { width: 768, height: 1024 },
   { width: 1024, height: 768 },
+  { width: 1280, height: 800 },
   { width: 1440, height: 960 },
+  { width: 1920, height: 1080 },
   { width: 2560, height: 1440 }
 ] as const;
 
@@ -46,11 +48,38 @@ for (const viewport of viewports) {
       await expect(editor).toBeVisible();
       await editor.click();
       await page.keyboard.type("清晰的内容");
-      await page.getByRole("button", { name: "一级标题" }).click();
+      await page.keyboard.press("Control+Alt+1");
       await page.keyboard.press("Control+End");
       await page.keyboard.press("Enter");
       await page.keyboard.type("在同一区域继续编辑，格式与内容始终可见。");
       await expectNoHorizontalOverflow(page);
+      if (viewport.width >= 1024) {
+        const navigation = page.locator(
+          'aside[data-workspace-navigation="true"]'
+        );
+        const noteList = page.locator('aside[data-workspace-list="true"]');
+        await expect(navigation).toHaveCSS("width", "254px");
+        await expect(noteList).toHaveCSS("width", "254px");
+        const toolbar = page.getByRole("toolbar", { name: "文档格式" });
+        const toolbarBox = await toolbar.boundingBox();
+        expect(toolbarBox?.height).toBeCloseTo(50, 0);
+        await expect(page.locator(".ProseMirror h1")).toHaveCSS(
+          "font-size",
+          "28px"
+        );
+        await expect(page.locator(".ProseMirror h1")).toHaveCSS(
+          "line-height",
+          "38px"
+        );
+        await expect(page.locator(".ProseMirror > p")).toHaveCSS(
+          "font-size",
+          "15px"
+        );
+        await expect(page.locator(".ProseMirror > p")).toHaveCSS(
+          "line-height",
+          "26.1px"
+        );
+      }
       await page.screenshot({
         path: resolve(reviewDirectory, `editor-${size}.png`)
       });
@@ -146,11 +175,9 @@ test.describe("interaction accessibility", () => {
     await expect(page.getByLabel("Markdown 正文")).toBeVisible();
 
     await page.keyboard.press("Control+j");
-    await expect(page.getByPlaceholder("搜索")).toBeFocused();
-    await page
-      .getByRole("dialog", { name: "工作区导航" })
-      .getByRole("button", { name: "关闭导航" })
-      .tap();
+    const navigation = page.getByRole("dialog", { name: "工作区导航" });
+    await expect(navigation.getByPlaceholder("搜索")).toBeFocused();
+    await navigation.getByRole("button", { name: "关闭导航" }).tap();
 
     const reducedMotion = await page.evaluate(() => {
       const skeleton = document.createElement("span");
