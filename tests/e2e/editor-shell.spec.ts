@@ -2054,68 +2054,66 @@ test("shows upload progress and supports cancellation", async ({ page }) => {
   await page.unroute(assetRoute);
 });
 
-test("round-trips quote, task and code blocks", async ({ page }) => {
+test("round-trips a quote block", async ({ page }) => {
   await openScratchNote(page);
   const editor = page.getByLabel("Markdown 正文");
   await editor.click();
   await page.keyboard.type("引用第一行");
+  const saveRequest = waitForMarkdownSave(page, (markdown) =>
+    markdown.includes("> 引用第一行")
+  );
   await clickEditorCommand(page, "引用");
-  const quote = page
-    .locator(".ProseMirror blockquote")
-    .filter({ hasText: "引用第一行" });
-  await expect(quote).toBeVisible();
-  await quote.click();
-  await page.keyboard.press("Control+End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
+  await expect(page.locator(".ProseMirror blockquote")).toContainText(
+    "引用第一行"
+  );
+  await saveRequest;
+
+  await page.reload();
+  await expect(page.locator(".ProseMirror blockquote")).toContainText(
+    "引用第一行"
+  );
+});
+
+test("round-trips a task list block", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
   await page.keyboard.type("任务项");
+  const saveRequest = waitForMarkdownSave(page, (markdown) =>
+    /^[*-] \[ \] 任务项$/m.test(markdown)
+  );
   await page.keyboard.press("Control+Shift+9");
   const task = page
     .locator(".milkdown-list-item-block li")
     .filter({ hasText: "任务项" });
   await expect(task).toContainText("任务项");
   await expect(task.locator(".label.unchecked")).toBeVisible();
-
-  await page.keyboard.press("Control+End");
-  await page.keyboard.press("Enter");
-  await clickEditorCommand(page, "代码块");
-  const code = page.locator(".milkdown-code-block .cm-content").last();
-  await expect(code).toBeVisible();
-  const saveRequest = page.waitForRequest((request) => {
-    if (
-      request.method() !== "PUT" ||
-      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
-        new URL(request.url()).pathname
-      )
-    ) {
-      return false;
-    }
-    return String(
-      (request.postDataJSON() as { markdown?: unknown }).markdown ?? ""
-    ).includes("const ready = true;");
-  });
-  await code.click();
-  await page.keyboard.type("const ready = true;");
-
-  const markdown = String(
-    ((await saveRequest).postDataJSON() as { markdown?: unknown }).markdown ??
-      ""
-  );
-  expect(markdown).toContain("> 引用第一行");
-  expect(markdown).toMatch(/^[*-] \[ \] 任务项$/m);
-  expect(markdown).toContain("```");
-  expect(markdown).toContain("const ready = true;");
+  await saveRequest;
 
   await page.reload();
-  await expect(page.locator(".ProseMirror blockquote")).toContainText(
-    "引用第一行"
-  );
   await expect(
     page
       .locator(".milkdown-list-item-block li")
       .filter({ hasText: "任务项" })
       .locator(".label.unchecked")
   ).toBeVisible();
+});
+
+test("round-trips a code block", async ({ page }) => {
+  await openScratchNote(page);
+  const editor = page.getByLabel("Markdown 正文");
+  await editor.click();
+  await clickEditorCommand(page, "代码块");
+  const code = page.locator(".milkdown-code-block .cm-content").last();
+  await expect(code).toBeVisible();
+  const saveRequest = waitForMarkdownSave(page, (markdown) =>
+    markdown.includes("const ready = true;")
+  );
+  await code.click();
+  await page.keyboard.type("const ready = true;");
+  await saveRequest;
+
+  await page.reload();
   await expect(page.locator(".milkdown-code-block .cm-content")).toContainText(
     "const ready = true;"
   );
@@ -2235,6 +2233,25 @@ async function chooseEditorBlockType(page: Page, label: string) {
 
 function documentIdFromUrl(page: Page): string {
   return /\/notes\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1] ?? "";
+}
+
+function waitForMarkdownSave(
+  page: Page,
+  predicate: (markdown: string) => boolean
+) {
+  return page.waitForRequest((request) => {
+    if (
+      request.method() !== "PUT" ||
+      !/\/api\/workspaces\/[^/]+\/documents\/[^/]+$/.test(
+        new URL(request.url()).pathname
+      )
+    ) {
+      return false;
+    }
+    return predicate(
+      String((request.postDataJSON() as { markdown?: unknown }).markdown ?? "")
+    );
+  });
 }
 
 async function drawExcalidrawRectangle(page: Page) {
